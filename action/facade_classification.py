@@ -83,16 +83,16 @@ class FacadeClassification:
 
                 break
 
-            if not accepted_level:
-                # Else: Find the building edge with the maximum visibility satisfying the conditions 
-                #   1) the category of the stored way is equal to a category from the category set AND 
-                #   2) dy < dx: (already checked in facade_visibility.py)
-                # Mark the building edge as front
-                if maxSight:
-                    maxEdge.cl = FacadeClass.front       
-                # If no front building edge was found, mark one as front
-                else:
-                    self.frontOfInvisibleBuilding(building)
+        if not accepted_level:
+            # Else: Find the building edge with the maximum visibility satisfying the conditions 
+            #   1) the category of the stored way is equal to a category from the category set AND 
+            #   2) dy < dx: (already checked in facade_visibility.py)
+            # Mark the building edge as front
+            if maxSight:
+                maxEdge.cl = FacadeClass.front       
+            # If no front building edge was found, mark one as front
+            else:
+                self.frontOfInvisibleBuilding(building)
 
  
     def frontOfInvisibleBuilding(self, building):
