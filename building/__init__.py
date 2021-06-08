@@ -22,8 +22,9 @@ from numpy.linalg import norm
 import parse
 from mathutils import Vector
 from util.polygon import Polygon
-from defs.facade_classification import WayLevel, VisibilityAngleFactor
-from action.facade_patterns import PatternClass
+from defs.facade_classification import WayLevel, VisibilityAngleFactor, PatternClass
+
+
 
 #
 # values for <BldgVector.skip>
@@ -162,7 +163,7 @@ class BldgPolygon:
         vector = BldgVector(edge, edge.id1 == nodeId1, self)
         edge.addVector(vector)
         return vector
-    
+
     def reverse(self):
         self.reversed = True
         for vector in self.vectors:
@@ -173,16 +174,33 @@ class BldgPolygon:
         return (
             vector.v1 for vector in (reversed(self.vectors) if self.reversed else self.vectors) if not vector.skip
         )
-    
+
     def getEdges(self):
         return (vector.edge for vector in reversed(self.vectors) if not vector.skip) \
             if self.reversed else\
             (vector.edge for vector in self.vectors if not vector.skip)
 
+    # def getEdges(self):
+    #     head = self.vectors[-1] if self.reversed else self.vectors[0]
+    #     yield head.edge
+    #     cur = head.next
+    #     while cur is not head:
+    #         yield cur.edge
+    #         cur = cur.next
+
     def getVectors(self):
         return (vector for vector in reversed(self.vectors) if not vector.skip) \
             if self.reversed else\
             (vector for vector in self.vectors if not vector.skip)
+
+    # def getVectors(self):
+    #     head = self.vectors[-1] if self.reversed else self.vectors[0]
+    #     yield head
+    #     cur = head.next
+    #     while cur is not head:
+    #         yield cur
+    #         cur = cur.next
+
     
     def edgeInfo(self, queryBldgVerts, firstVertIndex, skipShared):
         """

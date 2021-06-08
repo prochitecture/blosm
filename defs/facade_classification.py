@@ -1,4 +1,4 @@
-from math import tan, pi
+from math import tan, sin, pi
 
 from .way import Category, facadeVisibilityWayCategories
 
@@ -27,3 +27,16 @@ maxDistanceRatio = 7.5                                  # maximum allowed ratio 
 WayLevel = dict((category,1) for category in facadeVisibilityWayCategories)
 WayLevel[Category.service] = 2
 MaxWayLevel = 2
+
+# definitions used for patterns
+
+class PatternClass:
+    unclassified = 0
+    curvy = 1
+    spike = 2
+    balcony = 3
+
+sin_lo = abs(sin(pi/180.*5.))
+sin_hi = abs(sin(pi/180.*30))
+curvyLengthFactor = 1.5
+lengthThresh = 5.

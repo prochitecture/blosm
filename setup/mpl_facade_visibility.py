@@ -4,7 +4,7 @@ from way.manager import WayManager
 from mpl.renderer.facade_classification import BuildingVisibilityRender, WayVisibilityRenderer, BuildingClassificationRender, BuildingPatternRender
 from action.facade_visibility import FacadeVisibilityOther
 from action.facade_classification import FacadeClassification
-from action.facade_patterns import FacadePatterns
+from action.facade_simplify import FacadeSimplification
 #from manager.logging import Logger
 
 
@@ -21,16 +21,18 @@ def setup(app, osm):
     
     # add the definition of the custom command line arguments
     app.argParserExtra.add_argument("--classification", action='store_true', help="Display facade classification", default=False)
+    app.argParserExtra.add_argument("--simplification", action='store_true', help="Simplify facades", default=False)
     app.argParserExtra.add_argument("--sideFacadeColor", help="The color for a side facade", default="yellow")
     app.argParserExtra.add_argument("--showAssoc", action='store_true', help="Show the associations between way-segment and facade", default=False)
     app.argParserExtra.add_argument("--showIDs", action='store_true', help="Show the IDs of facades", default=False)
-    app.argParserExtra.add_argument("--patterns", action='store_true', help="Find facade patterns", default=False)
+    app.argParserExtra.add_argument("--showPatterns", action='store_true', help="Show simplification result", default=False)
     # parse the newly added command line arguments
     app.parseArgs()
     classifyFacades = getattr(app, "classification", False)
-    patternsOfFacades = getattr(app, "patterns", False)
+    simplifyFacades = getattr(app, "simplification", False)
     showAssoc = getattr(app, "showAssoc", False)
     showIDs = getattr(app, "showIDs", False)
+    showPatterns = getattr(app, "showPatterns", False)
     
     # create managers
     
@@ -54,15 +56,15 @@ def setup(app, osm):
         buildings.setRenderer(
             BuildingClassificationRender(sideFacadeColor=app.sideFacadeColor, showAssoc=showAssoc,showIDs=showIDs)\
                 if classifyFacades else (\
-                    BuildingPatternRender(showAssoc=showAssoc,showIDs=showIDs) if patternsOfFacades else\
+                    BuildingPatternRender(showIDs=showIDs) if simplifyFacades and showPatterns else\
                         BuildingVisibilityRender(showAssoc=showAssoc,showIDs=showIDs)
                 )
         )
+        if simplifyFacades:
+            buildings.addAction(FacadeSimplification())
         buildings.addAction(FacadeVisibilityOther())
         if classifyFacades:
             buildings.addAction(FacadeClassification())
-        if patternsOfFacades:
-            buildings.addAction(FacadePatterns())
         osm.addCondition(
             lambda tags, e: "building" in tags,
             "buildings", 

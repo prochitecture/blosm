@@ -2,9 +2,9 @@ from . import Renderer, BuildingRenderer, WayRenderer
 import parse
 from parse.osm import Osm
 from defs.way import facadeVisibilityWayCategoriesSet, Category
-from defs.facade_classification import FacadeClass
+from defs.facade_classification import FacadeClass, PatternClass
 from math import atan2, pi
-from action.facade_patterns import PatternClass
+
 
 class BuildingVisibilityRender(Renderer):
     
@@ -182,9 +182,8 @@ class BuildingClassificationRender(Renderer):
 
 class BuildingPatternRender(Renderer):
     
-    def __init__(self, showAssoc, showIDs):
+    def __init__(self, showIDs):
         super().__init__()
-        self.showAssoc = showAssoc
         self.showIDs = showIDs
 
     def render(self, building, data):
@@ -205,7 +204,8 @@ class BuildingPatternRender(Renderer):
             tuple(vector.v1[1] for vector in building.polygon.vectors),
             '#f5f5dc'
         )
-        for vector in building.polygon.vectors:
+
+        for vector in building.polygon.getVectors():
             if vector.skip:
                 continue
             edge, v1, v2 = vector.edge, vector.v1, vector.v2
@@ -222,37 +222,6 @@ class BuildingPatternRender(Renderer):
             if self.showIDs:
                 self.renderId(v1, v2, edge.id)
 
-            if self.showAssoc:
-                # visalization of association between way-segment and edge
-                visInfo = edge.visInfo
-                if visInfo.waySegment and visInfo.value>=0.5:
-                    seg = visInfo.waySegment
-                    s1, s2 = seg.v1, seg.v2
-                    ax.plot(s1[0], s1[1], 'k.', markersize=5.)
-                    vx = (v1[0]+v2[0])/2.
-                    vy = (v1[1]+v2[1])/2.
-                    sx = (s1[0]+s2[0])/2.
-                    sy = (s1[1]+s2[1])/2.
-                    color = 'blue' if edge.cl==FacadeClass.deadend else (
-                        'green' if edge.cl==FacadeClass.passage else 'magenta'
-                        )
-                    ax.annotate(
-                        '',
-                        xytext = (sx,sy),
-                        xy=(vx,vy),
-                        arrowprops=dict(color=color, width = 0.25, shrink=0., headwidth=3, headlength=8)
-                    )
-                    a = atan2(visInfo.dy,visInfo.dx)/pi*180.
-                    ax.text((sx+vx)/2.,(sy+vy)/2.,' %4.2f,%2.0f°'%(visInfo.value, a))
-            #if not skip:
-            #    ax.annotate(str(vector.index), xy=(v1[0], v1[1]))
-            #if not edge.hasSharedBuildings():
-            #    ax.annotate(
-            #        '',
-            #        xytext = (v1[0], v1[1]),
-            #        xy=(v2[0], v2[1]),
-            #        arrowprops=dict(color=color, width = 0.25, shrink=0., headwidth=3, headlength=8)
-            #    )
     
     @staticmethod
     def getFootprintEdgeColor(edge):
@@ -260,7 +229,9 @@ class BuildingPatternRender(Renderer):
             return 'black'
         pattern = edge.pattern
         return 'red' if pattern==PatternClass.curvy else ( 
-            'blue' if pattern==PatternClass.spike else 'black'
+            'blue' if pattern==PatternClass.spike else (
+                'green' if pattern==PatternClass.balcony else 'black'
+            )
         )
    
     @staticmethod
@@ -268,7 +239,9 @@ class BuildingPatternRender(Renderer):
         pattern = edge.pattern
         return 0.5 if edge.hasSharedBldgVectors() else ( 
             2. if pattern==PatternClass.curvy else ( 
-                2. if pattern==PatternClass.spike else 0.5 
+                2. if pattern==PatternClass.spike else (
+                    2. if pattern==PatternClass.balcony else 0.5
+                ) 
             )
         )
 
