@@ -50,7 +50,7 @@ class FacadeSimplification:
 
             # prepare numpy matrix with data used for pattern detection
             nEdges = building.polygon.numEdges
-            vectorData = np.zeros((nEdges,4))    # length, sine left, sine right, class
+            vectorData = np.zeros((nEdges,4))    # length, sine start, sine end, class
             vectors = [vector for vector in building.polygon.getVectors()]
             vectorData[:,:2] = [(vector.edge.length,np.cross(vector.prev.unitVector, vector.unitVector)) for vector in vectors]
             vectorData[:,2] = np.roll(vectorData[:,1],-1)
@@ -63,12 +63,11 @@ class FacadeSimplification:
             nLongEdges = np.where( vectorData[:,0]>=lengthThresh  )[0].shape[0]
             nShortEdges = np.where( vectorData[:,0]<lengthThresh )[0].shape[0]
             smallPatterns = None
-            if (nLongEdges and nShortEdges > nLongEdges) or nShortEdges > 10:
+            if (nLongEdges and nShortEdges > 2) or nShortEdges > 5:
                 smallPatterns = self.detectSmallPatterns(vectorData,vectors)
 
             self.replaceSequences(curvyEdges, building.polygon)
             self.replaceSequences(smallPatterns, building.polygon)
-            test =1 
 
     # Detects curvy sequences.
     # Returns:
@@ -76,8 +75,8 @@ class FacadeSimplification:
     #                                       If firstEdge is lastEdge, the whole building polygon is a curvy sequence 
     #   None                              : No curvy sequence found 
     def detectCurvyEdges(self,vectorData,vectors):
-        lowAngles = ((abs(vectorData[:,1])>sin_lo) & (abs(vectorData[:,1])<sin_hi)) | \
-                    ((abs(vectorData[:,2])>sin_lo) & (abs(vectorData[:,2])<sin_hi)) 
+        lowAngles = ((abs(vectorData[:,1])>sin_lo) & (abs(vectorData[:,1])<sin_me)) | \
+                    ((abs(vectorData[:,2])>sin_lo) & (abs(vectorData[:,2])<sin_me)) 
         if not np.any(lowAngles):
             return None
 
@@ -101,40 +100,65 @@ class FacadeSimplification:
 
         return curvyEdges
 
-    # Detects small patterns (spikes and balconies).
+    # Detects small patterns (rectangular and triangular).
     # Returns:
     #   (firstEdge,lastEdge,patternClass) : Tuple of first edge of sequence and last edge of sequence and the pattern class.
     #                                       If firstEdge is lastEdge, the whole building polygon is a curvy sequence 
     #   None                              : No patterns found 
     def detectSmallPatterns(self,vectorData,vectors):
-        # characters in sequence:
-        # 'S': short edge, turning at left at least at one end
-        # 'B': long edge, turning at left at both ends
-        # '0': all other edges
-        sequence =  "".join( np.where( vectorData[:,0]<lengthThresh , \
-                             np.where( (vectorData[:,1]>sin_hi) | (vectorData[:,2]>sin_hi), 'S', '0') , \
-                             np.where( (vectorData[:,1]>sin_hi) & (vectorData[:,2]>sin_hi), 'B', '0') ) )
+        # Long edges (>=lengthThresh):
+        #       'L': sharp left at both ends
+        #       'R': sharp right at both ends
+        #       'O': other long edge
+        # Short edges:
+        #       'l': medium left at both ends
+        #       'r': medium right at both ends
+        #       '>': alternate medium angle, starting to right
+        #       '<': alternate medium angle, starting to left
+        #       'o': other short edge
+        sequence =  "".join( np.where( (vectorData[:,0]>=lengthThresh), \
+                                ( np.where( ((vectorData[:,1]>sin_hi) & (vectorData[:,2]>sin_hi)), 'L', \
+                                  np.where( ((vectorData[:,1]<-sin_hi) & (vectorData[:,2]<-sin_hi)), 'R', 'O') )  \
+                            ), \
+                                ( np.where( ((vectorData[:,1]>sin_me) & (vectorData[:,2]>sin_me)), 'l', \
+                                  np.where( ((vectorData[:,1]<-sin_me) & (vectorData[:,2]<-sin_me)), 'r',  \
+                                  np.where( (vectorData[:,1]<-sin_me)&(vectorData[:,2]>sin_me), '>', \
+                                  np.where( (vectorData[:,1]>sin_me)&(vectorData[:,2]<-sin_me), '<', 'o') ) ) )\
+                                ) ) )
 
+        N = len(sequence)
+        sequence = sequence+sequence # allow cyclic pattern
         smallPatterns = []
-        pattern = re.compile(r"(S){2,}")
-        group_repl = lambda m: ('#' * len(m.group()))
-        matches = [r for r in pattern.finditer(sequence+sequence)]
+
+        # convex rectangular pattern
+        pattern = re.compile(r"(>[L|l]<)")
+        matches = [r for r in pattern.finditer(sequence)]
         if matches:
-            N = len(sequence)
             for spikyySeg in matches:
                 s = spikyySeg.span()
                 if s[0] < N and s[0] >= 0:
-                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.spike ) )
-                    sequence = re.sub(pattern, group_repl, sequence)
+                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.rectangular ) )
+        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
 
-        pattern = re.compile(r"(SBS){1,}")
-        matches = [r for r in pattern.finditer(sequence+sequence)]
+        # triangular pattern
+        pattern = re.compile(r">(>|<|l){1,}")
+        matches = [r for r in pattern.finditer(sequence)]
         if matches:
-            N = len(sequence)
-            for balkonySeg in matches:
-                s = balkonySeg.span()
+            for spikyySeg in matches:
+                s = spikyySeg.span()
                 if s[0] < N and s[0] >= 0:
-                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.balcony ) )
+                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.triangular ) )
+        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
+
+        # concave rectangular pattern
+        pattern = re.compile(r"(<[R,r]>)")
+        matches = [r for r in pattern.finditer(sequence)]
+        if matches:
+            for spikyySeg in matches:
+                s = spikyySeg.span()
+                if s[0] < N and s[0] >= 0:
+                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.rectangular ) )
+        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
 
         if smallPatterns:
             return smallPatterns

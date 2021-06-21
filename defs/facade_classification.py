@@ -33,10 +33,11 @@ MaxWayLevel = 2
 class PatternClass:
     unclassified = 0
     curvy = 1
-    spike = 2
-    balcony = 3
+    rectangular = 2
+    triangular = 3
 
 sin_lo = abs(sin(pi/180.*5.))
-sin_hi = abs(sin(pi/180.*30))
-curvyLengthFactor = 1.5
+sin_me = abs(sin(pi/180.*30))
+sin_hi = abs(sin(pi/180.*70))
+curvyLengthFactor = 2.
 lengthThresh = 5.

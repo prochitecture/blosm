@@ -229,8 +229,8 @@ class BuildingPatternRender(Renderer):
             return 'black'
         pattern = edge.pattern
         return 'red' if pattern==PatternClass.curvy else ( 
-            'blue' if pattern==PatternClass.spike else (
-                'green' if pattern==PatternClass.balcony else 'black'
+            'blue' if pattern==PatternClass.rectangular else (
+                'green' if pattern==PatternClass.triangular else 'black'
             )
         )
    
@@ -239,8 +239,8 @@ class BuildingPatternRender(Renderer):
         pattern = edge.pattern
         return 0.5 if edge.hasSharedBldgVectors() else ( 
             2. if pattern==PatternClass.curvy else ( 
-                2. if pattern==PatternClass.spike else (
-                    2. if pattern==PatternClass.balcony else 0.5
+                2. if pattern==PatternClass.rectangular else (
+                    2. if pattern==PatternClass.triangular else 0.5
                 ) 
             )
         )
