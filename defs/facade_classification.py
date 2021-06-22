@@ -38,6 +38,6 @@ class PatternClass:
 
 sin_lo = abs(sin(pi/180.*5.))
 sin_me = abs(sin(pi/180.*30))
-sin_hi = abs(sin(pi/180.*70))
+sin_hi = abs(sin(pi/180.*80))
 curvyLengthFactor = 2.
 lengthThresh = 5.

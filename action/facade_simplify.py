@@ -50,11 +50,10 @@ class FacadeSimplification:
 
             # prepare numpy matrix with data used for pattern detection
             nEdges = building.polygon.numEdges
-            vectorData = np.zeros((nEdges,4))    # length, sine start, sine end, class
+            vectorData = np.zeros((nEdges,4))    # shared, length, sine start, sine end, class
             vectors = [vector for vector in building.polygon.getVectors()]
-            vectorData[:,:2] = [(vector.edge.length,np.cross(vector.prev.unitVector, vector.unitVector)) for vector in vectors]
-            vectorData[:,2] = np.roll(vectorData[:,1],-1)
-            vectorData[:,3] = PatternClass.unclassified
+            vectorData[:,:3] = [(vector.edge.hasSharedBldgVectors(), vector.edge.length, np.cross(vector.prev.unitVector, vector.unitVector)) for vector in vectors]
+            vectorData[:,3] = np.roll(vectorData[:,2],-1)
 
             # detect curvy sequences
             curvyEdges = self.detectCurvyEdges(vectorData,vectors)
@@ -75,17 +74,22 @@ class FacadeSimplification:
     #                                       If firstEdge is lastEdge, the whole building polygon is a curvy sequence 
     #   None                              : No curvy sequence found 
     def detectCurvyEdges(self,vectorData,vectors):
-        lowAngles = ((abs(vectorData[:,1])>sin_lo) & (abs(vectorData[:,1])<sin_me)) | \
-                    ((abs(vectorData[:,2])>sin_lo) & (abs(vectorData[:,2])<sin_me)) 
+        shared = vectorData[:,0]
+        sineStart = vectorData[:,2]
+        sineEnd = vectorData[:,3]
+        lowAngles = (shared==0.0) & ( \
+                        ((abs(sineStart)>sin_lo) & (abs(sineStart)<sin_me)) | \
+                        ((abs(sineEnd)>sin_lo) & (abs(sineEnd)<sin_me)) 
+                    )
         if not np.any(lowAngles):
             return None
 
         # estimate a length threshold
-        curvyLengthThresh = np.mean(vectorData[lowAngles,0]) * curvyLengthFactor
+        curvyLengthThresh = np.mean(vectorData[lowAngles,1]) * curvyLengthFactor
 
         # pattern character sequence. edges with angle between 5° and 30° on either end 
         # and a length below <curvyLengthThresh> get a 'C', else a '0'
-        sequence =  "".join( np.where( (vectorData[:,0]<curvyLengthThresh) & lowAngles,'C','0') )
+        sequence =  "".join( np.where( (vectorData[:,1]<curvyLengthThresh) & lowAngles,'C','0') )
 
         # a sequence of four or more 'C' matches as curvy sequence
         pattern = re.compile(r"(C){4,}")
@@ -106,6 +110,8 @@ class FacadeSimplification:
     #                                       If firstEdge is lastEdge, the whole building polygon is a curvy sequence 
     #   None                              : No patterns found 
     def detectSmallPatterns(self,vectorData,vectors):
+        # Shared edges:
+        #       'X': edges shared
         # Long edges (>=lengthThresh):
         #       'L': sharp left at both ends
         #       'R': sharp right at both ends
@@ -116,15 +122,21 @@ class FacadeSimplification:
         #       '>': alternate medium angle, starting to right
         #       '<': alternate medium angle, starting to left
         #       'o': other short edge
-        sequence =  "".join( np.where( (vectorData[:,0]>=lengthThresh), \
-                                ( np.where( ((vectorData[:,1]>sin_hi) & (vectorData[:,2]>sin_hi)), 'L', \
-                                  np.where( ((vectorData[:,1]<-sin_hi) & (vectorData[:,2]<-sin_hi)), 'R', 'O') )  \
-                            ), \
-                                ( np.where( ((vectorData[:,1]>sin_me) & (vectorData[:,2]>sin_me)), 'l', \
-                                  np.where( ((vectorData[:,1]<-sin_me) & (vectorData[:,2]<-sin_me)), 'r',  \
-                                  np.where( (vectorData[:,1]<-sin_me)&(vectorData[:,2]>sin_me), '>', \
-                                  np.where( (vectorData[:,1]>sin_me)&(vectorData[:,2]<-sin_me), '<', 'o') ) ) )\
+        shared = vectorData[:,0]
+        length = vectorData[:,1]
+        sineStart = vectorData[:,2]
+        sineEnd = vectorData[:,3]
+        sequence =  "".join( np.where( (shared!=0.0), 'X', \
+                                np.where( (length>=lengthThresh), \
+                                ( np.where( ((sineStart>sin_hi) & (sineEnd>sin_hi)), 'L', \
+                                  np.where( ((sineStart<-sin_hi) & (sineEnd<-sin_hi)), 'R', 'O') )  \
+                                ), \
+                                ( np.where( ((sineStart>sin_me) & (sineEnd>sin_me)), 'l', \
+                                  np.where( ((sineStart<-sin_me) & (sineEnd<-sin_me)), 'r',  \
+                                  np.where( (sineStart<-sin_me)&(sineEnd>sin_me), '>', \
+                                  np.where( (sineStart>sin_me)&(sineEnd<-sin_me), '<', 'o') ) ) )\
                                 ) ) )
+                            )
 
         N = len(sequence)
         sequence = sequence+sequence # allow cyclic pattern
@@ -158,6 +170,16 @@ class FacadeSimplification:
                 s = spikyySeg.span()
                 if s[0] < N and s[0] >= 0:
                     smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.rectangular ) )
+        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
+
+        # triangular pattern
+        pattern = re.compile(r"<(>|<|r){1,}")
+        matches = [r for r in pattern.finditer(sequence)]
+        if matches:
+            for spikyySeg in matches:
+                s = spikyySeg.span()
+                if s[0] < N and s[0] >= 0:
+                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.triangular ) )
         sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
 
         if smallPatterns:
