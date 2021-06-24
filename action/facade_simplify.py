@@ -50,34 +50,33 @@ class FacadeSimplification:
 
             # prepare numpy matrix with data used for pattern detection
             nEdges = building.polygon.numEdges
-            vectorData = np.zeros((nEdges,4))    # shared, length, sine start, sine end, class
+            vectorData = np.zeros((nEdges,3))    # length, sine start, sine end
             vectors = [vector for vector in building.polygon.getVectors()]
-            vectorData[:,:3] = [(vector.edge.hasSharedBldgVectors(), vector.edge.length, np.cross(vector.prev.unitVector, vector.unitVector)) for vector in vectors]
-            vectorData[:,3] = np.roll(vectorData[:,2],-1)
+            vectorData[:,:2] = [(vector.edge.length, np.cross(vector.prev.unitVector, vector.unitVector)) for vector in vectors]
+            vectorData[:,2] = np.roll(vectorData[:,1],-1)
 
-            # detect curvy sequences
-            curvyEdges = self.detectCurvyEdges(vectorData,vectors)
+            # detect curvy features
+            curvyFeatures = self.detectCurvyFeatures(vectorData,vectors)
 
             # a primitive filter to avoid spiky edge detection for all buildings
             nLongEdges = np.where( vectorData[:,0]>=lengthThresh  )[0].shape[0]
             nShortEdges = np.where( vectorData[:,0]<lengthThresh )[0].shape[0]
-            smallPatterns = None
+            smallFeatures = None
             if (nLongEdges and nShortEdges > 2) or nShortEdges > 5:
-                smallPatterns = self.detectSmallPatterns(vectorData,vectors)
+                smallFeatures = self.detectsmallFeatures(vectorData,vectors)
 
-            self.replaceSequences(curvyEdges, building.polygon)
-            self.replaceSequences(smallPatterns, building.polygon)
+            self.replaceSequences(curvyFeatures, building.polygon)
+            self.replaceSequences(smallFeatures, building.polygon)
 
     # Detects curvy sequences.
     # Returns:
-    #   (firstEdge,lastEdge,patternClass) : Tuple of first edge of sequence and last edge of sequence and the pattern class.
+    #   (firstEdge,lastEdge,featureClass) : Tuple of first edge of sequence and last edge of sequence and the feature class.
     #                                       If firstEdge is lastEdge, the whole building polygon is a curvy sequence 
     #   None                              : No curvy sequence found 
-    def detectCurvyEdges(self,vectorData,vectors):
-        shared = vectorData[:,0]
-        sineStart = vectorData[:,2]
-        sineEnd = vectorData[:,3]
-        lowAngles = (shared==0.0) & ( \
+    def detectCurvyFeatures (self,vectorData,vectors):
+        sineStart = vectorData[:,1]
+        sineEnd = vectorData[:,2]
+        lowAngles = ( \
                         ((abs(sineStart)>sin_lo) & (abs(sineStart)<sin_me)) | \
                         ((abs(sineEnd)>sin_lo) & (abs(sineEnd)<sin_me)) 
                     )
@@ -94,24 +93,22 @@ class FacadeSimplification:
         # a sequence of four or more 'C' matches as curvy sequence
         pattern = re.compile(r"(C){4,}")
         matches = [c for c in pattern.finditer(sequence+sequence)]  # adjacent sequence for circularity
-        curvyEdges = []
+        curvyFeatures = []
         if matches:
             N = len(sequence)
             for curvySeg in matches:
                 s = curvySeg.span()
                 if s[0] < N and s[0] >= 0:
-                    curvyEdges.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.curvy ) )
+                    curvyFeatures.append( ( vectors[s[0]], vectors[(s[1]-1)%N], FeatureClass.curvy ) )
 
-        return curvyEdges
+        return curvyFeatures
 
     # Detects small patterns (rectangular and triangular).
     # Returns:
     #   (firstEdge,lastEdge,patternClass) : Tuple of first edge of sequence and last edge of sequence and the pattern class.
     #                                       If firstEdge is lastEdge, the whole building polygon is a curvy sequence 
     #   None                              : No patterns found 
-    def detectSmallPatterns(self,vectorData,vectors):
-        # Shared edges:
-        #       'X': edges shared
+    def detectsmallFeatures(self,vectorData,vectors):
         # Long edges (>=lengthThresh):
         #       'L': sharp left at both ends
         #       'R': sharp right at both ends
@@ -122,12 +119,11 @@ class FacadeSimplification:
         #       '>': alternate medium angle, starting to right
         #       '<': alternate medium angle, starting to left
         #       'o': other short edge
-        shared = vectorData[:,0]
-        length = vectorData[:,1]
-        sineStart = vectorData[:,2]
-        sineEnd = vectorData[:,3]
-        sequence =  "".join( np.where( (shared!=0.0), 'X', \
-                                np.where( (length>=lengthThresh), \
+        length = vectorData[:,0]
+        sineStart = vectorData[:,1]
+        sineEnd = vectorData[:,2]
+
+        sequence =  "".join(  np.where( (length>=lengthThresh), \
                                 ( np.where( ((sineStart>sin_hi) & (sineEnd>sin_hi)), 'L', \
                                   np.where( ((sineStart<-sin_hi) & (sineEnd<-sin_hi)), 'R', 'O') )  \
                                 ), \
@@ -135,54 +131,56 @@ class FacadeSimplification:
                                   np.where( ((sineStart<-sin_me) & (sineEnd<-sin_me)), 'r',  \
                                   np.where( (sineStart<-sin_me)&(sineEnd>sin_me), '>', \
                                   np.where( (sineStart>sin_me)&(sineEnd<-sin_me), '<', 'o') ) ) )\
-                                ) ) )
+                                ) )
                             )
 
         N = len(sequence)
         sequence = sequence+sequence # allow cyclic pattern
-        smallPatterns = []
+        smallFeatures = []
 
-        # convex rectangular pattern
+        # convex rectangular features
         pattern = re.compile(r"(>[L|l]<)")
         matches = [r for r in pattern.finditer(sequence)]
         if matches:
-            for spikyySeg in matches:
-                s = spikyySeg.span()
+            for featureSeg in matches:
+                s = featureSeg.span()
                 if s[0] < N and s[0] >= 0:
-                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.rectangular ) )
-        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
+                    smallFeatures.append( ( vectors[s[0]], vectors[(s[1]-1)%N], FeatureClass.rectangular ) )
+        sequence = re.sub(pattern, lambda m: ('1' * len(m.group())), sequence)
 
-        # triangular pattern
-        pattern = re.compile(r">(>|<|l){1,}")
+        # convex triangular features
+        triangle = r">(>|<|l){1,}"
+        left_triangle = r"(l<)" # special case for triangular part of rectangle
+        pattern = re.compile(triangle + r"|" + left_triangle)
         matches = [r for r in pattern.finditer(sequence)]
         if matches:
-            for spikyySeg in matches:
-                s = spikyySeg.span()
+            for featureSeg in matches:
+                s = featureSeg.span()
                 if s[0] < N and s[0] >= 0:
-                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.triangular ) )
-        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
+                    smallFeatures.append( ( vectors[s[0]], vectors[(s[1]-1)%N], FeatureClass.triangular ) )
+        sequence = re.sub(pattern, lambda m: ('2' * len(m.group())), sequence)
 
-        # concave rectangular pattern
-        pattern = re.compile(r"(<[R,r]>)")
+        # concave rectangular features
+        pattern = re.compile(r"([\-|<][R,r][\+|>])")
         matches = [r for r in pattern.finditer(sequence)]
         if matches:
-            for spikyySeg in matches:
-                s = spikyySeg.span()
+            for featureSeg in matches:
+                s = featureSeg.span()
                 if s[0] < N and s[0] >= 0:
-                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.rectangular ) )
-        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
+                    smallFeatures.append( ( vectors[s[0]], vectors[(s[1]-1)%N], FeatureClass.rectangular ) )
+        sequence = re.sub(pattern, lambda m: ('3' * len(m.group())), sequence)
 
-        # triangular pattern
+        # concave triangular features
         pattern = re.compile(r"<(>|<|r){1,}")
         matches = [r for r in pattern.finditer(sequence)]
         if matches:
-            for spikyySeg in matches:
-                s = spikyySeg.span()
+            for featureSeg in matches:
+                s = featureSeg.span()
                 if s[0] < N and s[0] >= 0:
-                    smallPatterns.append( ( vectors[s[0]], vectors[(s[1]-1)%N], PatternClass.triangular ) )
-        sequence = re.sub(pattern, lambda m: ('#' * len(m.group())), sequence)
+                    smallFeatures.append( ( vectors[s[0]], vectors[(s[1]-1)%N], FeatureClass.triangular ) )
+        sequence = re.sub(pattern, lambda m: ('4' * len(m.group())), sequence)
 
-        if smallPatterns:
-            return smallPatterns
+        if smallFeatures:
+            return smallFeatures
         else:
             return None

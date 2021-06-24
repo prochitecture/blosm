@@ -22,7 +22,7 @@ from numpy.linalg import norm
 import parse
 from mathutils import Vector
 from util.polygon import Polygon
-from defs.facade_classification import WayLevel, VisibilityAngleFactor, PatternClass
+from defs.facade_classification import WayLevel, VisibilityAngleFactor, FeatureClass
 
 
 
@@ -234,7 +234,7 @@ class BldgEdge:
         self.v1 = array(v1)
         self.id2 = id2
         self.v2 = array(v2)
-        self.pattern = PatternClass.unclassified
+        self.pattern = FeatureClass.unclassified
         self.id = BldgEdge.ID
         BldgEdge.ID += 1
         

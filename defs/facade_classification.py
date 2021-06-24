@@ -30,7 +30,7 @@ MaxWayLevel = 2
 
 # definitions used for patterns
 
-class PatternClass:
+class FeatureClass:
     unclassified = 0
     curvy = 1
     rectangular = 2

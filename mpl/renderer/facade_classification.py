@@ -1,8 +1,9 @@
+from numpy.lib.twodim_base import triu_indices
 from . import Renderer, BuildingRenderer, WayRenderer
 import parse
 from parse.osm import Osm
 from defs.way import facadeVisibilityWayCategoriesSet, Category
-from defs.facade_classification import FacadeClass, PatternClass
+from defs.facade_classification import FacadeClass, FeatureClass
 from math import atan2, pi
 
 
@@ -228,9 +229,9 @@ class BuildingPatternRender(Renderer):
         if edge.hasSharedBldgVectors():
             return 'black'
         pattern = edge.pattern
-        return 'red' if pattern==PatternClass.curvy else ( 
-            'blue' if pattern==PatternClass.rectangular else (
-                'green' if pattern==PatternClass.triangular else 'black'
+        return 'red' if pattern==FeatureClass.curvy else ( 
+            'blue' if pattern==FeatureClass.rectangular else (
+                'green' if pattern==FeatureClass.triangular else 'black'
             )
         )
    
@@ -238,9 +239,9 @@ class BuildingPatternRender(Renderer):
     def getLineWidth(edge):
         pattern = edge.pattern
         return 0.5 if edge.hasSharedBldgVectors() else ( 
-            2. if pattern==PatternClass.curvy else ( 
-                2. if pattern==PatternClass.rectangular else (
-                    2. if pattern==PatternClass.triangular else 0.5
+            2. if pattern==FeatureClass.curvy else ( 
+                2. if pattern==FeatureClass.rectangular else (
+                    2. if pattern==FeatureClass.triangular else 0.5
                 ) 
             )
         )
