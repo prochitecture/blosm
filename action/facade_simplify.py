@@ -84,11 +84,11 @@ class FacadeSimplification:
             return None
 
         # estimate a length threshold
-        curvyLengthThresh = np.mean(vectorData[lowAngles,1]) * curvyLengthFactor
+        curvyLengthThresh = np.mean(vectorData[lowAngles,0]) * curvyLengthFactor
 
         # pattern character sequence. edges with angle between 5° and 30° on either end 
         # and a length below <curvyLengthThresh> get a 'C', else a '0'
-        sequence =  "".join( np.where( (vectorData[:,1]<curvyLengthThresh) & lowAngles,'C','0') )
+        sequence =  "".join( np.where( (vectorData[:,0]<curvyLengthThresh) & lowAngles,'C','0') )
 
         # a sequence of four or more 'C' matches as curvy sequence
         pattern = re.compile(r"(C){4,}")
