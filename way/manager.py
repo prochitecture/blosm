@@ -1,4 +1,5 @@
 from . import Way
+from defs.base.polyline import Polyline
 from defs.way import allWayCategories, facadeVisibilityWayCategories
 
 
@@ -69,3 +70,52 @@ class WayManager:
     def addAction(self, action):
         action.app = self.app
         self.actions.append(action)
+
+
+class RoadPolygonsManager:
+    
+    def __init__(self, data, app):
+        self.id = "road_polygons"
+        self.data = data
+        self.polylines = []
+        self.connectedManagers = []
+        self.actions = []
+        
+        # don't accept broken multipolygons
+        self.acceptBroken = False
+        
+        app.addManager(self)
+    
+    def process(self):
+        for polyline in self.polylines:
+            polyline.init(self)
+            
+        for connectedManager in self.connectedManagers:
+            self.polylines.extend(connectedManager.getPolylines())
+        
+        for action in self.actions:
+            action.do(self)
+
+    def parseWay(self, element, elementId):
+        self.polylines.append(Polyline(element))
+    
+    def parseRelation(self, element, elementId):
+        return
+    
+    def render(self):
+        RoadPolygonsRenderer().render(self)
+
+
+from mpl.renderer import Renderer
+class RoadPolygonsRenderer(Renderer):
+    """
+    A temporary class
+    """
+    def render(self, manager):
+        for polyline in manager.polylines:
+            for edge in polyline.edges:
+                self.mpl.ax.plot(
+                    (edge.v1[0], edge.v2[0]),
+                    (edge.v1[1], edge.v2[1]),
+                    color="brown", linewidth=1.,
+                )

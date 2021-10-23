@@ -106,6 +106,10 @@ class BaseBuildingManager:
             )
             self.edges[key] = edge
         return edge
+    
+    def getPolylines(self):
+        # return <BldgPolygon>s for <way.manager.RoadPolygonsManager>
+        return (building.polygon for building in self.buildings)
 
 
 class BuildingManager(BaseBuildingManager, Manager):

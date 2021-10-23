@@ -1,6 +1,6 @@
 #from manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken
 from building.manager import BaseBuildingManager
-from way.manager import WayManager
+from way.manager import WayManager, RoadPolygonsManager
 from mpl.renderer.facade_classification import \
     BuildingVisibilityRender, WayVisibilityRenderer, BuildingClassificationRender, BuildingFeatureRender
 from mpl.renderer import BuildingBaseRenderer
@@ -11,6 +11,7 @@ from action.feature_detection import FeatureDetection
 from action.curved_features import CurvedFeatures
 from action.straight_angles import StraightAngles
 from action.way_clustering import WayClustering
+from action.road_polygons import RoadPolygons
 
 #from manager.logging import Logger
 
@@ -38,6 +39,7 @@ def setup(app, osm):
     app.argParserExtra.add_argument("--simplifyPolygons", action='store_true', help="Simplify polygons with the detected features", default=False)
     app.argParserExtra.add_argument("--restoreFeatures", action='store_true', help="Restore simplified features", default=False)
     app.argParserExtra.add_argument("--wayClustering", action='store_true', help="Create way clusters", default=False)
+    app.argParserExtra.add_argument("--roadPolygons", action='store_true', help="Create polygons surrounding roads", default=False)
     
     # parse the newly added command line arguments
     app.parseArgs()
@@ -54,9 +56,15 @@ def setup(app, osm):
     restoreFeatures = getattr(app, "restoreFeatures", False)
 
     wayClustering = getattr(app, "wayClustering", False)
+    
+    roadPolygons = getattr(app, "roadPolygons", False) and app.highways
+    
     # create managers
     
     wayManager = WayManager(osm, app)
+    
+    roadPolygonsManager = RoadPolygonsManager(osm, app) if roadPolygons else None
+        
     
     #linestring = Linestring(osm)
     #polygon = Polygon(osm)
@@ -103,6 +111,9 @@ def setup(app, osm):
             "buildings", 
             buildings
         )
+        
+        if roadPolygonsManager:
+            roadPolygonsManager.connectedManagers.append(buildings)
     
     if app.highways or app.railways:
         osm.addCondition(tunnel)
@@ -196,4 +207,30 @@ def setup(app, osm):
             lambda tags, e: "railway" in tags,
             "railways",
             wayManager
+        )
+    
+    if roadPolygonsManager:
+        roadPolygonsManager.actions.append(RoadPolygons())
+        
+        # add conditions for the polylines need to create road polygons
+        if not app.buildings:
+            osm.addCondition(
+                lambda tags, e: "building" in tags,
+                None, 
+                roadPolygonsManager
+            )   
+        osm.addCondition(
+            lambda tags, e: "landuse" in tags and tags.get("landuse") != "residential",
+            None,
+            roadPolygonsManager
+        )
+        osm.addCondition(
+            lambda tags, e: "natural" in tags,
+            None,
+            roadPolygonsManager
+        )
+        osm.addCondition(
+            lambda tags, e: "barrier" in tags,
+            None,
+            roadPolygonsManager
         )
