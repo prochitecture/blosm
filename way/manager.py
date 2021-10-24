@@ -112,10 +112,50 @@ class RoadPolygonsRenderer(Renderer):
     A temporary class
     """
     def render(self, manager):
+        ax = self.mpl.ax
         for polyline in manager.polylines:
-            for edge in polyline.edges:
-                self.mpl.ax.plot(
-                    (edge.v1[0], edge.v2[0]),
-                    (edge.v1[1], edge.v2[1]),
-                    color="brown", linewidth=1.,
+            lineStyle, areaColor = self.getStyles(polyline.element)
+            if lineStyle:
+                for edge in polyline.edges:
+                    ax.plot(
+                        (edge.v1[0], edge.v2[0]),
+                        (edge.v1[1], edge.v2[1]),
+                        **lineStyle
+                    )
+            if areaColor:
+                ax.fill(
+                    [ edge.v1[0] for edge in polyline.edges ],
+                    [ edge.v1[1] for edge in polyline.edges ],
+                    areaColor
                 )
+    
+    def getStyles(self, element):
+        tags = element.tags
+        if "building" in tags:
+            return ( dict(color="#c2b5aa", linewidth=1.), "#d9d0c9" )
+        elif "landuse" in tags:
+            landuse = tags["landuse"]
+            if landuse == "construction":
+                return (None, "#c7c7b4")
+            elif landuse == "industrial":
+                return (None, "#e6d1e3")
+            elif landuse == "forest":
+                return (None, "#9dca8a")
+            elif landuse == "cemetery":
+                return (None, "#aacbaf")
+            elif landuse in ("grass", "village_green"):
+                return (None, "#c5ec94")
+            else:
+                return (None, "#a7a87e")
+        elif "natural" in tags:
+            natural = tags["natural"]
+            if natural == "water":
+                return (None, "#a6c6c6")
+            elif natural == "tree_row":
+                return ( dict(color="#a9cea1", linewidth=2.5), None )
+            elif natural == "wood":
+                return (None, "#9dca8a")
+            else:
+                return (None, "#d6d99f")
+        elif "barrier" in tags:
+            return ( dict(color="black", linewidth=0.5), None )

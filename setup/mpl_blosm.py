@@ -220,7 +220,7 @@ def setup(app, osm):
                 roadPolygonsManager
             )   
         osm.addCondition(
-            lambda tags, e: "landuse" in tags and tags.get("landuse") != "residential",
+            lambda tags, e: "landuse" in tags and not tags.get("landuse") in ("residential", "retail"),
             None,
             roadPolygonsManager
         )
