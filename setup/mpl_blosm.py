@@ -210,7 +210,7 @@ def setup(app, osm):
         )
     
     if roadPolygonsManager:
-        roadPolygonsManager.actions.append(RoadPolygons())
+        roadPolygonsManager.addAction(RoadPolygons())
         
         # add conditions for the polylines need to create road polygons
         if not app.buildings:

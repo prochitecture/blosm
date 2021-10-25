@@ -77,6 +77,8 @@ class RoadPolygonsManager:
     def __init__(self, data, app):
         self.id = "road_polygons"
         self.data = data
+        self.app = app
+        
         self.polylines = []
         self.connectedManagers = []
         self.actions = []
@@ -85,6 +87,10 @@ class RoadPolygonsManager:
         self.acceptBroken = False
         
         app.addManager(self)
+    
+    def addAction(self, action):
+        action.app = self.app
+        self.actions.append(action)
     
     def process(self):
         for polyline in self.polylines:

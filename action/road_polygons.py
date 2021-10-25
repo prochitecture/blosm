@@ -10,3 +10,6 @@ class RoadPolygons:
         for polyline in manager.polylines:
             for edge in polyline.edges:
                 pass
+        
+        for way in self.app.managersById["ways"].getAllWays():
+            pass
