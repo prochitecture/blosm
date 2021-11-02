@@ -269,20 +269,22 @@ class RoadPolygons:
     def computePolylineVisibility(self):
         from defs.way import allRoadwayCategoriesRank
 
-        for crx in self.sectionNetwork.iterAllIntersectionNodes():
-            plt.plot(crx[0],crx[1],'ko',zorder=300)
+        # for crx in self.sectionNetwork.iterAllIntersectionNodes():
+        #     plt.plot(crx[0],crx[1],'ko',zorder=300)
 
         for waySeg in self.sectionNetwork.iterAllSegments():
             finalPosSkyline = []
             finalNegSkyline = []
             if allRoadwayCategoriesRank[waySeg.category] > allRoadwayCategoriesRank['secondary']:
                 continue
-            if waySeg.ID != 5833:
+            # c = (waySeg.s+waySeg.t)/2.
+            # plt.text(c[0],c[1],str(waySeg.ID))
+            if waySeg.ID not in [5948,5833,5968,5838,5843,5965,5846,5961,5851,5861,5937,5855,5856,5824,5827,5949,5964,5847,5960,5839,5867,5906,5905]:
                 continue
 
-            v1,v2 = waySeg.s, waySeg.t
-            if True:
-            # for v1,v2 in zip(waySeg.path[:-1],waySeg.path[1:]):
+            # v1,v2 = waySeg.s, waySeg.t
+            # if True:
+            for v1,v2 in zip(waySeg.path[:-1],waySeg.path[1:]):
                 v1, v2 = np.array(v1), np.array(v2) # <sectionNetwork> delivers mathutils.Vector's
                 way = (v2-v1)
                 wayLength = np.linalg.norm(way)
@@ -349,8 +351,14 @@ class RoadPolygons:
                         np.matmul(v, revMatrix, out=v)
                         v += wayCenter
 
-                    finalPosSkyline.extend(posSkyline) 
-                    finalNegSkyline.extend(negSkyline) 
+                    if finalPosSkyline:
+                        finalPosSkyline.extend(posSkyline[1:]) 
+                    else:
+                        finalPosSkyline.extend(posSkyline)
+                    if finalNegSkyline:
+                        finalNegSkyline.extend(negSkyline[1:]) 
+                    else:
+                        finalNegSkyline.extend(negSkyline)
 
                     w = np.array(( (-searchWidth,0.),(searchWidth,0.) ))
                     np.matmul(w, revMatrix, out=w)
@@ -368,9 +376,9 @@ class RoadPolygons:
                 )
 
                 for v1,v2 in zip(polygon[:-1],polygon[1:]):
-                    plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'r',linewidth=2,zorder=300)
+                    plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'r',linewidth=0.5,zorder=300)
                 v1, v2 = polygon[-1], polygon[0]
-                plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'r',linewidth=2,zorder=300)
+                plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'r',linewidth=0.5,zorder=300)
 
 
                 # plt.gca().axis('equal')
