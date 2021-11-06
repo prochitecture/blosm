@@ -112,8 +112,8 @@ def setup(app, osm):
             buildings
         )
         
-        if roadPolygonsManager:
-            roadPolygonsManager.connectedManagers.append(buildings)
+        #if roadPolygonsManager:
+        #    roadPolygonsManager.connectedManagers.append(buildings)
     
     if app.highways or app.railways:
         osm.addCondition(tunnel)
@@ -213,12 +213,12 @@ def setup(app, osm):
         roadPolygonsManager.addAction(RoadPolygons())
         
         # add conditions for the polylines need to create road polygons
-        if not app.buildings:
-            osm.addCondition(
-                lambda tags, e: "building" in tags,
-                None, 
-                roadPolygonsManager
-            )   
+        #if not app.buildings:
+        #    osm.addCondition(
+        #        lambda tags, e: "building" in tags,
+        #        None, 
+        #        roadPolygonsManager
+        #    )   
         osm.addCondition(
             lambda tags, e: "landuse" in tags and not tags.get("landuse") in ("residential", "retail"),
             None,

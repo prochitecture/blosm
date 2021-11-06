@@ -80,7 +80,8 @@ class RoadPolygonsManager:
         self.app = app
         
         self.polylines = []
-        self.connectedManagers = []
+        self.buildings = None
+        #self.connectedManagers = []
         self.actions = []
         
         # don't accept broken multipolygons
@@ -93,11 +94,14 @@ class RoadPolygonsManager:
         self.actions.append(action)
     
     def process(self):
+        # get <self.buildings>
+        self.buildings = self.app.managersById.get("buildings") and self.app.managersById.get("buildings").buildings
+        
         for polyline in self.polylines:
             polyline.init(self)
             
-        for connectedManager in self.connectedManagers:
-            self.polylines.extend(connectedManager.getPolylines())
+        #for connectedManager in self.connectedManagers:
+        #    self.polylines.extend(connectedManager.getPolylines())
         
         for action in self.actions:
             action.do(self)
