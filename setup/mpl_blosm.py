@@ -59,12 +59,9 @@ def setup(app, osm):
     
     roadPolygons = getattr(app, "roadPolygons", False) and app.highways
     
-    # create managers
+    # managers
     
-    wayManager = WayManager(osm, app)
-    
-    roadPolygonsManager = RoadPolygonsManager(osm, app) if roadPolygons else None
-        
+    buildings = wayManager = roadPolygonsManager = None
     
     #linestring = Linestring(osm)
     #polygon = Polygon(osm)
@@ -117,6 +114,8 @@ def setup(app, osm):
     
     if app.highways or app.railways:
         osm.addCondition(tunnel)
+        
+        wayManager = WayManager(osm, app)
         
         if wayClustering:
             wayManager.addRenderer(WayClusterRenderer())
@@ -209,7 +208,8 @@ def setup(app, osm):
             wayManager
         )
     
-    if roadPolygonsManager:
+    if roadPolygons:
+        roadPolygonsManager = RoadPolygonsManager(osm, app)
         roadPolygonsManager.addAction(RoadPolygons())
         
         # add conditions for the polylines need to create road polygons
