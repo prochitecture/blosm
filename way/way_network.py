@@ -15,6 +15,7 @@ class NetSegment():
             self.initFromDetails(*args)
         else:
             self.initFromOther(*args)
+        self.bisects = None     # computed on demand
 
     def initFromDetails(self, source, target, category, length=None, path=None):
         self.s = Vector(source).freeze()    # source node

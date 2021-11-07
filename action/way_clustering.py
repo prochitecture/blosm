@@ -39,8 +39,8 @@ class WayClustering:
         smallJunctions = findWayJunctionsFor(graph, remainingCrossings, smallRoads, 15.)
 
         wayManager.junctions = (
-            mainJunctions,
-            smallJunctions
+            [],#mainJunctions,
+            []#smallJunctions
         )
     
     def cleanup(self):
