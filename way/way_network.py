@@ -231,8 +231,8 @@ class WayNetwork(dict):
                     path.append(nextSeg)
                     segmentSet -= set([nextSeg])
 
-        for cycle in cycles:
-            plotCycle(cycle)
+        # for cycle in cycles:
+        #     plotCycle(cycle)
 
         return cycles
 
@@ -267,9 +267,9 @@ def plotCycle(cycle):
 
     x = [n[0] for n in scaledNodes]
     y = [n[1] for n in scaledNodes]
-    plt.fill(x,y,'#0000ff',alpha = 0.1,zorder = 50)
+    plt.fill(x,y,'#ff0000',alpha = 0.03,zorder = 500)
     for v1,v2 in _iterCircularPrevNext(scaledNodes):
-        plt.plot((v1[0], v2[0]),(v1[1], v2[1]),'b:',alpha = 1.0,zorder = 50,linewidth=0.5)
+        plt.plot((v1[0], v2[0]),(v1[1], v2[1]),'b:',alpha = 1.0,zorder = 500,linewidth=0.5)
 
 
 
