@@ -1,6 +1,10 @@
 from mathutils import Vector
 from functools import cmp_to_key
 from math import atan2, pi
+
+from lib.pygeos.geom import GeometryFactory
+from lib.pygeos.shared import CAP_STYLE
+
 from defs.way import allRoadwayCategoriesRank
 
 PI2 = 2.*pi
@@ -16,11 +20,14 @@ class NetSegment():
         else:
             self.initFromOther(*args)
         self.bisects = None     # computed on demand
+        self.buffer = None      # computed on demand
+        self.geosF = GeometryFactory()
 
-    def initFromDetails(self, source, target, category, length=None, path=None):
+    def initFromDetails(self, source, target, category, length=None, width = 0., path=None):
         self.s = Vector(source).freeze()    # source node
         self.t = Vector(target).freeze()    # target node
         self.category = category
+        self.width = width
         self.geomLength = (self.t-self.s).length
         if length:
             self.length = length
@@ -38,6 +45,7 @@ class NetSegment():
         self.category = other.category
         self.geomLength = other.geomLength
         self.length = other.length
+        self.width = other.width
         self.path = other.path        # includes source and target
         self.firstV = other.firstV
 
@@ -57,16 +65,23 @@ class NetSegment():
         for i in range(len(path)-1):
             yield path[i], path[i+1]
 
+    def getBuffer(self):
+        if self.buffer:
+            return self.getBuffer
+        else:
+            geosCoords = [self.geosF.createCoordinate(v) for v in self.path]
+            geosString = self.geosF.createLineString(geosCoords)
+            self.buffer = geosString.buffer(self.width/2.,cap_style=CAP_STYLE.square)
+            return self.buffer
+
     def __invert__(self):
         # create segment with the reversed direction
-        return self.__class__(self.t, self.s, self.category, self.length, self.path[::-1])
+        return self.__class__(self.t, self.s, self.category, self.length, self.width, self.path[::-1])
     def __eq__(self, other):
         # comparison of segments (no duplicates allowed)
         return self.category == other.category and self.path == other.path
     def __hash__(self):
         return hash((self.s, self.t, self.length))
-
-
 
 class WayNetwork(dict):
     # undirected multigraph
@@ -196,46 +211,47 @@ class WayNetwork(dict):
         return found
 
     def compare_angles(self, v1, v2):
-        return 1 if atan2(v1[1],v1[0])+(v1[1]<0)*PI2 < atan2(v2[1],v2[0])+(v2[1]<0)*PI2 else -1
+        return 1 if atan2(v1[1],v1[0])+(v1[1]<0)*PI2 > atan2(v2[1],v2[0])+(v2[1]<0)*PI2 else -1
 
     def createCircularEmbedding(self):
         self.counterClockEmbedding = dict(list())
         for node in self:
             neighbors = [seg for seg in self.iterOutSegments(node)]
+            if 5783 in [s.ID for s in neighbors]:
+                test=1
             if len(neighbors)>1:
                 ordering = sorted(neighbors, key = cmp_to_key( lambda a,b: self.compare_angles(a.firstV,b.firstV)) )
             else:
                 ordering = neighbors
             self.counterClockEmbedding[node] = ordering
 
-    def iterCycles(self):
+    def getCycles(self):
         if not self.counterClockEmbedding:
             self.createCircularEmbedding()
 
         # create set of all segments 
-        segmentSet = set( s for s in self.iterAllSegments() )
+        segmentSet = set(segment for segment in self.iterAllSegments())
 
-        cycles = []
+        cycleSegs = []
         while (len(segmentSet) > 0):
             # start with a first segment
             s = next(iter(segmentSet))
-            path = [s]
+            segs = [s]
             segmentSet -= set([s])
             while True:
-                neighbors = self.counterClockEmbedding[path[-1].t]
-                nextSeg = neighbors[(neighbors.index(~path[-1])+1)%(len(neighbors))]
-                if nextSeg == path[0]:
-                    cycles.append(path)
+                neighbors = self.counterClockEmbedding[segs[-1].t]
+                nextSeg = neighbors[(neighbors.index(~segs[-1])+1)%(len(neighbors))]
+                if nextSeg == segs[0]:
+                    # dont return border of outer scene frame
+                    if not all(s.category=='scene_border' for s in segs):
+                        cycleSegs.append(segs)
                     break
                 else:
-                    path.append(nextSeg)
+                    segs.append(nextSeg)
                     segmentSet -= set([nextSeg])
+        return cycleSegs
 
-        # for cycle in cycles:
-        #     plotCycle(cycle)
-
-        return cycles
-
+    
 # ------------------------------------------------------------------
 # this part is only used to temporary visualize the cycles
 from itertools import *
@@ -270,6 +286,24 @@ def plotCycle(cycle):
     plt.fill(x,y,'#ff0000',alpha = 0.03,zorder = 500)
     for v1,v2 in _iterCircularPrevNext(scaledNodes):
         plt.plot((v1[0], v2[0]),(v1[1], v2[1]),'b:',alpha = 1.0,zorder = 500,linewidth=0.5)
+
+cCount = 0
+cColors = ['r','b','g']
+
+def plotSingleCycle(cycle):
+    global cCount,cColors
+    nodes = [n for s in cycle for n in s.path[:-1]]
+    x = [n[0] for n in nodes]
+    y = [n[1] for n in nodes]
+    plt.fill(x,y,'#ff0000',alpha = 0.03,zorder = 500)
+    color = cColors[cCount]
+    cCount +=1
+    for v1,v2 in _iterCircularPrevNext(nodes):
+        plt.plot((v1[0], v2[0]),(v1[1], v2[1]),'r:',alpha = 1.0,zorder = 500,linewidth=1)
+    for wayseg in cycle:
+        x = (v1[0]+v2[0])/2
+        y = (v1[1]+v2[1])/2
+        plt.text(x,y,str(wayseg.ID))
 
 
 
