@@ -1,6 +1,7 @@
 from mathutils import Vector
 import numpy as np
 from itertools import *
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 
@@ -11,6 +12,7 @@ from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE
 from lib.CompGeom.algorithms import circumCircle, SCClipper
 from lib.CompGeom.splitPolygonHoles import splitPolygonHoles
+from lib.CompGeom.poly_point_isect import isect_segments_include_segments
 
 # cyclic iterate over polygons vertices
 def _iterEdges(poly):
@@ -51,8 +53,8 @@ class RoadPolygons:
 
     def __init__(self):
         self.sectionNetwork = None
-
         self.geosF = GeometryFactory()
+        self.intersectingSegments = defaultdict(list)
         self.geosPolyList = None
         self.polyVerts = None
         self.vertIndexToPolyIndex = []
@@ -60,6 +62,7 @@ class RoadPolygons:
         self.cyclePolys = None
 
     def do(self, manager):
+        # self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
         self.createPolylinePolygons(manager)
         self.createCyclePolygons()
@@ -70,6 +73,62 @@ class RoadPolygons:
         self.bldgVerts = None
         self.vertIndexToPolyIndex.clear()
 
+    def findSelfIntersections(self, manager):
+        wayManager = self.app.managersById["ways"]
+
+        # some way tags to exclude
+        excludedTags = ['steps']
+
+        segList = []
+        for way in wayManager.getAllWays():            
+            for segment in way.segments:
+                v1, v2 = (segment.v1[0],segment.v1[1]),  (segment.v2[0],segment.v2[1])
+                segList.append((v1,v2))
+
+        for polyline in manager.polylines:
+            for edge in polyline.edges:
+                v1, v2 = (edge.v1[0],edge.v1[1]),  (edge.v2[0],edge.v2[1])
+                segList.append((v1,v2))
+
+        # Find self-intersections using Bentley-Ottmann sweep-line algorithm
+        isects = isect_segments_include_segments(segList)
+
+        # For crossing line segments, often one of them already has a node,
+        # but not the other. In this case it is important to have the intersection
+        # exactly at the existing node.
+        if isects:
+            for node,segments in isects:
+                # plt.plot(node[0],node[1],'bx',markersize=10,zorder=600)
+                for segment in segments:
+                   self.intersectingSegments[segment].append(node)
+
+        def inorderExtend(v, v1, v2, ints):
+            # Extend a sequence v by points ints that are on the segment v1, v2
+            k, r = None, False
+            if v1[0] < v2[0]:
+                k, r = lambda i: i[0], True
+            elif v1[0] > v2[0]:
+                k, r = lambda i: i[0], False
+            elif v1[1] < v2[1]:
+                k, r = lambda i: i[1], True
+            else:
+                k, r = lambda i: i[1], False
+            l = [ p for p in sorted(ints, key=k, reverse=r) ]
+            i = next((i for i, p in enumerate(v) if p == v2), -1)
+            assert(i>=0)
+            for e in l:
+                v.insert(i, e)
+        
+        for segment,isectNodes in self.intersectingSegments.items():
+            newSegment = list(segment)
+            inorderExtend(newSegment, segment[0], segment[1], isectNodes)
+            self.intersectingSegments[segment] = newSegment
+
+        # if self.intersectingSegments:
+        #     for segment,newSegment in self.intersectingSegments.items():
+        #         plotPoly(newSegment,False,'r',3)
+        # plotEnd()
+ 
     # define way-widths from way tags. This part should later be replaced in the generation
     # of the way-segments by the way manager.
     def temporaryWayWidth(self,tags):
@@ -135,8 +194,19 @@ class RoadPolygons:
                 continue
 
             # width of the way segment. Later this should be delivered from the
-            # way-segement and be different for every catgory.
+            # way-segement and be different for every category.
             width = self.temporaryWayWidth(way.element.tags)
+
+            # for waySegment in way.segments:
+            #     # Check for segments splitted by self-intersections
+            #     segments = []
+            #     newSegments = self.intersectingSegments.get( (tuple(waySegment.v1),tuple(waySegment.v2)), None)
+            #     if newSegments:
+            #         for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
+            #             segments.append((v1,v2))
+            #             plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'r',linewidth=3,zorder=500)
+            #     else:
+            #         segments.append((waySegment.v1,waySegment.v2))
 
             for segment in way.segments:
                 way.element.tags
@@ -161,30 +231,24 @@ class RoadPolygons:
     # index of the polygon in <self.geosPolyList>
     def createPolylinePolygons(self,manager):
 
-        def triangleCapPoly(v0,v1,width):
-            uVec = v1-v0
-            uVec.normalize()
-            nVec = Vector((-uVec[1],uVec[0]))
-            vm = v0 - uVec*width*0.1
-            poly = [
-                vm + nVec*width*1.1,
-                vm + nVec*width*1.1 + uVec*width*2.5,
-                vm + uVec*width*0.2,
-                vm - nVec*width*1.1 + uVec*width*3.,
-                vm - nVec*width*1.1,
-                vm + nVec*width*1.1
-            ]
-            geosCoords = [self.geosF.createCoordinate(v) for v in poly]
-            geosRing = self.geosF.createLinearRing(geosCoords)
-            capPoly = self.geosF.createPolygon(geosRing)
-            return capPoly
-
         # eventually polyline tags have to be excluded
         excludedTags = []
         self.geosPolyList = []
         for polyline in manager.polylines:
             if [tag for tag in excludedTags if tag in polyline.element.tags]:
                  continue
+
+            # edges = []
+            # for edge in polyline.edges:
+            #     # Check for edges splitted by self-intersections
+            #     edges = []
+            #     newSegments = self.intersectingSegments.get( (tuple(edge.v1),tuple(edge.v2)), None)
+            #     if newSegments:
+            #         for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
+            #             edges.append((v1,v2))
+            #     else:
+            #         edges.append((edge.v1,edge.v2))
+            # vertList = [Vector(edge[0]) for edge in edges] + [edges[-1][1]]
 
             vertList = [Vector((edge.v1[0],edge.v1[1])) for edge in polyline.edges]
             vertList.append(Vector((polyline.edges[-1].v2[0],polyline.edges[-1].v2[1])))
@@ -198,10 +262,6 @@ class RoadPolygons:
                 geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
                 geosString = self.geosF.createLineString(geosCoords)
                 geosPoly = geosString.buffer(width,cap_style=CAP_STYLE.flat)
-                cap = triangleCapPoly(vertList[0],vertList[1], width)
-                geosPoly = geosPoly.difference(cap)
-                cap = triangleCapPoly(vertList[-1],vertList[-2], width)
-                geosPoly = geosPoly.difference(cap)
             self.geosPolyList.append(geosPoly)
 
         # add building polylines as polygon objects to <polyList>
@@ -236,7 +296,7 @@ class RoadPolygons:
         for segList in cycleSegs:
             # Find dead-end ways by searching for segment pairs, where (src,dst) == (dst,src)
             # The cycle has been constructed correctly for these cases, but contains
-            # antiparallel edges, which can't be processed by PyGeos
+            # antiparallel edges, which can't be processed by PyGEOS.
             src = [s.s for s in segList]
             dst = [s.t for s in segList]
             deadEndSegs = []
@@ -273,35 +333,22 @@ class RoadPolygons:
 
             # Exclude segments from scene border, which have a zero width
             wayPolys = [seg.getBuffer() for seg in boundaryList if seg.width > 0.]
-            polysToSubtractFrom = [ boundaryPoly ]
-            while wayPolys:
-                wayPoly = wayPolys.pop()
-                partsOfPoly = []
-                for currentPoly in polysToSubtractFrom:
-                    diffPoly = currentPoly.difference(wayPoly)
-                    # if the difference is a single polygon ...
-                    if diffPoly.geom_type == 'Polygon':
-                        if currentPoly.contains(wayPoly): 
-                            # segPoly is a hole in current polygon, try again at end
-                            wayPolys.insert(0,wayPoly)
-                            partsOfPoly.append(currentPoly)
-                        else:
-                            # keep the remaining polygon part
-                            partsOfPoly.append(diffPoly)
-                   # ... else, the polygon has been broken in parts
-                    elif diffPoly.geom_type == 'MultiLinearRing':
-                        # then, keep them all
-                        for poly in diffPoly.geoms:
-                            partsOfPoly.append(poly)
+            for wayPoly in wayPolys:
+                try:
+                    boundaryPoly = boundaryPoly.difference(wayPoly)
+                except:
+                    plotNetwork(self.sectionNetwork)
+                    plotGeosPoly(boundaryPoly,False,'b',2)
+                    plotGeosPoly(wayPoly,False,'r',2)
+                    plotEnd()
+                    test=1
 
-                # new list for next way segment to subtract
-                polysToSubtractFrom = partsOfPoly
-
-            # the remaing parts are collected as processed cycle polygons
-            if polysToSubtractFrom:
-                for poly in polysToSubtractFrom:
-                    self.cyclePolys.append(poly)
-
+            # if polygon has been broken in parts, separate them
+            if boundaryPoly.geom_type == 'Polygon':
+                self.cyclePolys.append(boundaryPoly)
+            else: # Multipolygon
+                for geom in boundaryPoly.geoms:
+                    self.cyclePolys.append(geom)
 
     def createWayEnvironmentPolygons(self):
         debug = False
@@ -310,14 +357,8 @@ class RoadPolygons:
 
             # Construct a circumscribed circle around the polygon vertices
             # used as search range in KD-tree of polyline objects.
-            cycleVerts = [Vector((v.x,v.y)) for v in cyclePoly.coords]
+            cycleVerts = [Vector((v.x,v.y)) for v in cyclePoly.exterior.coords]
             center, radius = circumCircle(cycleVerts)
- 
-            debug = False
-            if debug:
-                plt.text(center[0],center[1],str(polyNr),zorder=600)
-                if polyNr != 158:# 31, 107, 15 fence, forests: 173, 177
-                    continue
 
             # Query the KD-tree for indices of polyline objects that are at least
             # partly within the search range.
@@ -330,103 +371,39 @@ class RoadPolygons:
                 # Get the polyline objects in <objPolys>.
                 objPolys = [self.geosPolyList[indx] for indx in queryCycleIndices]
 
-                # sort by size to subtract largets objects first
-                objPolys.sort(key=lambda x:x.area)
+                # sort by size to subtract largest objects first
+                objPolys.sort(key=lambda x:x.area,reverse=True)
 
-                polysToProcess = [ {'poly':cyclePoly,'holes':[]} ]
-                while objPolys:
-                    objPoly = objPolys.pop()
-                    partsOfCyclePoly = []
-                    for currentPoly in polysToProcess:
-                        if debug:
-                            plotGeosPoly(currentPoly['poly'],False,'k')
-                            plotGeosPoly(objPoly,False,'r')
-                            plotEnd()
+                for objPoly in objPolys:
+                    cyclePoly = cyclePoly.difference(objPoly)
 
-                        if objPoly.contains(currentPoly['poly']):               # object covers polynom
-                            continue
-                        elif currentPoly['poly'].disjoint(objPoly):             # object is completely outside
-                            if debug:
-                                print('-----> outside')
-                            partsOfCyclePoly.append(currentPoly)
-                            continue
-                        elif currentPoly['poly'].relate(objPoly,'T**FF*FF*'):   # object is completely inside -> hole
-                            if debug:
-                                print('-----> hole')
-                            partsOfCyclePoly.append(currentPoly)
-                            currentPoly['holes'].append(objPoly)
-                        elif currentPoly['poly'].intersects(objPoly):           # polynoms intersect -> subtraction
-                            if debug:
-                                print('-----> subtract')
-                            diffPoly = currentPoly['poly'].difference(objPoly)
-                            # the difference is a single polygon
-                            if diffPoly.geom_type == 'Polygon':
-                                newPoly = {'poly':diffPoly,'holes':[]}
-                                if currentPoly['holes']:
-                                    for hole in currentPoly['holes']:
-                                        if newPoly['poly'].contains(hole):
-                                            newPoly['holes'].append(hole)
-                                        elif newPoly['poly'].intersects(hole):
-                                            newPoly['poly'] = newPoly['poly'].difference(hole)
-                                partsOfCyclePoly.append(newPoly)
-                            # or has been broken in parts
-                            elif diffPoly.geom_type == 'MultiLinearRing':
-                                # we have to distribute the holes to the polygon parts
-                                holes = currentPoly['holes']
-                                for poly in diffPoly.geoms:
-                                    newPoly = {'poly':poly,'holes':[]}
-                                    if holes:
-                                        newPoly['holes'] = [hole for hole in holes if poly.contains(hole)]
-                                    partsOfCyclePoly.append(newPoly)
-                    polysToProcess = partsOfCyclePoly
-
-                    if debug:
-                        N = len(polysToProcess)
-                        plt.close()
-                        for i, poly in enumerate(polysToProcess):
-                            plt.subplot(1,N,i+1)
-                            plotGeosPoly(cyclePoly,False,'k:')
-                            plotGeosPoly(objPoly,False,'r:')
-                            plotGeosPoly(poly['poly'],False,'b')
-                            for hole in poly['holes']:
-                                plotGeosPoly(hole,False,'r')
-                        plotEnd()
-
-                if polysToProcess:
-                    for processedPoly in polysToProcess:
-
-                        # Process now the holes in the polygons, if any
-                        if processedPoly['holes']:
-                            if len(processedPoly['holes'])>1:
-                                # Holes in holes have to be removed first
-                                # To find them, we have to check every combination
-                                toRemove = []
-                                combs = combinations(processedPoly['holes'],2)
-                                for polyA,polyB in combs:
-                                    if   polyA.contains(polyB): toRemove.append(polyB)
-                                    elif polyB.contains(polyA): toRemove.append(polyA)
-                                for poly in toRemove:
-                                    processedPoly['holes'].remove(poly)
-
-                            # Split polygon holes by bridges (does not work with PyGeos).
-                            # The PyGeos coordinates have to be converted back to tuples.
-                            polyVerts = [(v.x,v.y) for v in processedPoly['poly'].coords]
-                            holeVerts = []
-                            for hole in processedPoly['holes']:
-                                holeVerts.append([(v.x,v.y) for v in hole.coords])
-                            bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
-                            geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
-                            geosRing = self.geosF.createLinearRing(geosCoords)
-                            bridgedPoly = self.geosF.createPolygon(geosRing)
-                            environmentPolys.append(bridgedPoly)
-                        else:
-                            environmentPolys.append(processedPoly['poly'])
-
+                def makeBridgedPolygon(geom):
+                    holes = geom.interiors
+                    if holes:
+                        # Split polygon holes by bridges (does not work with PyGeos).
+                        # The PyGeos coordinates have to be converted back to tuples.
+                        polyVerts = [(v.x,v.y) for v in geom.exterior.coords]
+                        holeVerts = []
+                        for hole in holes:
+                            holeVerts.append([(v.x,v.y) for v in hole.coords])
+                        bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
+                        geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
+                        geosRing = self.geosF.createLinearRing(geosCoords)
+                        bridgedPoly = self.geosF.createPolygon(geosRing)
+                        environmentPolys.append(bridgedPoly)
+                    else:
+                        environmentPolys.append(geom)
+ 
+                if cyclePoly.geom_type == 'Polygon':
+                    makeBridgedPolygon(cyclePoly)
+                else: # Multipolygon
+                    for geom in cyclePoly.geoms:
+                        makeBridgedPolygon(geom)
             else:
                 environmentPolys.append(cyclePoly)
+
         for poly in environmentPolys:
             plotGeosPolyFill(poly,False)
-
 
     def createKdTree(self):
         from scipy.spatial import KDTree
@@ -449,7 +426,7 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
         if vertsOrder:
             plt.text(v1[0],v1[1],str(count))
         count += 1
-        # plt.plot(v1[0],v1[1],'kx')
+        plt.plot(v1[0],v1[1],'kx')
     v1, v2 = polygon[-1], polygon[0]
     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
     if vertsOrder:
@@ -458,6 +435,14 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
 def plotGeosPoly(geosPoly,vertsOrder,color='k',width=1.,order=100):
     poly = [(c.x,c.y) for c in geosPoly.coords]
     plotPoly(poly,vertsOrder,color,width,order)
+
+def plotGeosWithHoles(geosPoly,vertsOrder,color='k',width=1.,order=100):
+    poly = [(c.x,c.y) for c in geosPoly.exterior.coords]
+    plotPoly(poly,vertsOrder,color,width,order)
+    for ring in geosPoly.interiors:
+        p = [(c.x,c.y) for c in ring.coords]
+        plotPoly(p,vertsOrder,color,width,order)
+
 
 def plotGeosPolyFill(geosPoly,vertsOrder,color='k',width=1.,order=100):
     poly = [(v.x,v.y) for v in geosPoly.coords]
@@ -473,6 +458,8 @@ def plotPolyFill(poly):
 def plotWaySeg(wayseg,color='k',width=1.,order=100):
     for v1,v2 in zip(wayseg.path[:-1],wayseg.path[1:]):
         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+        plt.plot(v1[0],v1[1],'k.')
+        plt.plot(v2[0],v2[1],'k.')
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
         # plt.text(x,y,str(wayseg.ID))
@@ -498,6 +485,10 @@ def plotWaySeg(wayseg,color='k',width=1.,order=100):
 def plotNetwork(network):
     for count,seg in enumerate(network.iterAllSegments()):
         plotWaySeg(seg,'k',0.5)
+
+def plotCycle(cycle):
+    nodes = [n for s in cycle for n in s.path[:-1]]
+    plotPoly(nodes,True,'m',4)
 
 def plotEnd():
     plt.gca().axis('equal')

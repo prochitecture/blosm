@@ -60,6 +60,7 @@ class WayClusterRenderer(Renderer):
         footway = dict(color="#fa8072", linewidth=1., linestyle="dashed"),
         steps = dict(color="#fa8072", linewidth=2., linestyle="dotted"),
         path = dict(color="#fa8072", linewidth=1., linestyle="dashed"),
+        track = dict(color="#fa8072", linewidth=1., linestyle="dashed"),
         cycleway = dict(color="#0000ff", linewidth=1., linestyle="dashed"),
         scene_border = dict(color="#ff0000", linewidth=1., linestyle="solid")
     )
