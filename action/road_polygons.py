@@ -20,7 +20,6 @@ def _iterEdges(poly):
         p2 = islice(cycle(p2), 1, None)
         return zip(p1,p2)
 
-
 # Gets all buildings in scene and combines those with shared edges to
 # building blocks. Returns them as a list <geosPolyList> of PyGeos <Polynom>.
 def mergeBuildingsToBlocks(buildings):
@@ -62,10 +61,10 @@ class RoadPolygons:
         self.cyclePolys = None
 
     def do(self, manager):
-        # self.findSelfIntersections(manager)
+        self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
         self.createPolylinePolygons(manager)
-        self.createCyclePolygons()
+        self.createCyclePolygons()       
         self.createWayEnvironmentPolygons()
 
     def cleanup(self):
@@ -76,59 +75,77 @@ class RoadPolygons:
     def findSelfIntersections(self, manager):
         wayManager = self.app.managersById["ways"]
 
-        # some way tags to exclude
+        # some way tags to exclude, used also in createWaySectionNetwork(),
+        # should be moved to defs.
         excludedTags = ['steps']
 
         segList = []
         for way in wayManager.getAllWays():            
+            if [tag for tag in excludedTags if tag in way.element.tags]:
+                continue
             for segment in way.segments:
                 v1, v2 = (segment.v1[0],segment.v1[1]),  (segment.v2[0],segment.v2[1])
                 segList.append((v1,v2))
 
-        for polyline in manager.polylines:
-            for edge in polyline.edges:
-                v1, v2 = (edge.v1[0],edge.v1[1]),  (edge.v2[0],edge.v2[1])
-                segList.append((v1,v2))
+        # Unfortunatel, polylines can not be added to the intersection check,
+        # as they may be collinear to ways, which is not supported by the
+        # Bentley-Ottmann sweep-line algorithm.
+        # for polyline in manager.polylines:
+        #     for edge in polyline.edges:
+        #         v1, v2 = (edge.v1[0],edge.v1[1]),  (edge.v2[0],edge.v2[1])
+        #         segList.append((v1,v2))
 
         # Find self-intersections using Bentley-Ottmann sweep-line algorithm
         isects = isect_segments_include_segments(segList)
 
-        # For crossing line segments, often one of them already has a node,
-        # but not the other. In this case it is important to have the intersection
-        # exactly at the existing node.
+        # The algorithm delivers edge-ends, that are only nearby to the real edges,
+        # and even sometimes reversed. nearbySeg() finds the true end-points.
+        def nearbySeg(isectSeg,segLIst):
+            s1,s2 = Vector(isectSeg[0]), Vector(isectSeg[1])
+            for listSeg in segList:
+                v1,v2 = Vector(listSeg[0]), Vector(listSeg[1])
+                # nearby?
+                if (v1-s1).length + (v2-s2).length < 0.001:
+                    return (listSeg[0],listSeg[1]) 
+                # nearby but reversed?
+                if (v1-s2).length + (v2-s1).length < 0.001:
+                    return (listSeg[0],listSeg[1]) 
+            return None
+
+        # Find the nearby edge-ends and correct them
         if isects:
             for node,segments in isects:
-                # plt.plot(node[0],node[1],'bx',markersize=10,zorder=600)
                 for segment in segments:
-                   self.intersectingSegments[segment].append(node)
+                    if segment not in segList:
+                        nearSeg = nearbySeg(segment,segList)
+                        if nearSeg:
+                            self.intersectingSegments[nearSeg].append(node)
+                            v1,v2 = nearSeg
+                    else:
+                        self.intersectingSegments[segment].append(node)
 
-        def inorderExtend(v, v1, v2, ints):
-            # Extend a sequence v by points ints that are on the segment v1, v2
+        def _inorderExtend(segment, v1, v2, points):
+            # Extend a segment <segment> by <points> that are on
+            # between the points v1, v2
             k, r = None, False
-            if v1[0] < v2[0]:
-                k, r = lambda i: i[0], True
-            elif v1[0] > v2[0]:
-                k, r = lambda i: i[0], False
-            elif v1[1] < v2[1]:
-                k, r = lambda i: i[1], True
-            else:
-                k, r = lambda i: i[1], False
-            l = [ p for p in sorted(ints, key=k, reverse=r) ]
-            i = next((i for i, p in enumerate(v) if p == v2), -1)
+            if v1[0] < v2[0]:   k, r = lambda i: i[0], True
+            elif v1[0] > v2[0]: k, r = lambda i: i[0], False
+            elif v1[1] < v2[1]: k, r = lambda i: i[1], True
+            else:               k, r = lambda i: i[1], False
+            l = [ p for p in sorted(points, key=k, reverse=r) ]
+            i = next((i for i, p in enumerate(segment) if p == v2), -1)
             assert(i>=0)
             for e in l:
-                v.insert(i, e)
-        
-        for segment,isectNodes in self.intersectingSegments.items():
-            newSegment = list(segment)
-            inorderExtend(newSegment, segment[0], segment[1], isectNodes)
-            self.intersectingSegments[segment] = newSegment
+                # a vertex can appear only once in a segment
+                if not e in segment:
+                    segment.insert(i, e)
 
-        # if self.intersectingSegments:
-        #     for segment,newSegment in self.intersectingSegments.items():
-        #         plotPoly(newSegment,False,'r',3)
-        # plotEnd()
- 
+        # Extend the segments by the intersection points, if any.
+        for segment,isectNodes in self.intersectingSegments.items():
+            pathInSegment = list(segment)
+            _inorderExtend(pathInSegment, segment[0], segment[1], isectNodes)
+            self.intersectingSegments[segment] = pathInSegment
+
     # define way-widths from way tags. This part should later be replaced in the generation
     # of the way-segments by the way manager.
     def temporaryWayWidth(self,tags):
@@ -183,38 +200,36 @@ class RoadPolygons:
          # create full way network
         fullNetwork = WayNetwork()
 
-        # some way tags to exclude
+        # some way tags to exclude, used also in findSelfIntersections(),
+        # should be moved to defs.
         excludedTags = ['steps']
 
         for way in wayManager.getAllWays():
+            # Exclude ways with unwanted tags
             if [tag for tag in excludedTags if tag in way.element.tags]:
                 continue
-            # eliminate crossings to avoid self intersecting cycles in graph
-            if 'footway' in way.element.tags and way.element.tags['footway']=='crossing':
-                continue
 
-            # width of the way segment. Later this should be delivered from the
+            # Get the width of the way segment. Later this should be delivered from the
             # way-segement and be different for every category.
             width = self.temporaryWayWidth(way.element.tags)
 
-            # for waySegment in way.segments:
-            #     # Check for segments splitted by self-intersections
-            #     segments = []
-            #     newSegments = self.intersectingSegments.get( (tuple(waySegment.v1),tuple(waySegment.v2)), None)
-            #     if newSegments:
-            #         for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
-            #             segments.append((v1,v2))
-            #             plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'r',linewidth=3,zorder=500)
-            #     else:
-            #         segments.append((waySegment.v1,waySegment.v2))
+            for waySegment in way.segments:
+                # Check for segments splitted by self-intersections
+                segments = []
+                newSegments = self.intersectingSegments.get( (tuple(waySegment.v1),tuple(waySegment.v2)), None)
+                if newSegments:
+                    for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
+                        segments.append((v1,v2))
+                else:
+                    segments.append((waySegment.v1,waySegment.v2))
 
-            for segment in way.segments:
-                way.element.tags
-                v1, v2 = Vector(segment.v1),Vector(segment.v2)
-                accepted, v1, v2 = clipper.clip(v1,v2)
-                if accepted:
-                    netSeg = NetSegment(v1,v2,way.category,(v2-v1).length, width)
-                    fullNetwork.addSegment(netSeg)
+                for segment in segments:
+                    way.element.tags
+                    v1, v2 = Vector(segment[0]),Vector(segment[1])
+                    accepted, v1, v2 = clipper.clip(v1,v2)
+                    if accepted:
+                        netSeg = NetSegment(v1,v2,way.category,(v2-v1).length, width)
+                        fullNetwork.addSegment(netSeg)
 
         borderPolygon = clipper.getPolygon()
         for v1,v2 in zip(borderPolygon[:-1],borderPolygon[1:]):
@@ -238,26 +253,23 @@ class RoadPolygons:
             if [tag for tag in excludedTags if tag in polyline.element.tags]:
                  continue
 
-            # edges = []
-            # for edge in polyline.edges:
-            #     # Check for edges splitted by self-intersections
-            #     edges = []
-            #     newSegments = self.intersectingSegments.get( (tuple(edge.v1),tuple(edge.v2)), None)
-            #     if newSegments:
-            #         for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
-            #             edges.append((v1,v2))
-            #     else:
-            #         edges.append((edge.v1,edge.v2))
-            # vertList = [Vector(edge[0]) for edge in edges] + [edges[-1][1]]
-
-            vertList = [Vector((edge.v1[0],edge.v1[1])) for edge in polyline.edges]
-            vertList.append(Vector((polyline.edges[-1].v2[0],polyline.edges[-1].v2[1])))
+            edges = []
+            for edge in polyline.edges:
+                # Check for edges splitted by self-intersections
+                newSegments = self.intersectingSegments.get( (tuple(edge.v1),tuple(edge.v2)), None)
+                if newSegments:
+                    for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
+                        edges.append((v1,v2))
+                else:
+                    edges.append((edge.v1,edge.v2))
+ 
+            vertList = [Vector(edge[0]) for edge in edges] + [edges[-1][1]]
             if polyline.element.closed and not 'barrier' in polyline.element.tags:
                 geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
                 geosRing = self.geosF.createLinearRing(geosCoords)
                 geosPoly = self.geosF.createPolygon(geosRing)
-            else: # Linear objects, like fences, get here a small width to be a polygon
-                # The end caps are made triangular to avoid unwanted intersections
+            else: 
+                # Linear objects, like fences, get here a small width to be a polygon
                 width = 0.3
                 geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
                 geosString = self.geosF.createLineString(geosCoords)
@@ -312,7 +324,7 @@ class RoadPolygons:
                             deadEndSegs.append(segList[indx])
                             toRemove.extend([segList[indx],segList[rev_indx]])
 
-            # Remove all eventual dead-ends from segment list and get boundary of cycle polygon
+            # Remove all eventual dead-ends from segment list and get the boundary of cycle polygon
             boundaryList = [seg for seg in segList if seg not in toRemove]
 
             if not boundaryList:
@@ -331,7 +343,7 @@ class RoadPolygons:
             if deadEndSegs:
                 boundaryList.extend(deadEndSegs)
 
-            # Exclude segments from scene border, which have a zero width
+           # Exclude segments from scene border, which have a zero width
             wayPolys = [seg.getBuffer() for seg in boundaryList if seg.width > 0.]
             for wayPoly in wayPolys:
                 try:
@@ -341,7 +353,6 @@ class RoadPolygons:
                     plotGeosPoly(boundaryPoly,False,'b',2)
                     plotGeosPoly(wayPoly,False,'r',2)
                     plotEnd()
-                    test=1
 
             # if polygon has been broken in parts, separate them
             if boundaryPoly.geom_type == 'Polygon':
@@ -415,7 +426,7 @@ class RoadPolygons:
         )
 
 
-# plotting functions for development
+# Plotting functions used during development
 #-----------------------------------------------------------------------------------
 
 
@@ -462,7 +473,7 @@ def plotWaySeg(wayseg,color='k',width=1.,order=100):
         plt.plot(v2[0],v2[1],'k.')
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
-        # plt.text(x,y,str(wayseg.ID))
+        plt.text(x,y,str(wayseg.ID))
 
 # def plotRange(poly,holes,color='#ff0000',alpha = 0.7,zorder=2):
 #     from lib.CompGeom import patchify

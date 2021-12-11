@@ -211,7 +211,7 @@ class WayNetwork(dict):
         return found
 
     def compare_angles(self, v1, v2):
-        return 1 if atan2(v1[1],v1[0])+(v1[1]<0)*PI2 > atan2(v2[1],v2[0])+(v2[1]<0)*PI2 else -1
+        return 1 if atan2(v1[1],v1[0])+(v1[1]<0)*PI2 < atan2(v2[1],v2[0])+(v2[1]<0)*PI2 else -1
 
     def createCircularEmbedding(self):
         self.counterClockEmbedding = dict(list())
@@ -242,8 +242,10 @@ class WayNetwork(dict):
                 neighbors = self.counterClockEmbedding[segs[-1].t]
                 nextSeg = neighbors[(neighbors.index(~segs[-1])+1)%(len(neighbors))]
                 if nextSeg == segs[0]:
-                    # dont return border of outer scene frame
-                    if not all(s.category=='scene_border' for s in segs):
+                    cycVerts = [v for s in segs for v in s.path[:-1] ] + [segs[0].s]
+                    area = sum( (p2[0]-p1[0])*(p2[1]+p1[1]) for p1,p2 in zip(cycVerts,cycVerts[1:]+[cycVerts[0]])) 
+                    # Avoid clockwise cycles, these are outer cycles.
+                    if area < 0.:
                         cycleSegs.append(segs)
                     break
                 else:
@@ -253,7 +255,7 @@ class WayNetwork(dict):
 
     
 # ------------------------------------------------------------------
-# this part is only used to temporary visualize the cycles
+# this part is only used to temporary visualize the cycles durign development.
 from itertools import *
 import matplotlib.pyplot as plt
 def _iterCircularPrevNext(lst):
