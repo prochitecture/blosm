@@ -10,6 +10,7 @@ from way.way_algorithms import createSectionNetwork
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE
+from lib.pygeos.polygonDecomposition import polygonDecomposition
 from lib.CompGeom.algorithms import circumCircle, SCClipper
 from lib.CompGeom.splitPolygonHoles import splitPolygonHoles
 from lib.CompGeom.poly_point_isect import isect_segments_include_segments
@@ -344,7 +345,7 @@ class RoadPolygons:
                 boundaryList.extend(deadEndSegs)
 
            # Exclude segments from scene border, which have a zero width
-            wayPolys = [seg.getBuffer() for seg in boundaryList if seg.width > 0.]
+            wayPolys = [seg.getBuffer() for seg in deadEndSegs if seg.width > 0.]
             for wayPoly in wayPolys:
                 try:
                     boundaryPoly = boundaryPoly.difference(wayPoly)
@@ -388,33 +389,46 @@ class RoadPolygons:
                 for objPoly in objPolys:
                     cyclePoly = cyclePoly.difference(objPoly)
 
-                def makeBridgedPolygon(geom):
-                    holes = geom.interiors
-                    if holes:
-                        # Split polygon holes by bridges (does not work with PyGeos).
-                        # The PyGeos coordinates have to be converted back to tuples.
-                        polyVerts = [(v.x,v.y) for v in geom.exterior.coords]
-                        holeVerts = []
-                        for hole in holes:
-                            holeVerts.append([(v.x,v.y) for v in hole.coords])
-                        bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
-                        geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
-                        geosRing = self.geosF.createLinearRing(geosCoords)
-                        bridgedPoly = self.geosF.createPolygon(geosRing)
-                        environmentPolys.append(bridgedPoly)
-                    else:
-                        environmentPolys.append(geom)
+                # def makeBridgedPolygon(geom):
+                #     holes = geom.interiors
+                #     if holes:
+                #         # Split polygon holes by bridges (does not work with PyGeos).
+                #         # The PyGeos coordinates have to be converted back to tuples.
+                #         polyVerts = [(v.x,v.y) for v in geom.exterior.coords]
+                #         holeVerts = []
+                #         for hole in holes:
+                #             holeVerts.append([(v.x,v.y) for v in hole.coords])
+                #         bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
+                #         geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
+                #         geosRing = self.geosF.createLinearRing(geosCoords)
+                #         bridgedPoly = self.geosF.createPolygon(geosRing)
+                #         environmentPolys.append(bridgedPoly)
+                #     else:
+                #         environmentPolys.append(geom)
  
                 if cyclePoly.geom_type == 'Polygon':
-                    makeBridgedPolygon(cyclePoly)
+                    environmentPolys.append(cyclePoly)
+                    # makeBridgedPolygon(cyclePoly)
                 else: # Multipolygon
                     for geom in cyclePoly.geoms:
-                        makeBridgedPolygon(geom)
+                        environmentPolys.append(geom)
+                        # makeBridgedPolygon(geom)
             else:
                 environmentPolys.append(cyclePoly)
 
+        colorCycler = iterColorCycle()
         for poly in environmentPolys:
-            plotGeosPolyFill(poly,False)
+            try:
+                L = polygonDecomposition(poly)
+            except Exception as ex:
+                # import traceback
+                # traceback.print_exception(type(ex), ex, ex.__traceback__)
+                # plotGeosWithHoles(poly,True)
+                # plt.title('exception')
+                # plotEnd()
+                continue
+            plotFillMutliPolyList(L,colorCycler)
+            # plotEnd()
 
     def createKdTree(self):
         from scipy.spatial import KDTree
@@ -437,7 +451,7 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
         if vertsOrder:
             plt.text(v1[0],v1[1],str(count))
         count += 1
-        plt.plot(v1[0],v1[1],'kx')
+        # plt.plot(v1[0],v1[1],'kx')
     v1, v2 = polygon[-1], polygon[0]
     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
     if vertsOrder:
@@ -474,6 +488,24 @@ def plotWaySeg(wayseg,color='k',width=1.,order=100):
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
         plt.text(x,y,str(wayseg.ID))
+
+def iterColorCycle():
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+    return cycle(colors)
+    # import matplotlib.cm as cm
+    # import numpy as np
+    # colors = cm.prism(np.linspace(0, 1, 50))
+    # return cycle(colors)
+
+def plotFillMutliPolyList(polyList,colorCycler):
+    for poly in polyList:
+        color = next(colorCycler)
+        coords = [(v.x,v.y) for v in poly]
+        plotPoly(coords,False,color)
+        x = [v.x for v in poly]
+        y = [v.y for v in poly]
+        plt.fill(x,y,color,alpha=1.0,zorder=10)
 
 # def plotRange(poly,holes,color='#ff0000',alpha = 0.7,zorder=2):
 #     from lib.CompGeom import patchify

@@ -71,7 +71,7 @@ class NetSegment():
         else:
             geosCoords = [self.geosF.createCoordinate(v) for v in self.path]
             geosString = self.geosF.createLineString(geosCoords)
-            self.buffer = geosString.buffer(self.width/2.,cap_style=CAP_STYLE.square)
+            self.buffer = geosString.buffer(self.width/2.,resolution=3,cap_style=CAP_STYLE.square)
             return self.buffer
 
     def __invert__(self):

@@ -82,7 +82,8 @@ class WayClusterRenderer(Renderer):
             self.mpl.ax.plot(
                 (v1[0], v2[0]),
                 (v1[1], v2[1]),
-                **WayClusterRenderer.styles[s.category]
+                **WayClusterRenderer.styles[s.category],
+                zorder=50
             )
             # x = (v1[0]+v2[0])/2.
             # y = (v1[1]+v2[1])/2.
