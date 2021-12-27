@@ -157,18 +157,11 @@ class BldgPolygon:
             if self.reversed else\
             (vector.edge for vector in self.vectors if not vector.skip)
     
-    @property
-    def edges(self):
-        # the same code as in <self.getEdges()>
-        return (vector.edge for vector in reversed(self.vectors) if not vector.skip) \
-            if self.reversed else\
-            (vector.edge for vector in self.vectors if not vector.skip)
-    
     def getVectors(self):
         return (vector for vector in reversed(self.vectors) if not vector.skip) \
             if self.reversed else\
             (vector for vector in self.vectors if not vector.skip)
-
+    
     def getVectorsAll(self):
         return (vector for vector in reversed(self.vectors)) \
             if self.reversed else\
@@ -221,34 +214,6 @@ class BldgPolygon:
         vertsX = [ vector.v1[0] for vector in self.getVectors() ]
         vertsY = [ vector.v1[1] for vector in self.getVectors() ]
         return max( max(vertsX)-min(vertsX), max(vertsY)-min(vertsY) )
-    
-    def unskipFeatures(self):
-        # straight angle
-        if self.saSfsFeature:
-            self._unskipFeatures(self.saSfsFeature, BldgPolygonFeature.straightAngleSfs)
-        # small features
-        initialFeature = self.smallFeature or self.complex4Feature or self.triangleFeature
-        if initialFeature:
-            self._unskipFeatures(initialFeature, None)
-    
-    def _unskipFeatures(self, initialFeature, featureType):
-        startVector = initialFeature.startVector
-        currentVector = initialFeature.getProxyVector()
-        while True:
-            feature = currentVector.feature
-            if feature:
-                if (featureType and feature.type == featureType) or\
-                        (
-                            not featureType and\
-                            not feature.type in (BldgPolygonFeature.straightAngle, BldgPolygonFeature.curved)
-                        ):
-                    feature.unskipVectors()
-                    currentVector = feature.endVector
-                elif not feature.skipped:
-                    currentVector = feature.endVector
-            currentVector = currentVector.next
-            if currentVector is startVector:
-                break
 
 
 class BldgEdge:
