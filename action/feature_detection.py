@@ -1,33 +1,8 @@
 import re
-from defs.building import BldgPolygonFeature, curvedLengthFactor, \
-    longEdgeFactor, midEdgeFactor, sin_lo, sin_me
-from building.feature import StraightAngleSfs, Curved, ComplexConvex5, ComplexConvex4, QuadConvex, \
-    ComplexConcave, QuadConcave, TriConvex, TriConcave
-
-
-def hasAnglesForCurvedFeature(vector):
-    """
-    Checks if <vector.edge> has an angle between 5° and 30° on both ends of <vector.edge>
-    """
-    return sin_lo<abs(vector.sin)<sin_me and sin_lo<abs(vector.next.sin)<sin_me
-
-
-def vectorHasStraightAngle(vector):
-    return \
-    (
-        #vector.featureType==BldgPolygonFeature.quadrangle_convex and \
-        vector.feature and \
-        vector.feature.startSin and \
-        vector.hasStraightAngle
-    ) \
-    or \
-    (
-        #vector.featureType!=BldgPolygonFeature.quadrangle_convex and \
-        #vector.prev.featureType==BldgPolygonFeature.quadrangle_convex and \
-        vector.prev.feature and \
-        vector.prev.feature.nextSin and \
-        vector.hasStraightAngle
-    )
+from defs.building import BldgPolygonFeature, \
+    longEdgeFactor, midEdgeFactor, sin_me
+from building.feature import ComplexConvex5, ComplexConvex4, QuadConvex, \
+    QuadConcave, TriConvex
 
 
 class FeatureDetection:
@@ -43,7 +18,7 @@ class FeatureDetection:
     complexConvexPattern4 = re.compile(r"(>[L|l][L|l]<)")
 
     # concave complex features
-    complexConcavePattern = re.compile(r"(<[R|r][R|r]>)")
+    #complexConcavePattern = re.compile(r"(<[R|r][R|r]>)")
 
     # convex quadrangle features
     quadConvexPattern = re.compile(r"(>[L|l][<|L|R|O|+|=|o])|([>|L|R|O|+|=|o][L|l]<)")
@@ -60,25 +35,25 @@ class FeatureDetection:
     triConcavePattern = re.compile(r"[=|<][+|>]")
 
     
-    def __init__(self, simplifyPolygons=True):
-        self.simplifyPolygons = simplifyPolygons
+    def __init__(self, skipFeaturesAction=None):
+        self.skipFeaturesAction = skipFeaturesAction
 
     def do(self, manager):
 
         for building in manager.buildings:
             polygon = building.polygon
             
-            polygon.prepareVectorsByIndex()
-            
             self.detectFeatures(polygon)
             
-            if self.simplifyPolygons and (polygon.smallFeature or polygon.complex4Feature or polygon.triangleFeature):
-                self.skipFeatures(polygon, manager)
+            if self.skipFeaturesAction and (polygon.smallFeature or polygon.complex4Feature or polygon.triangleFeature):
+                self.skipFeaturesAction.skipFeatures(polygon, True, manager)
     
     def detectFeatures(self, polygon):
         """
         Detects patterns for small features
         """
+        
+        polygon.prepareVectorsByIndex()
 
         midEdgeThreshold = max(midEdgeFactor * polygon.dimension, 2.)
         longEdgeThreshold = longEdgeFactor * polygon.dimension
@@ -150,18 +125,11 @@ class FeatureDetection:
             polygon, '3'
         )
 
-        #sequence = self.matchPattern(
-        #    sequence, sequenceLength,
-        #    FeatureDetection.complexConcavePattern,
-        #    ComplexConcave,
-        #    polygon, '4'
-        #)
-
         sequence = self.matchPattern(
             sequence, sequenceLength,
             FeatureDetection.quadConcavePattern,
             QuadConcave,
-            polygon, '5'
+            polygon, '4'
         )   
 
         self.matchPattern(
@@ -193,84 +161,6 @@ class FeatureDetection:
             if subChar:
                 sequence = re.sub(pattern, lambda m: subChar * len(m.group()), sequence)
         return sequence
-    
-    def skipFeatures(self, polygon, manager):
-        if polygon.smallFeature:
-            currentVector = startVector = polygon.smallFeature.startVector
-            while True:
-                feature = currentVector.feature
-                if feature:
-                    if not feature.type in (
-                            BldgPolygonFeature.curved,
-                            BldgPolygonFeature.complex4_convex,
-                            #BldgPolygonFeature.complex4_concave,
-                            BldgPolygonFeature.triangle_convex,
-                            BldgPolygonFeature.triangle_concave
-                        ):
-                        feature.skipVectors(manager) 
-                    currentVector = feature.endVector.next
-                else:
-                    currentVector = currentVector.next
-                if currentVector is startVector:
-                    break
-        
-        # complex features with 4 edges are treated separately
-        if polygon.complex4Feature:
-            currentVector = startVector = polygon.complex4Feature.startVector
-            while True:
-                feature = currentVector.feature
-                if feature:
-                    if feature.type == BldgPolygonFeature.complex4_convex:
-                        feature.skipVectors(manager)
-                    currentVector = feature.endVector.next
-                else:
-                    currentVector = currentVector.next
-                if currentVector is startVector:
-                    break
-        
-        # triangular features are treated separetely
-        if polygon.triangleFeature:
-            currentVector = startVector = polygon.triangleFeature.startVector
-            while True:
-                feature = currentVector.feature
-                if feature:
-                    if feature.type == BldgPolygonFeature.triangle_convex:
-                        feature.skipVectors(manager)
-                    currentVector = feature.endVector.next
-                else:
-                    currentVector = currentVector.next
-                if currentVector is startVector:
-                    break
-        
-        # find <prevNonStraightVector>
-        isPrevVectorStraight = False
-        while True:
-            feature = currentVector.feature
-            if not vectorHasStraightAngle(currentVector):
-                prevNonStraightVector = currentVector
-                break
-            polygon.numEdges -= 1
-            isPrevVectorStraight = True
-            currentVector = currentVector.prev
-        currentVector = startVector.next
-        startVector = prevNonStraightVector
-        while True:
-            # conditions for a straight angle
-            if vectorHasStraightAngle(currentVector):
-                    polygon.numEdges -= 1
-                    isPrevVectorStraight = True
-            else:
-                if isPrevVectorStraight:
-                    StraightAngleSfs(prevNonStraightVector, currentVector.prev).skipVectors(manager)
-                    isPrevVectorStraight = False
-                # remember the last vector with a non straight angle
-                prevNonStraightVector = currentVector
-                
-            currentVector = currentVector.next
-            if currentVector is startVector:
-                if isPrevVectorStraight:
-                    StraightAngleSfs(prevNonStraightVector, currentVector.prev).skipVectors(manager)
-                break
     
     def debugSetFeatureSymbols(self, polygon, sequence):
         for vector,symbol in zip(polygon.getVectors(), sequence):

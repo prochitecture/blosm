@@ -3,11 +3,13 @@ from defs.facade_classification import *
 
 class FacadeClassification:
     
-    def __init__(self):
-        pass
+    def __init__(self, unskipFeaturesAction=None):
+        self.unskipFeaturesAction = unskipFeaturesAction
     
     def do(self, manager):
-            
+        
+        unskipFeaturesAction = self.unskipFeaturesAction
+        
         for building in manager.buildings:
 
             # The <edge> could have been already visited earlier if it is the shared one
@@ -25,6 +27,7 @@ class FacadeClassification:
                 if edge.cl in CrossedFacades:
                     if WayLevel[edge.visInfo.waySegment.way.category] <= accepted_level:
                         edge.cl = FacadeClass.front
+                        edge.visInfo.value = 1.
                     else:
                         edge.cl = FacadeClass.unknown
 
@@ -35,6 +38,9 @@ class FacadeClassification:
             for vector in building.polygon.getVectors():
                 if not vector.edge.cl:
                     vector.edge.cl = FacadeClass.back
+            
+            if unskipFeaturesAction:
+                unskipFeaturesAction.unskipFeatures(building.polygon)
 
     def classifyFrontFacades(self, building):
         maxSight = 0.
@@ -59,6 +65,9 @@ class FacadeClassification:
                     if edgeSight >= FrontFacadeSight:
                         edge.cl = FacadeClass.front
                         accepted_level = way_level
+                elif edge.cl in CrossedFacades and WayLevel[visInfo.waySegment.way.category] == way_level:
+                    accepted_level = way_level
+                   
 
             # If there is at least one building edge satisfying the above condition:
             #   do some post-processing and then
@@ -95,7 +104,6 @@ class FacadeClassification:
                 self.frontOfInvisibleBuilding(building)
 
         return accepted_level if accepted_level else MaxWayLevel+1
-
  
     def frontOfInvisibleBuilding(self, building): 
         # If no front building edge was found, mark one as front (e.g. the longest one)
