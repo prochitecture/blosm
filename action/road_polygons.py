@@ -500,12 +500,13 @@ def iterColorCycle():
 
 def plotFillMutliPolyList(polyList,colorCycler):
     for poly in polyList:
-        color = next(colorCycler)
+        #color = next(colorCycler)
+        color = "red"
         coords = [(v.x,v.y) for v in poly]
-        plotPoly(coords,False,color)
-        x = [v.x for v in poly]
-        y = [v.y for v in poly]
-        plt.fill(x,y,color,alpha=1.0,zorder=10)
+        plotPoly(coords,False,color,width=0.3)
+        #x = [v.x for v in poly]
+        #y = [v.y for v in poly]
+        #plt.fill(x,y,color,alpha=1.0,zorder=10)
 
 # def plotRange(poly,holes,color='#ff0000',alpha = 0.7,zorder=2):
 #     from lib.CompGeom import patchify
