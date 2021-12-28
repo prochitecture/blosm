@@ -269,13 +269,13 @@ class RoadPolygons:
                 geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
                 geosRing = self.geosF.createLinearRing(geosCoords)
                 geosPoly = self.geosF.createPolygon(geosRing)
-            else: 
-                # Linear objects, like fences, get here a small width to be a polygon
-                width = 0.3
-                geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
-                geosString = self.geosF.createLineString(geosCoords)
-                geosPoly = geosString.buffer(width,cap_style=CAP_STYLE.flat)
-            self.geosPolyList.append(geosPoly)
+            # else: 
+            #     # Linear objects, like fences, get here a small width to be a polygon
+            #     width = 0.3
+            #     geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
+            #     geosString = self.geosF.createLineString(geosCoords)
+            #     geosPoly = geosString.buffer(width,cap_style=CAP_STYLE.flat)
+                self.geosPolyList.append(geosPoly)
 
         # add building polylines as polygon objects to <polyList>
         self.buildingPolynoms = mergeBuildingsToBlocks(manager.buildings)
@@ -307,13 +307,28 @@ class RoadPolygons:
 
         self.cyclePolys = []
         for segList in cycleSegs:
-            # Find dead-end ways by searching for segment pairs, where (src,dst) == (dst,src)
-            # The cycle has been constructed correctly for these cases, but contains
-            # antiparallel edges, which can't be processed by PyGEOS.
+
+            # PyGEOS can only process simple polygons, but dead-end ways produce antiparallel
+            # segment pairs in a graph cycle, where (src,dst) == (dst,src). Following the order
+            # of the cycle's edges, dead-ends produce such paired segments in a consecutive order.
+            # For one dead-end way-segemnt for instance, there will be a cycle-segment to the end
+            # and then back. For a whole tree of dead-end way-segments, the graph-cycle segments
+            # form a consecutive sequence to the leaves of the tree and back. All these segments
+            # have to be removed from the graph-cycle polygon
+            
+            # This is not the case for antiparallel segments that arise when a way connects to an
+            # island of ways. Then an antiparallel segment of the graph cycle goes to the island,
+            # followed by some segments for the island itself and then comes the antiparallel part
+            # back to the polygon. These segments have to stay as they are to keep the topology of
+            # the graph-cycle.
+
+            # Step 1: Detect antiparallel graph-cycle segments. Note that we have a undirected
+            # multigraph. There may be segments with antiparallel end-points, but different paths.
+            # "Antiparallel" in the sense used here means identical but reversed paths, we 
+            # have to check for that.
             src = [s.s for s in segList]
             dst = [s.t for s in segList]
-            deadEndSegs = []
-            toRemove = []
+            antiparallelSegIndices = []
             rev_pairs = [pair for pair in zip(dst,src)]
             for indx, pair in enumerate(zip(src,dst)):
                 if pair in rev_pairs:
@@ -322,45 +337,92 @@ class RoadPolygons:
                         revPath = segList[rev_indx].path.copy()
                         revPath.reverse()
                         if segList[indx].path == revPath:
-                            deadEndSegs.append(segList[indx])
-                            toRemove.extend([segList[indx],segList[rev_indx]])
+                            antiparallelSegIndices.append( (indx,rev_indx) )
 
-            # Remove all eventual dead-ends from segment list and get the boundary of cycle polygon
-            boundaryList = [seg for seg in segList if seg not in toRemove]
+            if antiparallelSegIndices:
+                # Step 2: when antiparallel graph-cycle segments are detected, we have to check
+                # for non-consecutive "island type" segments.
 
-            if not boundaryList:
-                continue
+                # find order of antiparallel segments
+                orderedIndxs = sorted( indx for indexPair in antiparallelSegIndices for indx in indexPair )
+                # The graph-cycle is cyclic. To find the cyclic consecutive parts, I have
+                # a complicated solution, but couldn't find a better one.
+                N = len(segList)
+                orderedIndxs = orderedIndxs + \
+                               [indx+N for indx in orderedIndxs] + \
+                               [indx+2*N for indx in orderedIndxs]
 
-            # Create the cycle boundary polygon
-            boundary = [v for s in boundaryList for v in s.path[:-1] ] + [boundaryList[0].s]
-            geosCoords = [ self.geosF.createCoordinate(v) for v in boundary ] 
-            geosRing = self.geosF.createLinearRing(geosCoords)
-            boundaryPoly = self.geosF.createPolygon(geosRing)
+                # find groups of consecutive indices
+                consecutiveGroups, first = {}, None
+                for indx in orderedIndxs:
+                    if first is None or indx != consecutiveGroups[first][1]+1:
+                        first = indx
+                    consecutiveGroups[first] = (first, indx)
 
-            # The boundary of the cycle polygon consists of way segments. Subtract them
-            # as polygon with the way as center line and a buffer polygon with a width
-            # given by the way-category. Additionally, one of the two antiparallel dead-end
-            # way-segments has to be subtracted.
-            if deadEndSegs:
-                boundaryList.extend(deadEndSegs)
+                # The middle part between N <= indx < 2*N of the group with equal first and last
+                # index contains the non-consecutive segments.
+                nonConsecSegIndics = tuple( [indx%N for indx,group in consecutiveGroups.items() \
+                    if group[0]==group[1] and N <= indx < 2*N ])
 
-           # Exclude segments from scene border, which have a zero width
-            wayPolys = [seg.getBuffer() for seg in deadEndSegs if seg.width > 0.]
-            for wayPoly in wayPolys:
-                try:
-                    boundaryPoly = boundaryPoly.difference(wayPoly)
-                except:
-                    plotNetwork(self.sectionNetwork)
-                    plotGeosPoly(boundaryPoly,False,'b',2)
-                    plotGeosPoly(wayPoly,False,'r',2)
-                    plotEnd()
+                # If there are non-consecutive antiparallel segments, these are "island" types and
+                # they are removed from the list of antiparallel segments.
+                if nonConsecSegIndics:
+                    antiparallelSegIndices.remove(nonConsecSegIndics)
+
+                # Remove all dead-end segments from the segment list and create the boundary of
+                # reduced cycle polygon.
+                flatAntiparallelSegIndices = [indx for indexPair in antiparallelSegIndices for indx in indexPair]
+                boundarySegs = [seg for indx,seg in enumerate(segList) if indx not in flatAntiparallelSegIndices]
+                boundaryVerts = [v for s in boundarySegs for v in s.path[:-1] ] + [boundarySegs[0].s]
+                coords = [ self.geosF.createCoordinate(v) for v in boundaryVerts ] 
+                boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
+                self.cyclePolys.append(boundaryPoly)
+
+                # # All segments of dead-end ways of the graph-cycle are now removed and we have a simple
+                # # polygon. Instead of the dead-ends, we subtract now very small polygons, created from 
+                # # the inflated way segements to reconstruct a close approximation of the original polygon.
+                # for indx,_ in antiparallelSegIndices:
+                #     bufferLine = [self.geosF.createCoordinate(v) for v in segList[indx].path]
+                #     bufferString = self.geosF.createLineString(bufferLine)
+                #     bufferPoly = bufferString.buffer(0.1,resolution=3,cap_style=CAP_STYLE.square)
+
+                #     # Subtract buffer
+                #     try:
+                #         plotGeosPoly(boundaryPoly,False,'b',2)
+                #         plotGeosPoly(bufferPoly,False,'r',2)
+                #         plotEnd()
+                #         boundaryPoly = boundaryPoly.difference(bufferPoly)
+                #     except:
+                #         plotNetwork(self.sectionNetwork)
+                #         plotGeosPoly(boundaryPoly,False,'b',2)
+                #         plotGeosPoly(bufferPoly,False,'r',2)
+                #         plt.title('exception')
+                #         plotEnd()
+
+                # # Sometimes, the polygon may have been broken in parts, separate them in this case.
+                # if boundaryPoly.geom_type == 'Polygon':
+                #     self.cyclePolys.append(boundaryPoly)
+                # else: # Multipolygon
+                #     for geom in boundaryPoly.geoms:
+                #         
+
+
+
+            else:   # there are no antiparallel segments
+                # Create the PyGEOS cycle boundary polygon
+                boundarySegs = [seg for seg in segList]
+                boundaryVerts = [v for s in boundarySegs for v in s.path[:-1] ] + [boundarySegs[0].s]
+                coords = [ self.geosF.createCoordinate(v) for v in boundaryVerts ] 
+                boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
+                self.cyclePolys.append(boundaryPoly)
 
             # if polygon has been broken in parts, separate them
-            if boundaryPoly.geom_type == 'Polygon':
-                self.cyclePolys.append(boundaryPoly)
-            else: # Multipolygon
-                for geom in boundaryPoly.geoms:
-                    self.cyclePolys.append(geom)
+            # if boundaryPoly.geom_type == 'Polygon':
+            #     self.cyclePolys.append(boundaryPoly)
+            # else: # Multipolygon
+            #     for geom in boundaryPoly.geoms:
+            #         self.cyclePolys.append(geom)
+
 
     def createWayEnvironmentPolygons(self):
         debug = False
