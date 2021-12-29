@@ -367,7 +367,7 @@ def drawTrueDiagonal(prevDiagonal, holesInC):
         Es = min( [ei for ei in pC_e['e']], key=lambda ei: CGAlgorithms.distancePointPoint(Vi,ei) )
 
         if Es == previousClosestVertex:
-            return Vi, Es, H
+            return Vi, Es, pC_e['h']
 
         diagSegment[1] = Es # new diagonal is Vi-Es
         H = pC_e['h']   # hole H' to absorb

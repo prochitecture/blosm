@@ -423,7 +423,6 @@ class RoadPolygons:
             #     for geom in boundaryPoly.geoms:
             #         self.cyclePolys.append(geom)
 
-
     def createWayEnvironmentPolygons(self):
         debug = False
         environmentPolys = []
@@ -483,8 +482,8 @@ class RoadPolygons:
             try:
                 L = polygonDecomposition(poly)
             except Exception as ex:
-                # import traceback
-                # traceback.print_exception(type(ex), ex, ex.__traceback__)
+                import traceback
+                traceback.print_exception(type(ex), ex, ex.__traceback__)
                 # plotGeosWithHoles(poly,True)
                 # plt.title('exception')
                 # plotEnd()
