@@ -68,7 +68,7 @@ def createSectionNetwork(network):
                     mergedSegment = NetSegment(segmentsToMerge[0])
                     for seg in segmentsToMerge[1:]:
                         mergedSegment.join(seg)
-                    sectionNetwork.addSegment(mergedSegment)
+                    sectionNetwork.addSegment(mergedSegment,False)
     
     return sectionNetwork
 

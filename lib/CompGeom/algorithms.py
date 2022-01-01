@@ -144,6 +144,12 @@ class SCClipper():
         elif p[1] > self.yMax: code |= _TOP 
         return code
 
+    def checkForBorder(self,p):
+        if   p[0]==self.xMin: self.left.append(p)
+        elif p[0]==self.xMax: self.right.append(p)
+        elif p[1]==self.yMin: self.bottom.append(p)
+        elif p[1]==self.yMax: self.top.append(p)
+
     def clip(self,p1,p2):
         code1 = self.positionCode(p1)
         code2 = self.positionCode(p2)
@@ -163,19 +169,15 @@ class SCClipper():
                 if codeOut & _TOP:       # above scene
                     p[0] = p1[0] + ( (dP[0] / dP[1]) * (self.yMax - p1[1]) )
                     p[1] = self.yMax 
-                    self.top.append(p)
                 elif codeOut & _BOTTOM:  # below scene
                     p[0] = p1[0] + ( (dP[0] / dP[1]) * (self.yMin - p1[1]) )
                     p[1] = self.yMin 
-                    self.bottom.append(p)
                 elif codeOut & _RIGHT:  # right of scene
                     p[0] = self.xMax 
                     p[1] = p1[1] + ( (dP[1] / dP[0]) * (self.xMax - p1[0]) )
-                    self.right.append(p)
                 elif codeOut & _LEFT:  # left of scene
                     p[0] = self.xMin 
                     p[1] = p1[1] + ( (dP[1] / dP[0]) * (self.xMin - p1[0]) )
-                    self.left.append(p)
 
                 if codeOut == code1: 
                     p1 = p 
@@ -183,7 +185,11 @@ class SCClipper():
                 else: 
                     p2 = p 
                     code2 = self.positionCode(p2) 
-                    
+
+        if accepted:
+            self.checkForBorder(p1)
+            self.checkForBorder(p2)
+
         return accepted, p1, p2
 
     def getPolygon(self):

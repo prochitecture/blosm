@@ -120,7 +120,7 @@ class WayNetwork(dict):
                     oldSegment = segmentList[thisIndex]
                     if allRoadwayCategoriesRank[segment.category] < allRoadwayCategoriesRank[oldSegment.category]:
                         segmentList[thisIndex] = segment
-                        return
+                    return
 
         self.addNode(s)
         self.addNode(t)
@@ -249,6 +249,9 @@ class WayNetwork(dict):
                         cycleSegs.append(segs)
                     break
                 else:
+                    if nextSeg in segs:
+                        print('ERROR: Endless loop stopped in WayNetwork.getCycles(')
+                        break
                     segs.append(nextSeg)
                     segmentSet -= set([nextSeg])
         return cycleSegs

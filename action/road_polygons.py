@@ -1,7 +1,7 @@
 from mathutils import Vector
 import numpy as np
 from itertools import *
-from collections import defaultdict
+from collections import defaultdict, deque
 
 import matplotlib.pyplot as plt
 
@@ -9,7 +9,7 @@ from way.way_network import WayNetwork, NetSegment
 from way.way_algorithms import createSectionNetwork
 
 from lib.pygeos.geom import GeometryFactory
-from lib.pygeos.shared import CAP_STYLE
+from lib.pygeos.shared import CAP_STYLE, TopologyException
 from lib.pygeos.polygonDecomposition import polygonDecomposition
 from lib.CompGeom.algorithms import circumCircle, SCClipper
 from lib.CompGeom.splitPolygonHoles import splitPolygonHoles
@@ -22,31 +22,41 @@ def _iterEdges(poly):
         return zip(p1,p2)
 
 # Gets all buildings in scene and combines those with shared edges to
-# building blocks. Returns them as a list <geosPolyList> of PyGeos <Polynom>.
+# building blocks. Returns these as a list of PyGeos Polynoms.
 def mergeBuildingsToBlocks(buildings):
-    segList = dict()
-    for building in buildings:
+    segDict = defaultdict(deque)
+    for bNr,building in enumerate(buildings):
         verts = [v for v in building.polygon.verts]
         for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
-            segList[v1.freeze()] = v2
+            segDict[v1.freeze()].append(v2.freeze())
 
     geosF = GeometryFactory()
     geosPolyList = []
-    while segList:
-        firstVert = next(iter(segList))
-        vertList = [Vector((firstVert[0],firstVert[1]))]
-        nextVert = segList.pop(firstVert, None).freeze()
-        while nextVert != firstVert and nextVert is not None:
-            vertList.append(Vector((nextVert[0],nextVert[1])))
-            nextVert = segList.pop(nextVert, None)
-            if nextVert:
-                nextVert.freeze()
+    while segDict:
+        firstVert = next(iter(segDict))
+        vertList = [firstVert]
+        thisVert = segDict.get(firstVert).popleft().freeze()
+        if not segDict[firstVert]: del segDict[firstVert]
+
+        while thisVert != firstVert and thisVert is not None:
+            vertList.append(thisVert)
+            nextQueue = segDict.get(thisVert)
+            if nextQueue is None:
+                print('mergeBuildingsToBlocks: There is a porblem with a building.')
+                thisVert = None
+                break
+            nextVert = nextQueue.popleft().freeze()
+            if not segDict[thisVert]: del segDict[thisVert]
+            thisVert = nextVert
+
+
         if len(vertList) > 2:
             geosCoords = [geosF.createCoordinate(v) for v in vertList+[vertList[0]]]
             geosRing = geosF.createLinearRing(geosCoords)
             geosPoly = geosF.createPolygon(geosRing)
 
             geosPolyList.append( geosPoly )
+
     return geosPolyList
 
 class RoadPolygons:
@@ -65,7 +75,7 @@ class RoadPolygons:
         self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
         self.createPolylinePolygons(manager)
-        self.createCyclePolygons()       
+        self.createCyclePolygons()
         self.createWayEnvironmentPolygons()
 
     def cleanup(self):
@@ -230,7 +240,7 @@ class RoadPolygons:
                     accepted, v1, v2 = clipper.clip(v1,v2)
                     if accepted:
                         netSeg = NetSegment(v1,v2,way.category,(v2-v1).length, width)
-                        fullNetwork.addSegment(netSeg)
+                        fullNetwork.addSegment(netSeg,False)
 
         borderPolygon = clipper.getPolygon()
         for v1,v2 in zip(borderPolygon[:-1],borderPolygon[1:]):
@@ -448,7 +458,20 @@ class RoadPolygons:
                 objPolys.sort(key=lambda x:x.area,reverse=True)
 
                 for objPoly in objPolys:
-                    cyclePoly = cyclePoly.difference(objPoly)
+                    try:
+                        cyclePoly = cyclePoly.difference(objPoly)
+                    except TopologyException as e:
+                        import traceback
+                        traceback.print_exception(type(e), e, e.__traceback__)
+                        print('For cyclePoly Nr.: ', polyNr)
+                        # plt.subplot(1,2,1)
+                        # plotGeosWithHoles(cyclePoly,True)
+                        # plt.gca().axis('equal')
+                        # plt.subplot(1,2,2)
+                        # plotGeosWithHoles(cyclePoly,False)
+                        # plotGeosWithHoles(objPoly,True,'g',2)
+                        # plt.title('exception')
+                        # plotEnd()
 
                 # def makeBridgedPolygon(geom):
                 #     holes = geom.interiors
@@ -478,7 +501,8 @@ class RoadPolygons:
                 environmentPolys.append(cyclePoly)
 
         colorCycler = iterColorCycle()
-        for poly in environmentPolys:
+        for polyNr,poly in enumerate(environmentPolys):
+            # plotGeosWithHoles(poly,False,'b')
             try:
                 L = polygonDecomposition(poly)
             except Exception as ex:
@@ -489,7 +513,7 @@ class RoadPolygons:
                 # plotEnd()
                 continue
             plotFillMutliPolyList(L,colorCycler)
-            # plotEnd()
+            print('%d/%d decomposed'%(polyNr,len(environmentPolys)))
 
     def createKdTree(self):
         from scipy.spatial import KDTree
@@ -527,7 +551,7 @@ def plotGeosWithHoles(geosPoly,vertsOrder,color='k',width=1.,order=100):
     plotPoly(poly,vertsOrder,color,width,order)
     for ring in geosPoly.interiors:
         p = [(c.x,c.y) for c in ring.coords]
-        plotPoly(p,vertsOrder,color,width,order)
+        plotPoly(p,vertsOrder,'r',width,order)
 
 
 def plotGeosPolyFill(geosPoly,vertsOrder,color='k',width=1.,order=100):
