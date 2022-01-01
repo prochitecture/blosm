@@ -98,7 +98,7 @@ class RoadPolygons:
                 v1, v2 = (segment.v1[0],segment.v1[1]),  (segment.v2[0],segment.v2[1])
                 segList.append((v1,v2))
 
-        # Unfortunatel, polylines can not be added to the intersection check,
+        # Unfortunately, polylines can not be added to the intersection check,
         # as they may be collinear to ways, which is not supported by the
         # Bentley-Ottmann sweep-line algorithm.
         # for polyline in manager.polylines:
@@ -109,31 +109,15 @@ class RoadPolygons:
         # Find self-intersections using Bentley-Ottmann sweep-line algorithm
         isects = isect_segments_include_segments(segList)
 
-        # The algorithm delivers edge-ends, that are only nearby to the real edges,
-        # and even sometimes reversed. nearbySeg() finds the true end-points.
-        def nearbySeg(isectSeg,segLIst):
-            s1,s2 = Vector(isectSeg[0]), Vector(isectSeg[1])
-            for listSeg in segList:
-                v1,v2 = Vector(listSeg[0]), Vector(listSeg[1])
-                # nearby?
-                if (v1-s1).length + (v2-s2).length < 0.001:
-                    return (listSeg[0],listSeg[1]) 
-                # nearby but reversed?
-                if (v1-s2).length + (v2-s1).length < 0.001:
-                    return (listSeg[0],listSeg[1]) 
-            return None
-
-        # Find the nearby edge-ends and correct them
         if isects:
             for node,segments in isects:
                 for segment in segments:
-                    if segment not in segList:
-                        nearSeg = nearbySeg(segment,segList)
-                        if nearSeg:
-                            self.intersectingSegments[nearSeg].append(node)
-                            v1,v2 = nearSeg
-                    else:
+                    if segment in segList:
                         self.intersectingSegments[segment].append(node)
+                    else: # maybe reversed order of vertices
+                        segment = (segment[1],segment[0])
+                        if segment in segList:
+                            self.intersectingSegments[segment].append(node)
 
         def _inorderExtend(segment, v1, v2, points):
             # Extend a segment <segment> by <points> that are on
@@ -492,17 +476,27 @@ class RoadPolygons:
  
                 if cyclePoly.geom_type == 'Polygon':
                     environmentPolys.append(cyclePoly)
-                    # makeBridgedPolygon(cyclePoly)
                 else: # Multipolygon
                     for geom in cyclePoly.geoms:
                         environmentPolys.append(geom)
-                        # makeBridgedPolygon(geom)
             else:
                 environmentPolys.append(cyclePoly)
 
         colorCycler = iterColorCycle()
         for polyNr,poly in enumerate(environmentPolys):
-            # plotGeosWithHoles(poly,False,'b')
+            holes = poly.interiors
+            if holes:     
+                # Split polygon holes using bridges (can't be done by PyGeos).
+                # The bridged PyGeos coordinates have to be converted back to a polygon.
+                polyVerts = [(v.x,v.y) for v in poly.exterior.coords]
+                holeVerts = []
+                for hole in holes:
+                    holeVerts.append([(v.x,v.y) for v in hole.coords])
+                bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
+                geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
+                geosRing = self.geosF.createLinearRing(geosCoords)
+                poly = self.geosF.createPolygon(geosRing)
+
             try:
                 L = polygonDecomposition(poly)
             except Exception as ex:
@@ -513,7 +507,7 @@ class RoadPolygons:
                 # plotEnd()
                 continue
             plotFillMutliPolyList(L,colorCycler)
-            print('%d/%d decomposed'%(polyNr,len(environmentPolys)))
+            print('%d/%d decomposed'%(polyNr+1,len(environmentPolys)))
 
     def createKdTree(self):
         from scipy.spatial import KDTree
@@ -585,13 +579,13 @@ def iterColorCycle():
 
 def plotFillMutliPolyList(polyList,colorCycler):
     for poly in polyList:
-        #color = next(colorCycler)
+        # color = next(colorCycler)
         color = "red"
         coords = [(v.x,v.y) for v in poly]
         plotPoly(coords,False,color,width=0.3)
-        #x = [v.x for v in poly]
-        #y = [v.y for v in poly]
-        #plt.fill(x,y,color,alpha=1.0,zorder=10)
+        # x = [v.x for v in poly]
+        # y = [v.y for v in poly]
+        # plt.fill(x,y,color,alpha=1.0,zorder=10)
 
 # def plotRange(poly,holes,color='#ff0000',alpha = 0.7,zorder=2):
 #     from lib.CompGeom import patchify

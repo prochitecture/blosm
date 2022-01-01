@@ -440,7 +440,7 @@ def absHol(poly,holes):
 
     return LPCP
 
-def polygonDecomposition(P):
+def polygonDecompositionWithHoles(P):
     """
         P: A PyGEOS polygon (class Polygon) with optional interior geometries as holes. 
         return: A list of decomposed polygons. Every polygon in this list is itself a
@@ -464,3 +464,33 @@ def polygonDecomposition(P):
            # call Fernandez polygon decomposition
     return absHol(poly,holes)
 
+def polygonDecomposition(P):
+    """
+        P: A PyGEOS polygon (class Polygon) without interior geometries as holes. 
+        return: A list of decomposed polygons. Every polygon in this list is itself a
+        list of PyGEOS vertices (class Coordinate)
+    """
+    gF = GeometryFactory()
+
+    exteriorRing = P.exterior
+    # the exterior polygon must be counter-clockwise
+    if not exteriorRing.is_ccw:
+        exteriorRing.coords.reverse()
+    poly = exteriorRing.coords[:-1]
+
+    LPCP = []
+    Q = poly
+
+    while True:
+        # Obtain a convex polygon C of the partition of Q using the algorithm MP5
+        iC, end  = MP5(Q)
+        C = [Q[i] for i in iC]
+
+        LPCP.append(C)
+        if end:
+            break
+        iQ = [i for i in range(len(Q))]
+        iQ = subtractPolygons(iQ, iC)
+        Q = [Q[i] for i in iQ]
+
+    return LPCP

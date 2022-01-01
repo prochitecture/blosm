@@ -49,7 +49,7 @@ X, Y = 0, 1
 # -----------------------------------------------------------------------------
 # Switchable Number Implementation
 
-NUMBER_TYPE = 'native'
+NUMBER_TYPE = 'numpy'
 
 if NUMBER_TYPE == 'native':
     Real = float
