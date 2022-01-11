@@ -120,7 +120,7 @@ def setup(app, osm):
         if wayClustering:
             wayManager.addRenderer(WayClusterRenderer())
             wayManager.addAction(WayClustering())
-            buildings.addAction(CurvedFeatures())
+            # buildings.addAction(CurvedFeatures())
             buildings.addAction(StraightAngles())
         else:
             wayManager.addRenderer(WayVisibilityRenderer(showIDs=showIDs))

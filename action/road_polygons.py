@@ -12,8 +12,9 @@ from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE, TopologyException
 from lib.pygeos.polygonDecomposition import polygonDecomposition
 from lib.CompGeom.algorithms import circumCircle, SCClipper
-from lib.CompGeom.splitPolygonHoles import splitPolygonHoles
 from lib.CompGeom.poly_point_isect import isect_segments_include_segments
+from lib.triangulation.PolygonTriangulation import PolygonTriangulation
+from lib.triangulation.Vertex import Vertex
 
 # cyclic iterate over polygons vertices
 def _iterEdges(poly):
@@ -421,6 +422,7 @@ class RoadPolygons:
         debug = False
         environmentPolys = []
         for polyNr,cyclePoly in enumerate(self.cyclePolys):
+            print('%d/%d polyline subtraction started'%(polyNr+1,len(self.cyclePolys)))
 
             # Construct a circumscribed circle around the polygon vertices
             # used as search range in KD-tree of polyline objects.
@@ -483,31 +485,27 @@ class RoadPolygons:
                 environmentPolys.append(cyclePoly)
 
         colorCycler = iterColorCycle()
+        triangulation = PolygonTriangulation()
         for polyNr,poly in enumerate(environmentPolys):
             holes = poly.interiors
-            if holes:     
-                # Split polygon holes using bridges (can't be done by PyGeos).
-                # The bridged PyGeos coordinates have to be converted back to a polygon.
-                polyVerts = [(v.x,v.y) for v in poly.exterior.coords]
-                holeVerts = []
-                for hole in holes:
-                    holeVerts.append([(v.x,v.y) for v in hole.coords])
-                bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
-                geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
-                geosRing = self.geosF.createLinearRing(geosCoords)
-                poly = self.geosF.createPolygon(geosRing)
+            # the exterior polygon must be counter-clockwise
+            polyVerts = [Vertex((v.x,v.y)) for v in poly.exterior.coords[:-1]]
+            if not poly.exterior.is_ccw:
+                polyVerts.reverse()
+            holeVerts = []
+            for hole in holes:
+                holeV = [Vertex((v.x,v.y)) for v in hole.coords[:-1]]
+                if hole.is_ccw:
+                    holeV.reverse()
+                holeVerts.append(holeV)
 
-            try:
-                L = polygonDecomposition(poly)
-            except Exception as ex:
-                import traceback
-                traceback.print_exception(type(ex), ex, ex.__traceback__)
-                # plotGeosWithHoles(poly,True)
-                # plt.title('exception')
-                # plotEnd()
-                continue
-            plotFillMutliPolyList(L,colorCycler)
-            print('%d/%d decomposed'%(polyNr+1,len(environmentPolys)))
+            # plotGeosWithHoles(poly,False,'k')
+            # plotEnd()
+            triangles = triangulation.triangulate(polyVerts,holeVerts)
+            for triangle in triangles:
+                plotPoly(triangle,False,'r',0.5)
+            print('%d/%d triangulated'%(polyNr+1,len(environmentPolys)))
+            # plotEnd()
 
     def createKdTree(self):
         from scipy.spatial import KDTree
@@ -521,7 +519,6 @@ class RoadPolygons:
 
 # Plotting functions used during development
 #-----------------------------------------------------------------------------------
-
 
 def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
     count = 0
