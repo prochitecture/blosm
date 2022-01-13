@@ -28,8 +28,20 @@ def mergeBuildingsToBlocks(buildings):
     segDict = defaultdict(deque)
     for bNr,building in enumerate(buildings):
         verts = [v for v in building.polygon.verts]
+        sharedVertices = 0
         for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
-            segDict[v1.freeze()].append(v2.freeze())
+            v1.freeze()
+            if v1.freeze() in segDict:
+                sharedVertices += 1
+                # plt.plot(v1[0],v1[1],'bo',markersize=8)
+        if sharedVertices:
+                center = sum(verts,Vector((0.,0.)))/len(verts)
+                # plotPoly(verts,True,'r',2)
+                # plt.text(center[0],center[1],str(sharedVertices)+' '+str(bNr),color='red',fontsize=12)
+                print('ISSUE: Building Nr. %d at (%5.1f,%5.1f) has %d shared vertice(s) with another building'%(bNr,center[0],center[1],sharedVertices))
+        if not sharedVertices:
+            for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
+                segDict[v1.freeze()].append(v2.freeze())
 
     geosF = GeometryFactory()
     geosPolyList = []
@@ -43,6 +55,7 @@ def mergeBuildingsToBlocks(buildings):
             vertList.append(thisVert)
             nextQueue = segDict.get(thisVert)
             if nextQueue is None:
+                # plotPoly(vertList,True,'r',2)
                 print('mergeBuildingsToBlocks: There is a problem with a building.')
                 thisVert = None
                 break
@@ -380,6 +393,7 @@ class RoadPolygons:
                     bufferString = self.geosF.createLineString(path)
                     bufferPoly = bufferString.buffer(0.001,resolution=3,cap_style=CAP_STYLE.square)
                     boundaryPoly = boundaryPoly.difference(bufferPoly)
+                    # plotGeosWithHoles(boundaryPoly,False,'r',2)
 
                 self.cyclePolys.append(boundaryPoly)
 
