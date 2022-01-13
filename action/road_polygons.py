@@ -43,7 +43,7 @@ def mergeBuildingsToBlocks(buildings):
             vertList.append(thisVert)
             nextQueue = segDict.get(thisVert)
             if nextQueue is None:
-                print('mergeBuildingsToBlocks: There is a porblem with a building.')
+                print('mergeBuildingsToBlocks: There is a problem with a building.')
                 thisVert = None
                 break
             nextVert = nextQueue.popleft().freeze()
@@ -315,7 +315,8 @@ class RoadPolygons:
             # island of ways. Then an antiparallel segment of the graph cycle goes to the island,
             # followed by some segments for the island itself and then comes the antiparallel part
             # back to the polygon. These segments have to stay as they are to keep the topology of
-            # the graph-cycle.
+            # the graph-cycle. But to make their cycle polygons valid, a small gap has to be
+            # subtracted along the antiparalel part.
 
             # Step 1: Detect antiparallel graph-cycle segments. Note that we have a undirected
             # multigraph. There may be segments with antiparallel end-points, but different paths.
@@ -371,6 +372,15 @@ class RoadPolygons:
                 boundaryVerts = [v for s in boundarySegs for v in s.path[:-1] ] + [boundarySegs[0].s]
                 coords = [ self.geosF.createCoordinate(v) for v in boundaryVerts ] 
                 boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
+
+                # Step 3: A small gap has to be introduced along antiparallel segments to make the
+                # cycle polygon valid
+                if  nonConsecSegIndics:
+                    path = [self.geosF.createCoordinate(v) for v in segList[nonConsecSegIndics[0]].path ]
+                    bufferString = self.geosF.createLineString(path)
+                    bufferPoly = bufferString.buffer(0.001,resolution=3,cap_style=CAP_STYLE.square)
+                    boundaryPoly = boundaryPoly.difference(bufferPoly)
+
                 self.cyclePolys.append(boundaryPoly)
 
                 # # All segments of dead-end ways of the graph-cycle are now removed and we have a simple
@@ -419,9 +429,10 @@ class RoadPolygons:
             #         self.cyclePolys.append(geom)
 
     def createWayEnvironmentPolygons(self):
-        debug = False
         environmentPolys = []
         for polyNr,cyclePoly in enumerate(self.cyclePolys):
+            # if interrupt > 0:
+            #     return
             print('%d/%d polyline subtraction started'%(polyNr+1,len(self.cyclePolys)))
 
             # Construct a circumscribed circle around the polygon vertices
@@ -501,7 +512,12 @@ class RoadPolygons:
 
             # plotGeosWithHoles(poly,False,'k')
             # plotEnd()
-            triangles = triangulation.triangulate(polyVerts,holeVerts)
+            try:
+                triangles = triangulation.triangulate(polyVerts,holeVerts)
+            except Exception as e:
+                import traceback
+                traceback.print_exception(type(e), e, e.__traceback__)
+                plotGeosWithHoles(poly,True,'r',2)
             for triangle in triangles:
                 plotPoly(triangle,False,'r',0.5)
             print('%d/%d triangulated'%(polyNr+1,len(environmentPolys)))
