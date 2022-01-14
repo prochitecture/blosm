@@ -17,7 +17,7 @@ from action.road_polygons import RoadPolygons
 
 
 def skip(tags, e):
-    if tags.get("area") == "yes" or tags.get("tunnel") == "yes":
+    if tags.get("area") == "yes" or tags.get("tunnel") == "yes" or tags.get("ice_road") == "yes":
         e.valid = False
         return True
     return False
