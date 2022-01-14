@@ -16,8 +16,8 @@ from action.road_polygons import RoadPolygons
 #from manager.logging import Logger
 
 
-def tunnel(tags, e):
-    if tags.get("tunnel") == "yes":
+def skip(tags, e):
+    if tags.get("area") == "yes" or tags.get("tunnel") == "yes":
         e.valid = False
         return True
     return False
@@ -113,7 +113,7 @@ def setup(app, osm):
         #    roadPolygonsManager.connectedManagers.append(buildings)
     
     if app.highways or app.railways:
-        osm.addCondition(tunnel)
+        osm.addCondition(skip)
         
         wayManager = WayManager(osm, app)
         

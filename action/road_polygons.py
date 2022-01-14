@@ -56,7 +56,7 @@ def mergeBuildingsToBlocks(buildings):
             nextQueue = segDict.get(thisVert)
             if nextQueue is None:
                 # plotPoly(vertList,True,'r',2)
-                print('mergeBuildingsToBlocks: There is a problem with a building.')
+                print('mergeBuildingsToBlocks: There is a problem with a building.', thisVert)
                 thisVert = None
                 break
             nextVert = nextQueue.popleft().freeze()
