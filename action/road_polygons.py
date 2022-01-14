@@ -35,10 +35,10 @@ def mergeBuildingsToBlocks(buildings):
                 sharedVertices += 1
                 # plt.plot(v1[0],v1[1],'bo',markersize=8)
         if sharedVertices:
-                center = sum(verts,Vector((0.,0.)))/len(verts)
+                # center = sum(verts,Vector((0.,0.)))/len(verts)
                 # plotPoly(verts,True,'r',2)
                 # plt.text(center[0],center[1],str(sharedVertices)+' '+str(bNr),color='red',fontsize=12)
-                print('ISSUE: Building Nr. %d at (%5.1f,%5.1f) has %d shared vertice(s) with another building'%(bNr,center[0],center[1],sharedVertices))
+                print('ISSUE: Building with OSM id %s has %d shared vertice(s) with another building' % (building.element.tags["id"], sharedVertices))
         if not sharedVertices:
             for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
                 segDict[v1.freeze()].append(v2.freeze())

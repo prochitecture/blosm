@@ -21,6 +21,7 @@ import parse
 from mathutils import Vector
 from defs.building import BldgPolygonFeature, StraightAngleType
 from defs.facade_classification import WayLevel, VisibilityAngleFactor
+from util import zeroVector2d
 
 
 class BldgPolygon:
@@ -33,14 +34,14 @@ class BldgPolygon:
     
     straightAngleSin = 0.
     
-    def __init__(self, outline, manager, building):
+    def __init__(self, element, manager, building):
         # if <building> is None, it's a building part
         self.building = building
         self.reversed = False
         # vectors
         self.vectors = vectors = [
             self.createVector(nodeId1, nodeId2, manager) \
-                for nodeId1,nodeId2 in outline.pairNodeIds(manager.data) \
+                for nodeId1,nodeId2 in element.pairNodeIds(manager.data) \
                     if not manager.data.haveSamePosition(nodeId1, nodeId2)
         ]
         self.numEdges = len(self.vectors)
@@ -214,6 +215,38 @@ class BldgPolygon:
         vertsX = [ vector.v1[0] for vector in self.getVectors() ]
         vertsY = [ vector.v1[1] for vector in self.getVectors() ]
         return max( max(vertsX)-min(vertsX), max(vertsY)-min(vertsY) )
+    
+    def next(self, index):
+        """
+        Returns the next index for <index>
+        
+        Args:
+            index (int): A number between 0 and <self.numEdges - 1>
+        """
+        return (index+1) % self.numEdges
+    
+    def getLongestVector(self):
+        # We don't cache it!
+        return max(
+            ( vector for vector in self.getVectors() ),
+            key = lambda vector: (vector.edge.v2 - vector.edge.v1).length_squared
+        )
+    
+    def center(self):
+        """
+        Returns geometric center of the polygon
+        """
+        return sum(self.verts, zeroVector2d())/self.numEdges
+    
+    def centerBB3d(self, z):
+        """
+        Return the center of the polygon bounding box alligned along the global X and Y axes
+        """
+        return Vector((
+            ( min(self.verts, key=lambda v: v[0])[0] + max(self.verts, key=lambda v: v[0])[0] )/2.,
+            ( min(self.verts, key=lambda v: v[1])[1] + max(self.verts, key=lambda v: v[1])[1] )/2.,
+            z
+        ))
 
 
 class BldgEdge:
@@ -356,10 +389,10 @@ class Building:
     A wrapper for a OSM building
     """
     
-    __slots__ = ("outline", "parts", "polygon", "auxIndex", "crossedEdges", "renderInfo")
+    __slots__ = ("element", "parts", "polygon", "auxIndex", "crossedEdges", "renderInfo")
     
     def __init__(self, element, manager):
-        self.outline = element
+        self.element = element
         self.parts = []
         # an auxiliary variable used to store the first index of the building vertices in an external list or array
         self.auxIndex = 0
@@ -371,7 +404,7 @@ class Building:
         # A polygon for the outline.
         # Projection may not be available when Building.__init__(..) is called. So we have to
         # create <self.polygon> after the parsing is finished and the projectin is available.
-        self.polygon = BldgPolygon(self.outline, manager, self)
+        self.polygon = BldgPolygon(self.element, manager, self)
     
     def addPart(self, part):
         self.parts.append(part)
@@ -387,19 +420,19 @@ class Building:
         self.crossedEdges.append( (edge, intsectX) )
         
     def attr(self, attr):
-        return self.outline.tags.get(attr)
+        return self.element.tags.get(attr)
 
     def __getitem__(self, attr):
         """
         That variant of <self.attr(..) is used in a setup script>
         """
-        return self.outline.tags.get(attr)
+        return self.element.tags.get(attr)
 
 
 class BldgPart:
     
     def __init__(self, element, manager):
-        self.outline = element
+        self.element = element
         self.polygon = BldgPolygon(element, manager, None)
 
 
