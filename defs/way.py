@@ -19,7 +19,7 @@ allRoadwayCategories = (
     "track",
     "escape",
     "raceway",
-    "other",
+    "other_roadway",
     # "road", # other
     "steps",
     "footway",
@@ -38,8 +38,8 @@ allRailwayCategories = (
     "light_rail",
     "tram",
     "funicular",
-    "monorail"
-    
+    "monorail",
+    "other_railway"
 )
 allRailwayCategoriesSet = set(allRailwayCategories)
 

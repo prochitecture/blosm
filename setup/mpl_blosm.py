@@ -205,9 +205,9 @@ def setup(app, osm):
         )
     if app.railways:
         osm.addCondition(
-            lambda tags, e: "railway" in tags,
+            lambda tags, e: tags.get("railway") in ("rail", "tram", "subway", "light_rail", "funicular", "monorail"),
             "railways",
-            wayManager
+            wayManager.getRailwayManager()
         )
     
     if roadPolygons:

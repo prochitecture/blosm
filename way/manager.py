@@ -1,4 +1,4 @@
-from . import Way
+from . import Way, Railway
 from defs.base.polyline import Polyline
 from defs.way import allWayCategories, facadeVisibilityWayCategories
 
@@ -29,15 +29,12 @@ class WayManager:
         app.addManager(self)
 
     def parseWay(self, element, elementId):
-        self.createWay(element)
-    
-    def parseRelation(self, element, elementId):
-        return
-    
-    def createWay(self, element):
         # create a wrapper for the OSM way <element>
         way = Way(element, self)
         self.layers[way.category].append(way)
+    
+    def parseRelation(self, element, elementId):
+        return
     
     def getAllWays(self):
         return (way for category in allWayCategories for way in self.layers[category])
@@ -70,6 +67,28 @@ class WayManager:
     def addAction(self, action):
         action.app = self.app
         self.actions.append(action)
+    
+    def getRailwayManager(self):
+        return RailwayManager(self)
+
+
+class RailwayManager:
+    """
+    An auxiliary manager to process railways
+    """
+    
+    def __init__(self, wayManager):
+        self.layers = wayManager.layers
+        # use the default layer class in the <app>
+        self.layerClass = None
+    
+    def parseWay(self, element, elementId):
+        # create a wrapper for the OSM way <element>
+        way = Railway(element, self)
+        self.layers[way.category].append(way)
+    
+    def parseRelation(self, element, elementId):
+        return
 
 
 class RoadPolygonsManager:

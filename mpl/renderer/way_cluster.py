@@ -70,7 +70,11 @@ class WayClusterRenderer(Renderer):
         path = dict(color="#fa8072", linewidth=1., linestyle="dashed"),
         track = dict(color="#fa8072", linewidth=1., linestyle="dashed"),
         cycleway = dict(color="#0000ff", linewidth=1., linestyle="dashed"),
-        scene_border = dict(color="#ff0000", linewidth=1., linestyle="solid")
+        # a special case
+        scene_border = dict(color="#ff0000", linewidth=1., linestyle="solid"),
+        # railways
+        tram = dict(color="#000000", linewidth=2., linestyle="solid"),
+        rail = dict(color="#000000", linewidth=3., linestyle="solid")
     )
     
     def render(self, wayManager, data):
