@@ -11,7 +11,7 @@ from way.way_algorithms import createSectionNetwork
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE, TopologyException
 from lib.pygeos.polygonDecomposition import polygonDecomposition
-from lib.CompGeom.algorithms import circumCircle, SCClipper
+from lib.CompGeom.algorithms import circumCircle, SCClipper, simpleSelfIntersection
 from lib.CompGeom.poly_point_isect import isect_segments_include_segments
 from lib.triangulation.PolygonTriangulation import PolygonTriangulation
 from lib.triangulation.Vertex import Vertex
@@ -26,19 +26,23 @@ def _iterEdges(poly):
 # building blocks. Returns these as a list of PyGeos Polynoms.
 def mergeBuildingsToBlocks(buildings):
     segDict = defaultdict(deque)
+    buildingDict = defaultdict(set)
     for bNr,building in enumerate(buildings):
         verts = [v for v in building.polygon.verts]
-        sharedVertices = 0
+        sharedVertices = []
         for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
+            buildingDict[v1.freeze()].add(bNr)
             v1.freeze()
             if v1.freeze() in segDict:
-                sharedVertices += 1
+                sharedVertices.append(v1)
                 # plt.plot(v1[0],v1[1],'bo',markersize=8)
         if sharedVertices:
+            for v in sharedVertices:
+                # plt.plot(v[0],v[1],'ro',markersize=6)
                 # center = sum(verts,Vector((0.,0.)))/len(verts)
                 # plotPoly(verts,True,'r',2)
                 # plt.text(center[0],center[1],str(sharedVertices)+' '+str(bNr),color='red',fontsize=12)
-                print('ISSUE: Building with OSM id %s has %d shared vertice(s) with another building' % (building.element.tags["id"], sharedVertices))
+                print('ISSUE: Building with OSM id %s has %d shared vertice(s) with another building' % (building.element.tags["id"], len(sharedVertices)))
         if not sharedVertices:
             for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
                 segDict[v1.freeze()].append(v2.freeze())
@@ -88,7 +92,9 @@ class RoadPolygons:
     def do(self, manager):
         self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
-        self.createPolylinePolygons(manager)
+        # self.createPolylinePolygons(manager)  # replaced by the two following function calls
+        self.checkAndRepairObjectPolys(manager)
+        self.fillObjectsInKDTree()
         self.createCyclePolygons()
         self.createWayEnvironmentPolygons()
 
@@ -247,6 +253,296 @@ class RoadPolygons:
 
         # create way-section network
         self.sectionNetwork = createSectionNetwork(fullNetwork)
+
+    # Gets all polylines and buildings in scene (those with shared edges combined
+    # to blocks) and collects them in a list <self.geosPolyList> of PyGeos polynoms. 
+    def checkAndRepairObjectPolys(self,manager):
+        # Create dictionary polygon id -> vertices
+        polygons = {} 
+        for building in manager.buildings:
+            verts = [v for v in building.polygon.verts]
+            for v in verts: v.freeze()  # make vertices immutable
+            polygons[int(building.element.tags["id"])] = [v for v in building.polygon.verts]
+        for polyline in manager.polylines:
+            if polyline.element.closed and not 'barrier' in polyline.element.tags:
+                verts = [edge.v1 for edge in polyline.edges]
+                ccw = sum( (v2[0]-v1[0])*(v2[1]+v1[1]) for v1,v2 in _iterEdges(verts)) < 0.
+                if ccw: verts.reverse()
+                for v in verts: v.freeze()  # make vertices immutable
+                polygons[int(polyline.element.tags["id"])] = verts
+
+        # Create an adjacency list <edges> of all edges. Edges that have a twin
+        # are shared edges and get removed.
+        # Create also a mapping <vertsToIds> from vertex to polygon IDs (there
+        # may be multiple ids for shared vertices)
+        edges = defaultdict(list)
+        vertsToIds = defaultdict(set)
+        for polyID,verts in polygons.items():
+            for source,target in _iterEdges(verts):
+                if source in edges.get(target,[]):
+                    # edge and its twin detected -> shared edge
+                    edges[target].remove(source)
+                    if not edges[target]:
+                        del edges[target]
+                else:
+                    edges[source].append(target)
+                    vertsToIds[source].add(int(polyID))
+
+        # # DEBUG-PLOT, to be removed when no more required
+        # # Shows edges after shared edge removal.
+        # for source,targets in edges.items():
+        #     for target in targets:
+        #         plt.plot([source[0],target[0]],[source[1],target[1]],'k')
+
+        # Detect IDs of conflicting polygons due to shared vertices
+        conflictingPolys = defaultdict(list)
+        for source,targets in edges.items():
+            if len(targets) > 1:
+                conflictingPolys[tuple(vertsToIds[source])].append(source)
+
+        # # DEBUG-PLOT, to be removed when no more required
+        # # Shows conflicting polygons and shared vertices.
+        # for polys,sources in conflictingPolys.items():
+        #     for source in sources:
+        #         plt.plot(source[0],source[1],'co',markersize=10,zorder=500)
+        #     for poly in polys:
+        #         plotPoly(polygons[poly],False,'r',3,500)
+        # plotEnd()
+
+        # Now try to repair the conflicting polygons
+        geosF = GeometryFactory()
+        for polyIDs,sharedVerts in conflictingPolys.items():
+            # Remove all edges of these polygons from <edges>, but save those
+            # that have been already detected as shared edges and are no more
+            # in the adjacency list <edges> in <hiddenSharedEdges>.
+            hiddenSharedEdges = []
+            for polyID in polyIDs:
+                for source,target in _iterEdges(polygons[polyID]):
+                    if source in edges and target in edges[source]:
+                        # remove those that exist and are not shared
+                        edges[source].remove(target)
+                        if not edges[source]: del edges[source]
+                    else:
+                        # store edges detected as shared
+                        hiddenSharedEdges.append((source,target))
+
+            # We will analyse this conflict using pyGEOS,so create pyGEOS polygons           
+            polysToBeAnalyzed = []
+            for polyID in polyIDs:
+                verts = [v for v in polygons[polyID]]
+                coords = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                polysToBeAnalyzed.append( geosF.createPolygon( geosF.createLinearRing(coords)) )
+
+            # Try to detect the reasons of the conflict
+            conflictReasons = []
+            for p1,p2 in combinations(range(len(polysToBeAnalyzed)), 2):
+                intersection = polysToBeAnalyzed[p1].intersects(polysToBeAnalyzed[p2])
+                singleVertex = polysToBeAnalyzed[p1].relate(polysToBeAnalyzed[p2],'*F2*0*2**')
+                if intersection and not singleVertex:
+                    conflictReasons.append('intersect')
+                elif singleVertex:
+                    conflictReasons.append('singleVert')
+                else:
+                    conflictReasons.append('unknown')
+
+            # Try to repair the conflict
+            if len(conflictReasons) == 1:   # Only two polygons involved in conflict
+                id0, id1 = list(polyIDs)
+                if conflictReasons[0] == 'intersect':
+                    # # DEBUG-PLOT, to be removed when no more required
+                    # plt.close()
+                    # plotGeosWithHoles(polysToBeAnalyzed[0],False,'r',2)
+                    # plotGeosWithHoles(polysToBeAnalyzed[1],False,'g',2)
+                    # plt.title('Intersection')
+                    # plotEnd()
+                    # Merge the intersecting polygons
+                    joinedPoly = polysToBeAnalyzed[0].union(polysToBeAnalyzed[1])
+                    if joinedPoly.geom_type=='Polygon' and joinedPoly.exterior.is_valid:
+                        verts = [Vector((v.x,v.y)) for v in joinedPoly.exterior.coords[:-1]]
+                        if not joinedPoly.exterior.is_ccw:
+                            verts.reverse()
+                        for v in verts: v.freeze()  # make vertices immutable
+                        # put edges of joined polygon back to <edges>, when not shared.
+                        for source,target in _iterEdges(verts):
+                            if (source,target) not in hiddenSharedEdges:
+                                edges[source].append(target)
+                        print('Mapping CONFLICT repaired: Overlapping or touching polygons %s and %s'%(id0,id1))
+                    else:
+                        print('Mapping CONFLICT unresolved: Polygons %s and %s removed'%(id0,id1))
+                elif conflictReasons[0] == 'singleVert':
+                    # # DEBUG-PLOT, to be removed when no more required
+                    # plt.close()
+                    # plotGeosWithHoles(polysToBeAnalyzed[0],False,'r',2)
+                    # plotGeosWithHoles(polysToBeAnalyzed[1],False,'g',2)
+                    # plt.title('Single Vertex')
+                    # plotEnd()
+                    # The first polygon remains as it was
+                    for source,target in _iterEdges(polygons[id0]):
+                        source.freeze(), target.freeze()
+                        if (source,target) not in hiddenSharedEdges:
+                            edges[source].append(target)
+                    # The shared vertex of the second polygon is shifted along 
+                    # the bisector by 1mm into the polygon ...
+                    sharedVert = sharedVerts[0]
+                    verts = polygons[id1]    
+                    indx = verts.index(sharedVert) 
+                    N = len(verts)
+                    pred, succ = verts[(indx-1)%N], verts[(indx+1)%N]
+                    u1 = (pred-sharedVert)/(pred-sharedVert).length
+                    u2 = (succ-sharedVert)/(succ-sharedVert).length
+                    shiftedShared = sharedVert + (u1 +u2)/(u1 +u2).length * 0.001
+                    shiftedShared.freeze()
+                    verts[indx] = shiftedShared
+
+                    # ... and then put back to <edges>, when not shared.
+                    for source,target in _iterEdges(verts):
+                        if (source,target) not in hiddenSharedEdges:
+                            edges[source].append(target)
+                    print('Mapping CONFLICT repaired: Single shared vertex between polygons %s and %s'%(id0,id1))
+                else:
+                    id0, id1 = list(polyIDs)
+                    print('Mapping CONFLICT unresolved: Polygons %s and %s removed'%(id0,id1))
+
+            else: # More than two polygons involved in conflict
+                # # DEBUG-PLOT, to be removed when no more required
+                # plt.close()
+                # for poly in polysToBeAnalyzed:
+                #     plotGeosWithHoles(poly,False,'r',2)
+                # plt.title('Multiple poly conflict')
+                # plotEnd()
+
+                if all(reason=='intersect' for reason in conflictReasons):
+                    # Merge polygons involved in this conflict
+                    polysToBeMerged = []
+                    for polyID in polyIDs:
+                        verts = [v for v in polygons[polyID]]
+                        coords = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                        polysToBeMerged.append( geosF.createPolygon( geosF.createLinearRing(coords)) )
+                    joinedPoly = polysToBeMerged[0]
+                    for poly in polysToBeMerged[1:]:
+                        joinedPoly = joinedPoly.union(poly)
+                    if joinedPoly.geom_type=='Polygon' and joinedPoly.exterior.is_valid:
+                        verts = [Vector((v.x,v.y)) for v in joinedPoly.exterior.coords[:-1]]
+                        if not joinedPoly.exterior.is_ccw:
+                            verts.reverse()
+                        for v in verts: v.freeze()  # make vertices immutable
+                        # put edges of joined polygon back to <edges>, when not shared.
+                        for source,target in _iterEdges(verts):
+                            if (source,target) not in hiddenSharedEdges:
+                                edges[source].append(target)
+                        print('Mapping CONFLICT repaired: Overlapping or touching polygons ', polyIDs, ' merged.')
+
+        # # DEBUG-PLOT, to be removed when no more required
+        # # Shows edges after conflict repair.
+        # for source,targets in edges.items():
+        #     for target in targets:
+        #         plt.plot([source[0],target[0]],[source[1],target[1]],'k')
+        # plotEnd()
+
+        # All conflicts due to shared vertices should be repaired now. The adjacency list <edges>
+        # is now parsed for polygons. Take a starting vertex <firstVert> and follow the edges in
+        # the list until this edge is reached again and create a polygon from its vertices.
+        self.geosPolyList = []
+        while edges:
+            firstVert = next(iter(edges))
+            vertList = [firstVert]
+            thisVert = edges[firstVert].pop().freeze() #segDict.get(firstVert).popleft().freeze()
+            if not edges[firstVert]: del edges[firstVert]
+
+            while thisVert != firstVert and thisVert is not None:
+                vertList.append(thisVert)
+                nextQueue = edges.get(thisVert)
+                if nextQueue is None:
+                    # Merge polygons involved in this conflict
+                    involvedPolygonsIDs = set()
+                    for v in vertList:
+                        involvedPolygonsIDs = involvedPolygonsIDs.union(vertsToIds[v])
+                    # remove their edges from edge list
+                    for polyID in involvedPolygonsIDs:
+                        for source,target in _iterEdges(polygons[polyID]):
+                            if source in edges and target in edges[source]:
+                                # remove those that exist
+                                edges[source].remove(target)
+                                if not edges[source]: del edges[source]
+
+                    polysToBeMerged = []
+                    for polyID in involvedPolygonsIDs:
+                        verts = [v for v in polygons[polyID]]
+                        coords = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                        polysToBeMerged.append( geosF.createPolygon( geosF.createLinearRing(coords)) )
+                    joinedPoly = polysToBeMerged[0]
+                    for poly in polysToBeMerged[1:]:
+                        joinedPoly = joinedPoly.union(poly)
+                    if joinedPoly.geom_type=='Polygon' and joinedPoly.exterior.is_valid:
+                        self.geosPolyList.append( joinedPoly )
+                    print('Mapping CONFLICT repaired:: Polygons ', involvedPolygonsIDs, ' merged')
+                    thisVert = None
+                    break
+                nextVert = nextQueue.pop().freeze()
+                if not edges[thisVert]: del edges[thisVert]
+                thisVert = nextVert
+
+            if len(vertList) > 2:
+                # simple check for self-intersections
+                if simpleSelfIntersection(vertList):
+                    # try to find the involved polygons
+                    polyIDs = set()
+                    for v in vertList:
+                        polyIDs = polyIDs.union(vertsToIds[v])
+                    if len(polyIDs) == 2:
+                        # we're lucky, two polygons. Do they intersect?
+                        geosPolys = []
+                        for polyID in polyIDs:
+                            verts = [v for v in polygons[polyID]]
+                            coord = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                            geosPolys.append( geosF.createPolygon( geosF.createLinearRing(coord)) )
+                        # haveIntersection
+                        doIntersect = geosPolys[0].intersects(geosPolys[1])
+                        id0, id1 = list(polyIDs)
+                        if doIntersect:
+                            joinedPoly = geosPolys[0].union(geosPolys[1])
+                            if joinedPoly.geom_type=='Polygon' and joinedPoly.exterior.is_valid:
+                                self.geosPolyList.append( joinedPoly )
+                                
+                                print('Mapping CONFLICT repaired: Overlapping or touching polygons %s and %s'%(id0,id1))
+                            else:
+                                print('Mapping CONFLICT unresolved: Polygons %s and %s removed'%(id0,id1))
+                        else:
+                            print('Mapping CONFLICT unresolved: Polygons %s and %s removed'%(id0,id1))
+                    else:
+                        print('Mapping CONFLICT unresolved: Three or more polygons removed')
+                else:
+                    geosCoords = [geosF.createCoordinate(v) for v in vertList+[vertList[0]]]
+                    geosRing = geosF.createLinearRing(geosCoords)
+                    geosPoly = geosF.createPolygon(geosRing)
+                    self.geosPolyList.append( geosPoly )
+
+        # # DEBUG-PLOT, to be removed when no more required
+        # # Show the final result of checkAndRepairObjectPolys()
+        # for poly in self.geosPolyList:
+        #     plotGeosWithHoles(poly,False,'b',2)
+        # plotEnd()
+
+    def fillObjectsInKDTree(self):
+        # create mapping between the index of the vertex and index of the polygon in <geosPolyList>
+        self.vertIndexToPolyIndex.extend(
+            polyIndex for polyIndex, polygon in enumerate(self.geosPolyList) for _ in range(polygon.numpoints)
+        )
+
+        # the total number of vertices
+        totalNumVerts = sum(polygon.numpoints for polygon in self.geosPolyList )
+
+        # allocate the memory for an empty numpy array
+        self.polyVerts = np.zeros((totalNumVerts, 2))
+
+        # fill vertices in <self.polyVerts>
+        index = 0
+        for polygon in self.geosPolyList:
+            for vert in polygon.coords:
+                self.polyVerts[index] = (vert.x,vert.y)
+                index += 1
+
+        self.createKdTree()
 
     # Gets all polylines and buildings in scene (buildings with shared edges combined
     # to building blocks) and collects them in a list <self.geosPolyList> of PyGeos
@@ -445,8 +741,6 @@ class RoadPolygons:
     def createWayEnvironmentPolygons(self):
         environmentPolys = []
         for polyNr,cyclePoly in enumerate(self.cyclePolys):
-            # if interrupt > 0:
-            #     return
             print('%d/%d polyline subtraction started'%(polyNr+1,len(self.cyclePolys)))
 
             # Construct a circumscribed circle around the polygon vertices
@@ -524,14 +818,12 @@ class RoadPolygons:
                     holeV.reverse()
                 holeVerts.append(holeV)
 
-            # plotGeosWithHoles(poly,False,'k')
-            # plotEnd()
             try:
                 triangles = triangulation.triangulate(polyVerts,holeVerts)
             except Exception as e:
                 import traceback
                 traceback.print_exception(type(e), e, e.__traceback__)
-                plotGeosWithHoles(poly,True,'r',2)
+                plotGeosWithHoles(poly,True,'b',2)
             for triangle in triangles:
                 plotPoly(triangle,False,'r',0.5)
             print('%d/%d triangulated'%(polyNr+1,len(environmentPolys)))

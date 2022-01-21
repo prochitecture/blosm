@@ -1,6 +1,7 @@
 from mathutils import Vector
 import numpy as np
 from random import shuffle
+from itertools import *
 
 MULT_EPSILON = 1 + 1e-14
 
@@ -196,3 +197,25 @@ class SCClipper():
         # in counter-clockwise order, including start vertice also at end
         return sorted(self.bottom,key=lambda p:p[0])  + sorted(self.right,key=lambda p:p[1]) + \
                sorted(self.top,key=lambda p:-p[0]) + sorted(self.left,key=lambda p:-p[1]) 
+
+# simple check for self-intersections   ------------------------------------
+def ccw(A,B,C):
+    return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
+
+# Return true if line segments AB and CD intersect
+def intersect(A,B,C,D):
+    return ccw(A,C,D) != ccw(B,C,D) and ccw(A,B,C) != ccw(A,B,D)
+
+# iterate cyclic over non-contiguous segments
+def iterCircular(iterable):
+    A,B,C,D = tee(iterable, 4)
+    B = islice(cycle(B), 1, None)
+    C = islice(cycle(C), 2, None)
+    D = islice(cycle(D), 3, None)
+    return zip(A, B, C, D)
+
+def simpleSelfIntersection(polygon):
+    for A, B, C, D in iterCircular(polygon):
+        if intersect(A,B,C,D):
+            return True
+    return False
