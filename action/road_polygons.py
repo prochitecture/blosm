@@ -10,7 +10,6 @@ from way.way_algorithms import createSectionNetwork
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE, TopologyException
-from lib.pygeos.polygonDecomposition import polygonDecomposition
 from lib.CompGeom.algorithms import circumCircle, SCClipper, simpleSelfIntersection
 from lib.CompGeom.poly_point_isect import isect_segments_include_segments
 from lib.triangulation.PolygonTriangulation import PolygonTriangulation
@@ -24,58 +23,58 @@ def _iterEdges(poly):
 
 # Gets all buildings in scene and combines those with shared edges to
 # building blocks. Returns these as a list of PyGeos Polynoms.
-def mergeBuildingsToBlocks(buildings):
-    segDict = defaultdict(deque)
-    buildingDict = defaultdict(set)
-    for bNr,building in enumerate(buildings):
-        verts = [v for v in building.polygon.verts]
-        sharedVertices = []
-        for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
-            buildingDict[v1.freeze()].add(bNr)
-            v1.freeze()
-            if v1.freeze() in segDict:
-                sharedVertices.append(v1)
-                # plt.plot(v1[0],v1[1],'bo',markersize=8)
-        if sharedVertices:
-            for v in sharedVertices:
-                # plt.plot(v[0],v[1],'ro',markersize=6)
-                # center = sum(verts,Vector((0.,0.)))/len(verts)
-                # plotPoly(verts,True,'r',2)
-                # plt.text(center[0],center[1],str(sharedVertices)+' '+str(bNr),color='red',fontsize=12)
-                print('ISSUE: Building with OSM id %s has %d shared vertice(s) with another building' % (building.element.tags["id"], len(sharedVertices)))
-        if not sharedVertices:
-            for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
-                segDict[v1.freeze()].append(v2.freeze())
+# def mergeBuildingsToBlocks(buildings):
+#     segDict = defaultdict(deque)
+#     buildingDict = defaultdict(set)
+#     for bNr,building in enumerate(buildings):
+#         verts = [v for v in building.polygon.verts]
+#         sharedVertices = []
+#         for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
+#             buildingDict[v1.freeze()].add(bNr)
+#             v1.freeze()
+#             if v1.freeze() in segDict:
+#                 sharedVertices.append(v1)
+#                 # plt.plot(v1[0],v1[1],'bo',markersize=8)
+#         if sharedVertices:
+#             for v in sharedVertices:
+#                 # plt.plot(v[0],v[1],'ro',markersize=6)
+#                 # center = sum(verts,Vector((0.,0.)))/len(verts)
+#                 # plotPoly(verts,True,'r',2)
+#                 # plt.text(center[0],center[1],str(sharedVertices)+' '+str(bNr),color='red',fontsize=12)
+#                 print('ISSUE: Building with OSM id %s has %d shared vertice(s) with another building' % (building.element.tags["id"], len(sharedVertices)))
+#         if not sharedVertices:
+#             for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
+#                 segDict[v1.freeze()].append(v2.freeze())
 
-    geosF = GeometryFactory()
-    geosPolyList = []
-    while segDict:
-        firstVert = next(iter(segDict))
-        vertList = [firstVert]
-        thisVert = segDict.get(firstVert).popleft().freeze()
-        if not segDict[firstVert]: del segDict[firstVert]
+#     geosF = GeometryFactory()
+#     geosPolyList = []
+#     while segDict:
+#         firstVert = next(iter(segDict))
+#         vertList = [firstVert]
+#         thisVert = segDict.get(firstVert).popleft().freeze()
+#         if not segDict[firstVert]: del segDict[firstVert]
 
-        while thisVert != firstVert and thisVert is not None:
-            vertList.append(thisVert)
-            nextQueue = segDict.get(thisVert)
-            if nextQueue is None:
-                # plotPoly(vertList,True,'r',2)
-                print('mergeBuildingsToBlocks: There is a problem with a building.', thisVert)
-                thisVert = None
-                break
-            nextVert = nextQueue.popleft().freeze()
-            if not segDict[thisVert]: del segDict[thisVert]
-            thisVert = nextVert
+#         while thisVert != firstVert and thisVert is not None:
+#             vertList.append(thisVert)
+#             nextQueue = segDict.get(thisVert)
+#             if nextQueue is None:
+#                 # plotPoly(vertList,True,'r',2)
+#                 print('mergeBuildingsToBlocks: There is a problem with a building.', thisVert)
+#                 thisVert = None
+#                 break
+#             nextVert = nextQueue.popleft().freeze()
+#             if not segDict[thisVert]: del segDict[thisVert]
+#             thisVert = nextVert
 
 
-        if len(vertList) > 2:
-            geosCoords = [geosF.createCoordinate(v) for v in vertList+[vertList[0]]]
-            geosRing = geosF.createLinearRing(geosCoords)
-            geosPoly = geosF.createPolygon(geosRing)
+#         if len(vertList) > 2:
+#             geosCoords = [geosF.createCoordinate(v) for v in vertList+[vertList[0]]]
+#             geosRing = geosF.createLinearRing(geosCoords)
+#             geosPoly = geosF.createPolygon(geosRing)
 
-            geosPolyList.append( geosPoly )
+#             geosPolyList.append( geosPoly )
 
-    return geosPolyList
+#     return geosPolyList
 
 class RoadPolygons:
 
@@ -267,7 +266,7 @@ class RoadPolygons:
             if polyline.element.closed and not 'barrier' in polyline.element.tags:
                 verts = [edge.v1 for edge in polyline.edges]
                 ccw = sum( (v2[0]-v1[0])*(v2[1]+v1[1]) for v1,v2 in _iterEdges(verts)) < 0.
-                if ccw: verts.reverse()
+                if not ccw: verts.reverse()
                 for v in verts: v.freeze()  # make vertices immutable
                 polygons[int(polyline.element.tags["id"])] = verts
 
@@ -292,7 +291,7 @@ class RoadPolygons:
         # # Shows edges after shared edge removal.
         # for source,targets in edges.items():
         #     for target in targets:
-        #         plt.plot([source[0],target[0]],[source[1],target[1]],'k')
+        #         plotEdge(source,target)
 
         # Detect IDs of conflicting polygons due to shared vertices
         conflictingPolys = defaultdict(list)
@@ -336,9 +335,11 @@ class RoadPolygons:
             # Try to detect the reasons of the conflict
             conflictReasons = []
             for p1,p2 in combinations(range(len(polysToBeAnalyzed)), 2):
-                intersection = polysToBeAnalyzed[p1].intersects(polysToBeAnalyzed[p2])
-                singleVertex = polysToBeAnalyzed[p1].relate(polysToBeAnalyzed[p2],'*F2*0*2**')
-                if intersection and not singleVertex:
+                intersection = polysToBeAnalyzed[p1].intersection(polysToBeAnalyzed[p2]).area > 0.
+                relation = polysToBeAnalyzed[p1].relate(polysToBeAnalyzed[p2])
+                singleVertex = relation.matrix[1][1] == 0
+                touchEdge = relation.matrix[1][1] == 1
+                if intersection or touchEdge:
                     conflictReasons.append('intersect')
                 elif singleVertex:
                     conflictReasons.append('singleVert')
@@ -366,6 +367,9 @@ class RoadPolygons:
                         for source,target in _iterEdges(verts):
                             if (source,target) not in hiddenSharedEdges:
                                 edges[source].append(target)
+                        # replace new vertices in both polygons, maybe they will be considered again
+                        polygons[id0] = verts
+                        polygons[id1] = verts
                         print('Mapping CONFLICT repaired: Overlapping or touching polygons %s and %s'%(id0,id1))
                     else:
                         print('Mapping CONFLICT unresolved: Polygons %s and %s removed'%(id0,id1))
@@ -393,6 +397,8 @@ class RoadPolygons:
                     shiftedShared = sharedVert + (u1 +u2)/(u1 +u2).length * 0.001
                     shiftedShared.freeze()
                     verts[indx] = shiftedShared
+                    # replace new shared vertex in polygon, maybe it will be considered again
+                    polygons[id1][indx] = shiftedShared
 
                     # ... and then put back to <edges>, when not shared.
                     for source,target in _iterEdges(verts):
@@ -436,7 +442,7 @@ class RoadPolygons:
         # # Shows edges after conflict repair.
         # for source,targets in edges.items():
         #     for target in targets:
-        #         plt.plot([source[0],target[0]],[source[1],target[1]],'k')
+        #         plotEdge(source,target)
         # plotEnd()
 
         # All conflicts due to shared vertices should be repaired now. The adjacency list <edges>
@@ -497,7 +503,7 @@ class RoadPolygons:
                             coord = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
                             geosPolys.append( geosF.createPolygon( geosF.createLinearRing(coord)) )
                         # haveIntersection
-                        doIntersect = geosPolys[0].intersects(geosPolys[1])
+                        doIntersect = geosPolys[0].intersection(geosPolys[1]).area > 0.
                         id0, id1 = list(polyIDs)
                         if doIntersect:
                             joinedPoly = geosPolys[0].union(geosPolys[1])
@@ -549,61 +555,61 @@ class RoadPolygons:
     # polynoms. All their vertices are inserted into the KD-tree <self.kdTree>
     # Create mapping <self.vertIndexToPolyIndex> between the index of the vertex and
     # index of the polygon in <self.geosPolyList>
-    def createPolylinePolygons(self,manager):
+    # def createPolylinePolygons(self,manager):
 
-        # eventually polyline tags have to be excluded
-        excludedTags = []
-        self.geosPolyList = []
-        for polyline in manager.polylines:
-            if [tag for tag in excludedTags if tag in polyline.element.tags]:
-                 continue
+    #     # eventually polyline tags have to be excluded
+    #     excludedTags = []
+    #     self.geosPolyList = []
+    #     for polyline in manager.polylines:
+    #         if [tag for tag in excludedTags if tag in polyline.element.tags]:
+    #              continue
 
-            edges = []
-            for edge in polyline.edges:
-                # Check for edges splitted by self-intersections
-                newSegments = self.intersectingSegments.get( (tuple(edge.v1),tuple(edge.v2)), None)
-                if newSegments:
-                    for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
-                        edges.append((v1,v2))
-                else:
-                    edges.append((edge.v1,edge.v2))
+    #         edges = []
+    #         for edge in polyline.edges:
+    #             # Check for edges splitted by self-intersections
+    #             newSegments = self.intersectingSegments.get( (tuple(edge.v1),tuple(edge.v2)), None)
+    #             if newSegments:
+    #                 for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
+    #                     edges.append((v1,v2))
+    #             else:
+    #                 edges.append((edge.v1,edge.v2))
  
-            vertList = [Vector(edge[0]) for edge in edges] + [edges[-1][1]]
-            if polyline.element.closed and not 'barrier' in polyline.element.tags:
-                geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
-                geosRing = self.geosF.createLinearRing(geosCoords)
-                geosPoly = self.geosF.createPolygon(geosRing)
-            # else: 
-            #     # Linear objects, like fences, get here a small width to be a polygon
-            #     width = 0.3
-            #     geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
-            #     geosString = self.geosF.createLineString(geosCoords)
-            #     geosPoly = geosString.buffer(width,cap_style=CAP_STYLE.flat)
-                self.geosPolyList.append(geosPoly)
+    #         vertList = [Vector(edge[0]) for edge in edges] + [edges[-1][1]]
+    #         if polyline.element.closed and not 'barrier' in polyline.element.tags:
+    #             geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
+    #             geosRing = self.geosF.createLinearRing(geosCoords)
+    #             geosPoly = self.geosF.createPolygon(geosRing)
+    #         # else: 
+    #         #     # Linear objects, like fences, get here a small width to be a polygon
+    #         #     width = 0.3
+    #         #     geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
+    #         #     geosString = self.geosF.createLineString(geosCoords)
+    #         #     geosPoly = geosString.buffer(width,cap_style=CAP_STYLE.flat)
+    #             self.geosPolyList.append(geosPoly)
 
-        # add building polylines as polygon objects to <polyList>
-        self.buildingPolynoms = mergeBuildingsToBlocks(manager.buildings)
-        self.geosPolyList.extend(self.buildingPolynoms)
+    #     # add building polylines as polygon objects to <polyList>
+    #     self.buildingPolynoms = mergeBuildingsToBlocks(manager.buildings)
+    #     self.geosPolyList.extend(self.buildingPolynoms)
 
-        # create mapping between the index of the vertex and index of the polygon in <geosPolyList>
-        self.vertIndexToPolyIndex.extend(
-            polyIndex for polyIndex, polygon in enumerate(self.geosPolyList) for _ in range(polygon.numpoints)
-        )
+    #     # create mapping between the index of the vertex and index of the polygon in <geosPolyList>
+    #     self.vertIndexToPolyIndex.extend(
+    #         polyIndex for polyIndex, polygon in enumerate(self.geosPolyList) for _ in range(polygon.numpoints)
+    #     )
 
-        # the total number of vertices
-        totalNumVerts = sum(polygon.numpoints for polygon in self.geosPolyList )
+    #     # the total number of vertices
+    #     totalNumVerts = sum(polygon.numpoints for polygon in self.geosPolyList )
 
-        # allocate the memory for an empty numpy array
-        self.polyVerts = np.zeros((totalNumVerts, 2))
+    #     # allocate the memory for an empty numpy array
+    #     self.polyVerts = np.zeros((totalNumVerts, 2))
 
-        # fill vertices in <self.polyVerts>
-        index = 0
-        for polygon in self.geosPolyList:
-            for vert in polygon.coords:
-                self.polyVerts[index] = (vert.x,vert.y)
-                index += 1
+    #     # fill vertices in <self.polyVerts>
+    #     index = 0
+    #     for polygon in self.geosPolyList:
+    #         for vert in polygon.coords:
+    #             self.polyVerts[index] = (vert.x,vert.y)
+    #             index += 1
 
-        self.createKdTree()
+    #     self.createKdTree()
 
     # Creates polygons from graph cycles of the section network 
     def createCyclePolygons(self):
@@ -691,6 +697,17 @@ class RoadPolygons:
                     boundaryPoly = boundaryPoly.difference(bufferPoly)
                     # plotGeosWithHoles(boundaryPoly,False,'r',2)
 
+                    # Polygons with antiparallel isand-type segments are not simple and considered
+                    # as valid by pyGEOS, although this is not checked. The subtraction of a buffer
+                    # sometimes creates duplicated vertices, which have to be removed here.
+                    bufferedPath = [Vector((v.x,v.y)) for v in boundaryPoly.exterior.coords]
+                    for v in bufferedPath: v.freeze()
+                    boundaryPath = list(dict.fromkeys(bufferedPath))
+                    boundaryPath = [self.geosF.createCoordinate(v) for v in boundaryPath]
+                    boundaryPoly = self.geosF.createPolygon(self.geosF.createLineString(boundaryPath + [boundaryPath[0]]))
+                    # plotGeosWithHoles(boundaryPoly,False,'r',2)
+                    # plotEnd()
+
                 self.cyclePolys.append(boundaryPoly)
 
                 # # All segments of dead-end ways of the graph-cycle are now removed and we have a simple
@@ -730,13 +747,6 @@ class RoadPolygons:
                 coords = [ self.geosF.createCoordinate(v) for v in boundaryVerts ] 
                 boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
                 self.cyclePolys.append(boundaryPoly)
-
-            # if polygon has been broken in parts, separate them
-            # if boundaryPoly.geom_type == 'Polygon':
-            #     self.cyclePolys.append(boundaryPoly)
-            # else: # Multipolygon
-            #     for geom in boundaryPoly.geoms:
-            #         self.cyclePolys.append(geom)
 
     def createWayEnvironmentPolygons(self):
         environmentPolys = []
@@ -823,7 +833,9 @@ class RoadPolygons:
             except Exception as e:
                 import traceback
                 traceback.print_exception(type(e), e, e.__traceback__)
-                plotGeosWithHoles(poly,True,'b',2)
+                print('For cyclePoly Nr.: ', polyNr)
+                # plotGeosWithHoles(poly,True,'b',2)
+                # printMultiPolyData(poly)
             for triangle in triangles:
                 plotPoly(triangle,False,'r',0.5)
             print('%d/%d triangulated'%(polyNr+1,len(environmentPolys)))
@@ -841,6 +853,17 @@ class RoadPolygons:
 
 # Plotting functions used during development
 #-----------------------------------------------------------------------------------
+
+def plotEdge(v1,v2,color='k',arrow=False,width=1,order=100):
+    plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+    if arrow:
+        v = (v1+v2)/2.
+        plt.annotate(
+            '',
+            xytext = (v1[0],v1[1]),
+            xy=(v[0],v[1]),
+            arrowprops=dict(color=color, width = 0.25, shrink=0., headwidth=3, headlength=8)
+        )
 
 def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
     count = 0
@@ -866,6 +889,12 @@ def plotGeosWithHoles(geosPoly,vertsOrder,color='k',width=1.,order=100):
         p = [(c.x,c.y) for c in ring.coords]
         plotPoly(p,vertsOrder,'r',width,order)
 
+def plotGeneralPoly(geosPoly,vertsOrder,color='k',width=1.,order=100):
+    if geosPoly.geom_type == 'Polygon':
+         plotGeosWithHoles(geosPoly,vertsOrder,color,width,order)
+    else:
+        for geom in geosPoly.geoms:
+            plotGeosWithHoles(geom,vertsOrder,color,width,order)
 
 def plotGeosPolyFill(geosPoly,vertsOrder,color='k',width=1.,order=100):
     poly = [(v.x,v.y) for v in geosPoly.coords]
@@ -935,3 +964,27 @@ def plotCycle(cycle):
 def plotEnd():
     plt.gca().axis('equal')
     plt.show()
+
+def printMultiPolyData(multipoly):
+    fid = open('C:/Users/Roger/Desktop/polybug.py','w')
+    poly = [(c.x,c.y) for c in multipoly.exterior.coords[:-1]]
+    if not multipoly.exterior.is_ccw:
+        poly.reverse()
+    fid.write('polygon = [')
+    for v in poly:
+        fid.write('%s, '%(str(v)))
+    fid.write(']\n')
+    for i,ring in enumerate(multipoly.interiors):
+        p = [(c.x,c.y) for c in ring.coords[:-1]]
+        if ring.is_ccw:
+            p.reverse()
+        fid.write('hole%d = ['%(i))
+        for v in p:
+            fid.write('%s, '%(str(v)))
+        fid.write(']\n')
+    fid.write('holes = [')
+    for i in range(len(multipoly.interiors)):
+        fid.write('hole%d[:-1],'%(i))
+    fid.write(']\n')    
+    fid.close()
+
