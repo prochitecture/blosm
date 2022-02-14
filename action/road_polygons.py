@@ -1,7 +1,7 @@
 from mathutils import Vector
 import numpy as np
 from itertools import *
-from collections import defaultdict, deque
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 
@@ -11,7 +11,7 @@ from way.way_algorithms import createSectionNetwork
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE, TopologyException
 from lib.CompGeom.algorithms import circumCircle, SCClipper, simpleSelfIntersection
-from lib.CompGeom.poly_point_isect import isect_segments_include_segments
+from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 from lib.triangulation.PolygonTriangulation import PolygonTriangulation
 from lib.triangulation.Vertex import Vertex
 
@@ -20,61 +20,6 @@ def _iterEdges(poly):
         p1, p2= tee(poly)
         p2 = islice(cycle(p2), 1, None)
         return zip(p1,p2)
-
-# Gets all buildings in scene and combines those with shared edges to
-# building blocks. Returns these as a list of PyGeos Polynoms.
-# def mergeBuildingsToBlocks(buildings):
-#     segDict = defaultdict(deque)
-#     buildingDict = defaultdict(set)
-#     for bNr,building in enumerate(buildings):
-#         verts = [v for v in building.polygon.verts]
-#         sharedVertices = []
-#         for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
-#             buildingDict[v1.freeze()].add(bNr)
-#             v1.freeze()
-#             if v1.freeze() in segDict:
-#                 sharedVertices.append(v1)
-#                 # plt.plot(v1[0],v1[1],'bo',markersize=8)
-#         if sharedVertices:
-#             for v in sharedVertices:
-#                 # plt.plot(v[0],v[1],'ro',markersize=6)
-#                 # center = sum(verts,Vector((0.,0.)))/len(verts)
-#                 # plotPoly(verts,True,'r',2)
-#                 # plt.text(center[0],center[1],str(sharedVertices)+' '+str(bNr),color='red',fontsize=12)
-#                 print('ISSUE: Building with OSM id %s has %d shared vertice(s) with another building' % (building.element.tags["id"], len(sharedVertices)))
-#         if not sharedVertices:
-#             for _, v1, v2 in building.polygon.edgeInfo(verts, 0, skipShared=True):
-#                 segDict[v1.freeze()].append(v2.freeze())
-
-#     geosF = GeometryFactory()
-#     geosPolyList = []
-#     while segDict:
-#         firstVert = next(iter(segDict))
-#         vertList = [firstVert]
-#         thisVert = segDict.get(firstVert).popleft().freeze()
-#         if not segDict[firstVert]: del segDict[firstVert]
-
-#         while thisVert != firstVert and thisVert is not None:
-#             vertList.append(thisVert)
-#             nextQueue = segDict.get(thisVert)
-#             if nextQueue is None:
-#                 # plotPoly(vertList,True,'r',2)
-#                 print('mergeBuildingsToBlocks: There is a problem with a building.', thisVert)
-#                 thisVert = None
-#                 break
-#             nextVert = nextQueue.popleft().freeze()
-#             if not segDict[thisVert]: del segDict[thisVert]
-#             thisVert = nextVert
-
-
-#         if len(vertList) > 2:
-#             geosCoords = [geosF.createCoordinate(v) for v in vertList+[vertList[0]]]
-#             geosRing = geosF.createLinearRing(geosCoords)
-#             geosPoly = geosF.createPolygon(geosRing)
-
-#             geosPolyList.append( geosPoly )
-
-#     return geosPolyList
 
 class RoadPolygons:
 
@@ -91,7 +36,7 @@ class RoadPolygons:
     def do(self, manager):
         self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
-        # self.createPolylinePolygons(manager)  # replaced by the two following function calls
+       # self.createPolylinePolygons(manager)  # replaced by the two following function calls
         self.checkAndRepairObjectPolys(manager)
         self.fillObjectsInKDTree()
         self.createCyclePolygons()
@@ -125,40 +70,11 @@ class RoadPolygons:
         #         v1, v2 = (edge.v1[0],edge.v1[1]),  (edge.v2[0],edge.v2[1])
         #         segList.append((v1,v2))
 
-        # Find self-intersections using Bentley-Ottmann sweep-line algorithm
-        isects = isect_segments_include_segments(segList)
-
-        if isects:
-            for node,segments in isects:
-                for segment in segments:
-                    if segment in segList:
-                        self.intersectingSegments[segment].append(node)
-                    else: # maybe reversed order of vertices
-                        segment = (segment[1],segment[0])
-                        if segment in segList:
-                            self.intersectingSegments[segment].append(node)
-
-        def _inorderExtend(segment, v1, v2, points):
-            # Extend a segment <segment> by <points> that are on
-            # between the points v1, v2
-            k, r = None, False
-            if v1[0] < v2[0]:   k, r = lambda i: i[0], True
-            elif v1[0] > v2[0]: k, r = lambda i: i[0], False
-            elif v1[1] < v2[1]: k, r = lambda i: i[1], True
-            else:               k, r = lambda i: i[1], False
-            l = [ p for p in sorted(points, key=k, reverse=r) ]
-            i = next((i for i, p in enumerate(segment) if p == v2), -1)
-            assert(i>=0)
-            for e in l:
-                # a vertex can appear only once in a segment
-                if not e in segment:
-                    segment.insert(i, e)
-
-        # Extend the segments by the intersection points, if any.
-        for segment,isectNodes in self.intersectingSegments.items():
-            pathInSegment = list(segment)
-            _inorderExtend(pathInSegment, segment[0], segment[1], isectNodes)
-            self.intersectingSegments[segment] = pathInSegment
+        intersector = SweepIntersector()
+        self.intersectingSegments = intersector.findIntersections(segList)
+        # for s,isects in self.intersectingSegments.items():
+        #     for p in isects[1:-1]:
+        #         plt.plot(p[0],p[1],'r.',zorder=900)
 
     # define way-widths from way tags. This part should later be replaced in the generation
     # of the way-segments by the way manager.
@@ -710,6 +626,12 @@ class RoadPolygons:
 
                 self.cyclePolys.append(boundaryPoly)
 
+                from collections import Counter
+                a = dict(Counter(boundaryPoly.exterior.coords[:-1]))
+                hasDup = max(val for key,val in a.items())>1
+                if hasDup:
+                    test=1
+
                 # # All segments of dead-end ways of the graph-cycle are now removed and we have a simple
                 # # polygon. Instead of the dead-ends, we subtract now very small polygons, created from 
                 # # the inflated way segements to reconstruct a close approximation of the original polygon.
@@ -748,6 +670,12 @@ class RoadPolygons:
                 boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
                 self.cyclePolys.append(boundaryPoly)
 
+                from collections import Counter
+                a = dict(Counter(boundaryPoly.exterior.coords[:-1]))
+                hasDup = max(val for key,val in a.items())>1
+                if hasDup:
+                    test=1
+
     def createWayEnvironmentPolygons(self):
         environmentPolys = []
         for polyNr,cyclePoly in enumerate(self.cyclePolys):
@@ -773,9 +701,11 @@ class RoadPolygons:
                 objPolys.sort(key=lambda x:x.area,reverse=True)
 
                 for objPoly in objPolys:
+                    if not cyclePoly.area:
+                        break
                     try:
                         cyclePoly = cyclePoly.difference(objPoly)
-                    except TopologyException as e:
+                    except (TopologyException,ValueError) as e:
                         import traceback
                         traceback.print_exception(type(e), e, e.__traceback__)
                         print('For cyclePoly Nr.: ', polyNr)
@@ -788,23 +718,6 @@ class RoadPolygons:
                         # plt.title('exception')
                         # plotEnd()
 
-                # def makeBridgedPolygon(geom):
-                #     holes = geom.interiors
-                #     if holes:
-                #         # Split polygon holes by bridges (does not work with PyGeos).
-                #         # The PyGeos coordinates have to be converted back to tuples.
-                #         polyVerts = [(v.x,v.y) for v in geom.exterior.coords]
-                #         holeVerts = []
-                #         for hole in holes:
-                #             holeVerts.append([(v.x,v.y) for v in hole.coords])
-                #         bridgedPolyVerts = splitPolygonHoles(polyVerts,holeVerts)
-                #         geosCoords = [self.geosF.createCoordinate(v) for v in bridgedPolyVerts+[bridgedPolyVerts[0]]]
-                #         geosRing = self.geosF.createLinearRing(geosCoords)
-                #         bridgedPoly = self.geosF.createPolygon(geosRing)
-                #         environmentPolys.append(bridgedPoly)
-                #     else:
-                #         environmentPolys.append(geom)
- 
                 if cyclePoly.geom_type == 'Polygon':
                     environmentPolys.append(cyclePoly)
                 else: # Multipolygon
@@ -816,6 +729,11 @@ class RoadPolygons:
         colorCycler = iterColorCycle()
         triangulation = PolygonTriangulation()
         for polyNr,poly in enumerate(environmentPolys):
+            # if polyNr==40:
+            # c = polyCenter(poly)
+            # plt.text(c[0],c[1],str(polyNr))
+            # plotGeosWithHoles(poly,False,'k',1,900)
+            # plotGeosPolyFillExterior(poly,False)
             holes = poly.interiors
             # the exterior polygon must be counter-clockwise
             polyVerts = [Vertex((v.x,v.y)) for v in poly.exterior.coords[:-1]]
@@ -837,6 +755,7 @@ class RoadPolygons:
                 # plotGeosWithHoles(poly,True,'b',2)
                 # printMultiPolyData(poly)
             for triangle in triangles:
+                # plotPolyFill(triangle)
                 plotPoly(triangle,False,'r',0.5)
             print('%d/%d triangulated'%(polyNr+1,len(environmentPolys)))
             # plotEnd()
@@ -870,20 +789,20 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
     for v1,v2 in zip(polygon[:-1],polygon[1:]):
         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
         if vertsOrder:
-            plt.text(v1[0],v1[1],str(count))
+            plt.text(v1[0],v1[1],str(count),fontsize=12)
         count += 1
         # plt.plot(v1[0],v1[1],'kx')
     v1, v2 = polygon[-1], polygon[0]
     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
     if vertsOrder:
-        plt.text(v1[0],v1[1],str(count))
+        plt.text(v1[0],v1[1],str(count),fontsize=12)
 
 def plotGeosPoly(geosPoly,vertsOrder,color='k',width=1.,order=100):
-    poly = [(c.x,c.y) for c in geosPoly.coords]
+    poly = [(c.x,c.y) for c in geosPoly.coords[:-1]]
     plotPoly(poly,vertsOrder,color,width,order)
 
 def plotGeosWithHoles(geosPoly,vertsOrder,color='k',width=1.,order=100):
-    poly = [(c.x,c.y) for c in geosPoly.exterior.coords]
+    poly = [(c.x,c.y) for c in geosPoly.exterior.coords[:-1]]
     plotPoly(poly,vertsOrder,color,width,order)
     for ring in geosPoly.interiors:
         p = [(c.x,c.y) for c in ring.coords]
@@ -897,15 +816,28 @@ def plotGeneralPoly(geosPoly,vertsOrder,color='k',width=1.,order=100):
             plotGeosWithHoles(geom,vertsOrder,color,width,order)
 
 def plotGeosPolyFill(geosPoly,vertsOrder,color='k',width=1.,order=100):
-    poly = [(v.x,v.y) for v in geosPoly.coords]
+    poly = [(v.x,v.y) for v in geosPoly.coords[:-1]]
     x = [n[0] for n in poly]
     y = [n[1] for n in poly]
     plt.fill(x,y,'#ff0000',alpha = 0.2,zorder = 500)
 
+def plotGeosPolyFillExterior(geosPoly,vertsOrder,color='k',width=1.,order=100):
+    poly = [(v.x,v.y) for v in geosPoly.exterior.coords[:-1]]
+    x = [n[0] for n in poly]
+    y = [n[1] for n in poly]
+    plt.plot(x,y,'b',linewidth=0.5)
+    plt.fill(x,y,'#ff0000',alpha = 0.2,zorder = 500)
+
+def polyCenter(geosPoly):
+    poly = [(v.x,v.y) for v in geosPoly.coords[:-1]]
+    x = sum([n[0] for n in poly])/len(poly)
+    y = sum([n[1] for n in poly])/len(poly)
+    return (x,y)
+
 def plotPolyFill(poly):
     x = [n[0] for n in poly]
     y = [n[1] for n in poly]
-    plt.fill(x,y,'#ff0000',alpha = 0.2,zorder = 500)
+    plt.fill(x,y,'#0000ff',alpha = 0.2,zorder = 500)
 
 def plotWaySeg(wayseg,color='k',width=1.,order=100):
     for v1,v2 in zip(wayseg.path[:-1],wayseg.path[1:]):
@@ -914,7 +846,7 @@ def plotWaySeg(wayseg,color='k',width=1.,order=100):
         plt.plot(v2[0],v2[1],'k.')
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
-        plt.text(x,y,str(wayseg.ID))
+        # plt.text(x,y,str(wayseg.ID),fontsize=12)
 
 def iterColorCycle():
     prop_cycle = plt.rcParams['axes.prop_cycle']
@@ -988,3 +920,7 @@ def printMultiPolyData(multipoly):
     fid.write(']\n')    
     fid.close()
 
+def plotGeosPolyFillID(poly,vertsOrder,polyNr,color='k',width=1.,order=100):
+    c = polyCenter(poly)
+    plt.text(c[0],c[1],str(polyNr))
+    plotGeosPolyFill(poly,vertsOrder,color,width,order)

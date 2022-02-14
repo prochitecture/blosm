@@ -66,7 +66,7 @@ elif NUMBER_TYPE == 'numpy':
     import numpy
     Real = numpy.float64
     del numpy
-    NUM_EPS = Real("1e-10")
+    NUM_EPS = Real("1e-10")  # was 1e-10
     NUM_INF = Real(float("inf"))
 elif NUMBER_TYPE == 'gmpy2':
     # Not passing tests!
