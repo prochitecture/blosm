@@ -1,10 +1,10 @@
 # Implementation in pure Python of a sweep line algorithm for line-segment
-# intersection, based on the algorithmof described in the paper:
+# intersection, based on the algorithm described in the paper:
 #
 # Mehlhorn, K., Näher, S.(1994). Implementation of a sweep line algorithm
 # for the Straight Line Segment Intersection Problem (MPI-I-94-160).
 # Saarbrücken: Max-Planck-Institut für Informatik.
-# https://pure.mpg.de/pubman/faces/ViewItemOverviewPage.jsp?itemId=item_1834220#
+# https://pure.mpg.de/pubman/faces/ViewItemOverviewPage.jsp?itemId=item_1834220
 # 
 # Implementation of the main class <SweepIntersector> that implements the
 # sweep line algorithm for line-segment intersection.

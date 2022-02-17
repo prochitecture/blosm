@@ -233,6 +233,8 @@ class WayNetwork(dict):
         segmentSet = set(segment for segment in self.iterAllSegments())
 
         cycleSegs = []
+        holeSegs = []
+        solitarySegs = []
         while (len(segmentSet) > 0):
             # start with a first segment
             s = next(iter(segmentSet))
@@ -244,9 +246,19 @@ class WayNetwork(dict):
                 if nextSeg == segs[0]:
                     cycVerts = [v for s in segs for v in s.path[:-1] ] + [segs[0].s]
                     area = sum( (p2[0]-p1[0])*(p2[1]+p1[1]) for p1,p2 in zip(cycVerts,cycVerts[1:]+[cycVerts[0]])) 
-                    # Avoid clockwise cycles, these are outer cycles.
+                    # Clockwise cycles are outer contours.
                     if area < 0.:
-                        cycleSegs.append(segs)
+                            cycleSegs.append(segs)
+                    # Counter-clockwise cycles are from islands (holes).
+                    # Exception: the outer contour of the scene border
+                    elif area > 0.:
+                        if not all(s.category == 'scene_border' for s in segs):
+                            holeSegs.append(segs)
+                            # plotSimpleCycle(segs,'r')
+                    # These are solitary spurs or dead-end ways
+                    else:
+                        solitarySegs.append(segs)
+                        # plotSimpleCycle(segs,'b')
                     break
                 else:
                     if nextSeg in segs:
@@ -254,7 +266,7 @@ class WayNetwork(dict):
                         break
                     segs.append(nextSeg)
                     segmentSet -= set([nextSeg])
-        return cycleSegs
+        return cycleSegs, holeSegs, solitarySegs
 
     
 # ------------------------------------------------------------------
@@ -309,6 +321,12 @@ def plotSingleCycle(cycle):
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
         plt.text(x,y,str(wayseg.ID))
+
+def plotSimpleCycle(cycle,color='k'):
+    nodes = [n for s in cycle for n in s.path[:-1]]
+    for v1,v2 in _iterCircularPrevNext(nodes):
+        plt.plot((v1[0], v2[0]),(v1[1], v2[1]),color,alpha = 1.0,zorder = 900,linewidth=2)
+
 
 
 

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 from way.way_network import WayNetwork, NetSegment
 from way.way_algorithms import createSectionNetwork
+from way.way_graph_cycle import GraphCycle
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE, TopologyException
@@ -36,7 +37,6 @@ class RoadPolygons:
     def do(self, manager):
         self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
-       # self.createPolylinePolygons(manager)  # replaced by the two following function calls
         self.checkAndRepairObjectPolys(manager)
         self.fillObjectsInKDTree()
         self.createCyclePolygons()
@@ -466,220 +466,35 @@ class RoadPolygons:
 
         self.createKdTree()
 
-    # Gets all polylines and buildings in scene (buildings with shared edges combined
-    # to building blocks) and collects them in a list <self.geosPolyList> of PyGeos
-    # polynoms. All their vertices are inserted into the KD-tree <self.kdTree>
-    # Create mapping <self.vertIndexToPolyIndex> between the index of the vertex and
-    # index of the polygon in <self.geosPolyList>
-    # def createPolylinePolygons(self,manager):
-
-    #     # eventually polyline tags have to be excluded
-    #     excludedTags = []
-    #     self.geosPolyList = []
-    #     for polyline in manager.polylines:
-    #         if [tag for tag in excludedTags if tag in polyline.element.tags]:
-    #              continue
-
-    #         edges = []
-    #         for edge in polyline.edges:
-    #             # Check for edges splitted by self-intersections
-    #             newSegments = self.intersectingSegments.get( (tuple(edge.v1),tuple(edge.v2)), None)
-    #             if newSegments:
-    #                 for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
-    #                     edges.append((v1,v2))
-    #             else:
-    #                 edges.append((edge.v1,edge.v2))
- 
-    #         vertList = [Vector(edge[0]) for edge in edges] + [edges[-1][1]]
-    #         if polyline.element.closed and not 'barrier' in polyline.element.tags:
-    #             geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
-    #             geosRing = self.geosF.createLinearRing(geosCoords)
-    #             geosPoly = self.geosF.createPolygon(geosRing)
-    #         # else: 
-    #         #     # Linear objects, like fences, get here a small width to be a polygon
-    #         #     width = 0.3
-    #         #     geosCoords = [self.geosF.createCoordinate(v) for v in vertList]
-    #         #     geosString = self.geosF.createLineString(geosCoords)
-    #         #     geosPoly = geosString.buffer(width,cap_style=CAP_STYLE.flat)
-    #             self.geosPolyList.append(geosPoly)
-
-    #     # add building polylines as polygon objects to <polyList>
-    #     self.buildingPolynoms = mergeBuildingsToBlocks(manager.buildings)
-    #     self.geosPolyList.extend(self.buildingPolynoms)
-
-    #     # create mapping between the index of the vertex and index of the polygon in <geosPolyList>
-    #     self.vertIndexToPolyIndex.extend(
-    #         polyIndex for polyIndex, polygon in enumerate(self.geosPolyList) for _ in range(polygon.numpoints)
-    #     )
-
-    #     # the total number of vertices
-    #     totalNumVerts = sum(polygon.numpoints for polygon in self.geosPolyList )
-
-    #     # allocate the memory for an empty numpy array
-    #     self.polyVerts = np.zeros((totalNumVerts, 2))
-
-    #     # fill vertices in <self.polyVerts>
-    #     index = 0
-    #     for polygon in self.geosPolyList:
-    #         for vert in polygon.coords:
-    #             self.polyVerts[index] = (vert.x,vert.y)
-    #             index += 1
-
-    #     self.createKdTree()
-
     # Creates polygons from graph cycles of the section network 
     def createCyclePolygons(self):
-        cycleSegs = self.sectionNetwork.getCycles()
-
-        self.cyclePolys = []
+        cycleSegs, holeSegs, _ = self.sectionNetwork.getCycles()
+        self.graphCycles = []
         for segList in cycleSegs:
+            self.graphCycles.append( GraphCycle(segList) )
+        holePolys = []
+        for segList in holeSegs:
+            holePolys.extend( GraphCycle.createHoleCycles(segList) )
 
-            # PyGEOS can only process simple polygons, but dead-end ways produce antiparallel
-            # segment pairs in a graph cycle, where (src,dst) == (dst,src). Following the order
-            # of the cycle's edges, dead-ends produce such paired segments in a consecutive order.
-            # For one dead-end way-segemnt for instance, there will be a cycle-segment to the end
-            # and then back. For a whole tree of dead-end way-segments, the graph-cycle segments
-            # form a consecutive sequence to the leaves of the tree and back. All these segments
-            # have to be removed from the graph-cycle polygon
-            
-            # This is not the case for antiparallel segments that arise when a way connects to an
-            # island of ways. Then an antiparallel segment of the graph cycle goes to the island,
-            # followed by some segments for the island itself and then comes the antiparallel part
-            # back to the polygon. These segments have to stay as they are to keep the topology of
-            # the graph-cycle. But to make their cycle polygons valid, a small gap has to be
-            # subtracted along the antiparalel part.
-
-            # Step 1: Detect antiparallel graph-cycle segments. Note that we have a undirected
-            # multigraph. There may be segments with antiparallel end-points, but different paths.
-            # "Antiparallel" in the sense used here means identical but reversed paths, we 
-            # have to check for that.
-            src = [s.s for s in segList]
-            dst = [s.t for s in segList]
-            antiparallelSegIndices = []
-            rev_pairs = [pair for pair in zip(dst,src)]
-            for indx, pair in enumerate(zip(src,dst)):
-                if pair in rev_pairs:
-                    rev_indx = rev_pairs.index(pair)
-                    if indx < rev_indx:
-                        revPath = segList[rev_indx].path.copy()
-                        revPath.reverse()
-                        if segList[indx].path == revPath:
-                            antiparallelSegIndices.append( (indx,rev_indx) )
-
-            if antiparallelSegIndices:
-                # Step 2: when antiparallel graph-cycle segments are detected, we have to check
-                # for non-consecutive "island type" segments.
-
-                # find order of antiparallel segments
-                orderedIndxs = sorted( indx for indexPair in antiparallelSegIndices for indx in indexPair )
-                # The graph-cycle is cyclic. To find the cyclic consecutive parts, I have
-                # a complicated solution, but couldn't find a better one.
-                N = len(segList)
-                orderedIndxs = orderedIndxs + \
-                               [indx+N for indx in orderedIndxs] + \
-                               [indx+2*N for indx in orderedIndxs]
-
-                # find groups of consecutive indices
-                consecutiveGroups, first = {}, None
-                for indx in orderedIndxs:
-                    if first is None or indx != consecutiveGroups[first][1]+1:
-                        first = indx
-                    consecutiveGroups[first] = (first, indx)
-
-                # The middle part between N <= indx < 2*N of the group with equal first and last
-                # index contains the non-consecutive segments.
-                nonConsecSegIndics = tuple( [indx%N for indx,group in consecutiveGroups.items() \
-                    if group[0]==group[1] and N <= indx < 2*N ])
-
-                # If there are non-consecutive antiparallel segments, these are "island" types and
-                # they are removed from the list of antiparallel segments.
-                if nonConsecSegIndics:
-                    antiparallelSegIndices.remove(nonConsecSegIndics)
-
-                # Remove all dead-end segments from the segment list and create the boundary of
-                # reduced cycle polygon.
-                flatAntiparallelSegIndices = [indx for indexPair in antiparallelSegIndices for indx in indexPair]
-                boundarySegs = [seg for indx,seg in enumerate(segList) if indx not in flatAntiparallelSegIndices]
-                boundaryVerts = [v for s in boundarySegs for v in s.path[:-1] ] + [boundarySegs[0].s]
-                coords = [ self.geosF.createCoordinate(v) for v in boundaryVerts ] 
-                boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
-
-                # Step 3: A small gap has to be introduced along antiparallel segments to make the
-                # cycle polygon valid
-                if  nonConsecSegIndics:
-                    path = [self.geosF.createCoordinate(v) for v in segList[nonConsecSegIndics[0]].path ]
-                    bufferString = self.geosF.createLineString(path)
-                    bufferPoly = bufferString.buffer(0.001,resolution=3,cap_style=CAP_STYLE.square)
-                    boundaryPoly = boundaryPoly.difference(bufferPoly)
-                    # plotGeosWithHoles(boundaryPoly,False,'r',2)
-
-                    # Polygons with antiparallel isand-type segments are not simple and considered
-                    # as valid by pyGEOS, although this is not checked. The subtraction of a buffer
-                    # sometimes creates duplicated vertices, which have to be removed here.
-                    bufferedPath = [Vector((v.x,v.y)) for v in boundaryPoly.exterior.coords]
-                    for v in bufferedPath: v.freeze()
-                    boundaryPath = list(dict.fromkeys(bufferedPath))
-                    boundaryPath = [self.geosF.createCoordinate(v) for v in boundaryPath]
-                    boundaryPoly = self.geosF.createPolygon(self.geosF.createLineString(boundaryPath + [boundaryPath[0]]))
-                    # plotGeosWithHoles(boundaryPoly,False,'r',2)
-                    # plotEnd()
-
-                self.cyclePolys.append(boundaryPoly)
-
-                from collections import Counter
-                a = dict(Counter(boundaryPoly.exterior.coords[:-1]))
-                hasDup = max(val for key,val in a.items())>1
-                if hasDup:
-                    test=1
-
-                # # All segments of dead-end ways of the graph-cycle are now removed and we have a simple
-                # # polygon. Instead of the dead-ends, we subtract now very small polygons, created from 
-                # # the inflated way segements to reconstruct a close approximation of the original polygon.
-                # for indx,_ in antiparallelSegIndices:
-                #     bufferLine = [self.geosF.createCoordinate(v) for v in segList[indx].path]
-                #     bufferString = self.geosF.createLineString(bufferLine)
-                #     bufferPoly = bufferString.buffer(0.1,resolution=3,cap_style=CAP_STYLE.square)
-
-                #     # Subtract buffer
-                #     try:
-                #         plotGeosPoly(boundaryPoly,False,'b',2)
-                #         plotGeosPoly(bufferPoly,False,'r',2)
-                #         plotEnd()
-                #         boundaryPoly = boundaryPoly.difference(bufferPoly)
-                #     except:
-                #         plotNetwork(self.sectionNetwork)
-                #         plotGeosPoly(boundaryPoly,False,'b',2)
-                #         plotGeosPoly(bufferPoly,False,'r',2)
-                #         plt.title('exception')
-                #         plotEnd()
-
-                # # Sometimes, the polygon may have been broken in parts, separate them in this case.
-                # if boundaryPoly.geom_type == 'Polygon':
-                #     self.cyclePolys.append(boundaryPoly)
-                # else: # Multipolygon
-                #     for geom in boundaryPoly.geoms:
-                #         
-
-
-
-            else:   # there are no antiparallel segments
-                # Create the PyGEOS cycle boundary polygon
-                boundarySegs = [seg for seg in segList]
-                boundaryVerts = [v for s in boundarySegs for v in s.path[:-1] ] + [boundarySegs[0].s]
-                coords = [ self.geosF.createCoordinate(v) for v in boundaryVerts ] 
-                boundaryPoly = self.geosF.createPolygon(self.geosF.createLinearRing(coords))
-                self.cyclePolys.append(boundaryPoly)
-
-                from collections import Counter
-                a = dict(Counter(boundaryPoly.exterior.coords[:-1]))
-                hasDup = max(val for key,val in a.items())>1
-                if hasDup:
-                    test=1
+        # Hole graph-cycles are detected because they are in clockwise order.
+        # They become holes in their enclosing polygons. This computation is not
+        # very effective (O(n*m), where n is the nmber of graph-cycles and m is 
+        # the number of hole graph cycles), but they are rare, so m is small.
+        for holePoly in holePolys:
+            plotGeosWithHoles(holePoly,False,'r')                             # contains properly -> 'T**FF*FF*'
+            enclosingPolys = [cycle for cycle in self.graphCycles if cycle.cyclePoly.relate(holePoly,'T**FF*FF*')]
+            smallestEnclosingPoly = min(enclosingPolys,key=lambda x:x.cyclePoly.area)
+            try:
+                smallestEnclosingPoly.cyclePoly = smallestEnclosingPoly.cyclePoly.difference(holePoly)
+            except (TopologyException,ValueError) as e:
+                import traceback
+                traceback.print_exception(type(e), e, e.__traceback__)
 
     def createWayEnvironmentPolygons(self):
         environmentPolys = []
-        for polyNr,cyclePoly in enumerate(self.cyclePolys):
-            print('%d/%d polyline subtraction started'%(polyNr+1,len(self.cyclePolys)))
+        for polyNr,graphCycle in enumerate(self.graphCycles):
+            print('%d/%d polyline subtraction started'%(polyNr+1,len(self.graphCycles)))
+            cyclePoly = graphCycle.cyclePoly
 
             # Construct a circumscribed circle around the polygon vertices
             # used as search range in KD-tree of polyline objects.
@@ -719,46 +534,51 @@ class RoadPolygons:
                         # plotEnd()
 
                 if cyclePoly.geom_type == 'Polygon':
-                    environmentPolys.append(cyclePoly)
+                    graphCycle.subPolys.append(cyclePoly)
                 else: # Multipolygon
                     for geom in cyclePoly.geoms:
-                        environmentPolys.append(geom)
+                        graphCycle.subPolys.append(geom)
             else:
-                environmentPolys.append(cyclePoly)
+                graphCycle.subPolys.append(cyclePoly)
 
-        colorCycler = iterColorCycle()
         triangulation = PolygonTriangulation()
-        for polyNr,poly in enumerate(environmentPolys):
-            # if polyNr==40:
-            # c = polyCenter(poly)
-            # plt.text(c[0],c[1],str(polyNr))
-            # plotGeosWithHoles(poly,False,'k',1,900)
-            # plotGeosPolyFillExterior(poly,False)
-            holes = poly.interiors
-            # the exterior polygon must be counter-clockwise
-            polyVerts = [Vertex((v.x,v.y)) for v in poly.exterior.coords[:-1]]
-            if not poly.exterior.is_ccw:
-                polyVerts.reverse()
-            holeVerts = []
-            for hole in holes:
-                holeV = [Vertex((v.x,v.y)) for v in hole.coords[:-1]]
-                if hole.is_ccw:
-                    holeV.reverse()
-                holeVerts.append(holeV)
+        for polyNr,graphCycle in enumerate(self.graphCycles):
+            for polyNr,poly in enumerate(graphCycle.subPolys):
+                # if polyNr==40:
+                # c = polyCenter(poly)
+                # plt.text(c[0],c[1],str(polyNr))
+                # plotGeosWithHoles(poly,False,'k',1,900)
+                # plotGeosPolyFillExterior(poly,False)
+                holes = poly.interiors
+                # the exterior polygon must be counter-clockwise
+                polyVerts = [Vertex((v.x,v.y)) for v in poly.exterior.coords[:-1]]
+                if not poly.exterior.is_ccw:
+                    polyVerts.reverse()
+                holeVerts = []
+                for hole in holes:
+                    holeV = [Vertex((v.x,v.y)) for v in hole.coords[:-1]]
+                    if hole.is_ccw:
+                        holeV.reverse()
+                    holeVerts.append(holeV)
 
-            try:
-                triangles = triangulation.triangulate(polyVerts,holeVerts)
-            except Exception as e:
-                import traceback
-                traceback.print_exception(type(e), e, e.__traceback__)
-                print('For cyclePoly Nr.: ', polyNr)
-                # plotGeosWithHoles(poly,True,'b',2)
-                # printMultiPolyData(poly)
-            for triangle in triangles:
+                try:
+                    triangles = triangulation.triangulate(polyVerts,holeVerts)
+                except Exception as e:
+                    import traceback
+                    traceback.print_exception(type(e), e, e.__traceback__)
+                    print('For cyclePoly Nr.: ', polyNr)
+                    plotGeosWithHoles(poly,True,'b',2)
+                    # printMultiPolyData(poly)
+                    # plotEnd()
+
+                graphCycle.triangles.extend(triangles)
+
+        for polyNr,graphCycle in enumerate(self.graphCycles):
+            for triangle in graphCycle.triangles:
                 # plotPolyFill(triangle)
                 plotPoly(triangle,False,'r',0.5)
-            print('%d/%d triangulated'%(polyNr+1,len(environmentPolys)))
-            # plotEnd()
+            print('%d triangulated'%(polyNr+1))
+        # plotEnd()
 
     def createKdTree(self):
         from scipy.spatial import KDTree
