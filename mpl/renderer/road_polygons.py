@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 
 
-class WayClusterRenderer(Renderer):
+class RoadPolygonsRenderer(Renderer):
     
     styles = dict(
         motorway = dict(
@@ -98,7 +98,7 @@ class WayClusterRenderer(Renderer):
             self.mpl.ax.plot(
                 (v1[0], v2[0]),
                 (v1[1], v2[1]),
-                **WayClusterRenderer.styles[s.category],
+                **RoadPolygonsRenderer.styles[s.category],
                 zorder=50
             )
             # x = (v1[0]+v2[0])/2.

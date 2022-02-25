@@ -4,7 +4,7 @@ from way.manager import WayManager, RoadPolygonsManager
 from mpl.renderer.facade_classification import \
     BuildingVisibilityRender, WayVisibilityRenderer, BuildingClassificationRender, BuildingFeatureRender
 from mpl.renderer import BuildingBaseRenderer
-from mpl.renderer.way_cluster import WayClusterRenderer
+from mpl.renderer.road_polygons import RoadPolygonsRenderer
 from action.facade_visibility import FacadeVisibilityOther
 from action.facade_classification import FacadeClassification
 from action.feature_detection import FeatureDetection
@@ -114,7 +114,7 @@ def setup(app, osm):
         wayManager = WayManager(osm, app)
         
         if roadPolygons:
-            wayManager.addRenderer(WayClusterRenderer())
+            wayManager.addRenderer(RoadPolygonsRenderer())
             # buildings.addAction(CurvedFeatures())
             # buildings.addAction(StraightAngles())
         else:
