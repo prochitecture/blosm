@@ -10,7 +10,6 @@ from action.facade_classification import FacadeClassification
 from action.feature_detection import FeatureDetection
 from action.curved_features import CurvedFeatures
 from action.straight_angles import StraightAngles
-from action.way_clustering import WayClustering
 from action.road_polygons import RoadPolygons
 
 #from manager.logging import Logger
@@ -38,7 +37,6 @@ def setup(app, osm):
     app.argParserExtra.add_argument("--showFeatureSymbols", action='store_true', help="Show a symbol for each unskipped polygon vector. The symbol is used for pattern matching", default=False)
     app.argParserExtra.add_argument("--simplifyPolygons", action='store_true', help="Simplify polygons with the detected features", default=False)
     app.argParserExtra.add_argument("--restoreFeatures", action='store_true', help="Restore simplified features", default=False)
-    app.argParserExtra.add_argument("--wayClustering", action='store_true', help="Create way clusters", default=False)
     app.argParserExtra.add_argument("--roadPolygons", action='store_true', help="Create polygons surrounding roads", default=False)
     
     # parse the newly added command line arguments
@@ -54,8 +52,6 @@ def setup(app, osm):
     
     simplifyPolygons = getattr(app, "simplifyPolygons", False)
     restoreFeatures = getattr(app, "restoreFeatures", False)
-
-    wayClustering = getattr(app, "wayClustering", False)
     
     roadPolygons = getattr(app, "roadPolygons", False) and app.highways
     
@@ -117,9 +113,8 @@ def setup(app, osm):
         
         wayManager = WayManager(osm, app)
         
-        if wayClustering:
+        if roadPolygons:
             wayManager.addRenderer(WayClusterRenderer())
-            wayManager.addAction(WayClustering())
             # buildings.addAction(CurvedFeatures())
             # buildings.addAction(StraightAngles())
         else:
