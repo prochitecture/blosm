@@ -11,7 +11,8 @@ from way.way_graph_cycle import GraphCycle
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import CAP_STYLE, TopologyException
-from lib.CompGeom.algorithms import circumCircle, SCClipper, simpleSelfIntersection
+from lib.CompGeom.algorithms import circumCircle, SCClipper, repairSimpleSelfIntersection
+from lib.CompGeom.GraphBasedAlgos import DisjointSets, ArticulationPoints
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 from lib.triangulation.PolygonTriangulation import PolygonTriangulation
 from lib.triangulation.Vertex import Vertex
@@ -37,10 +38,10 @@ class RoadPolygons:
     def do(self, manager):
         self.findSelfIntersections(manager)
         self.createWaySectionNetwork()
-        self.checkAndRepairObjectPolys(manager)
-        self.fillObjectsInKDTree()
-        self.createCyclePolygons()
-        self.createWayEnvironmentPolygons()
+        # self.checkAndRepairObjectPolys_III(manager)
+        # self.fillObjectsInKDTree()
+        # self.createCyclePolygons()
+        # self.createWayEnvironmentPolygons()
 
     def cleanup(self):
         self.kdTree = None
@@ -49,6 +50,10 @@ class RoadPolygons:
 
     def findSelfIntersections(self, manager):
         wayManager = self.app.managersById["ways"]
+        wayManager.junctions = (
+            [],#mainJunctions,
+            []#smallJunctions
+        )
 
         # some way tags to exclude, used also in createWaySectionNetwork(),
         # should be moved to defs.
@@ -128,7 +133,8 @@ class RoadPolygons:
         wayManager = self.app.managersById["ways"]
 
          # create full way network
-        fullNetwork = WayNetwork()
+        wayManager.networkGraph = WayNetwork()
+        # fullNetwork = WayNetwork()
 
         # some way tags to exclude, used also in findSelfIntersections(),
         # should be moved to defs.
@@ -159,19 +165,396 @@ class RoadPolygons:
                     accepted, v1, v2 = clipper.clip(v1,v2)
                     if accepted:
                         netSeg = NetSegment(v1,v2,way.category,(v2-v1).length, width)
-                        fullNetwork.addSegment(netSeg,False)
+                        wayManager.networkGraph.addSegment(netSeg,False)
 
         borderPolygon = clipper.getPolygon()
         for v1,v2 in zip(borderPolygon[:-1],borderPolygon[1:]):
             netSeg = NetSegment(v1,v2,'scene_border',(v2-v1).length, 0.) # has no width
-            fullNetwork.addSegment(netSeg)
+            wayManager.networkGraph.addSegment(netSeg)
 
         # create way-section network
-        self.sectionNetwork = createSectionNetwork(fullNetwork)
+        self.sectionNetwork = createSectionNetwork(wayManager.networkGraph)
+
+    def checkAndRepairObjectPolys_III(self,manager):
+        geosF = GeometryFactory()
+        self.geosPolyList = []
+
+
+        # some helper functions --------------------------------------------------------
+        def vertsToGeosPoly(verts):
+            # verts is axpected as a list of vertices of a polygon without end point
+            coords = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+            return geosF.createPolygon( geosF.createLinearRing(coords) )
+
+        def mergeIntersectingPolygons(polygons, intersectingPolygonIDs):
+            # find connected groups of intersecting polygons
+            disjointSets = DisjointSets()
+            for IDs in intersectingPolygonIDs.values():
+                IDlist = list(IDs)
+                for iD in IDlist[1:]:
+                    disjointSets.addSegment(IDlist[0],iD)
+
+            # Merge connected group
+            geosPolyGroup = []
+            for group in disjointSets:
+                for polyID in group:
+                    wasRepaired,verts = repairSimpleSelfIntersection(polygons[polyID])
+                    if wasRepaired:
+                        print('Mapping Conflict repaired: Self intersection in object %d'%(polyID))
+                    geosPolyGroup.append( vertsToGeosPoly(verts) )
+                multiPoly = geosF.createMultiPolygon(geosPolyGroup)
+                try:
+                    merged = multiPoly.union()
+                except (TopologyException) as e:
+                    print('Problem with merging polys ',group)
+
+                # result comes in first polygon
+                verts = [Vector((v.x,v.y)) for v in merged.exterior.coords[:-1]]
+                for v in verts: v.freeze()
+                polygons[group[0]] = verts
+                for poly in group[1:]:
+                    polygons[poly] = []
+                print('Mapping Conflict repaired: Intersectiong objects: ', group)
+
+            return polygons
+
+        def separateConnectedPolys(polygons,artPoint,connectedPolys):
+            # The shared vertex <artPoint> of the first polygon is shifted along 
+            # the bisector by 1mm into the polygon ...
+            firstPoly = next(iter(connectedPolys))
+            verts = polygons[firstPoly]               # vertices of first polygon
+            sharedIndx = verts.index(artPoint)        # index of shared vertex
+            # find predecessor and successor of shared vertex
+            N = len(verts)
+            pred, succ = verts[(sharedIndx-1)%N], verts[(sharedIndx+1)%N]
+            # compute bisector and move shared vertex for 1mm into the polygon
+            u1 = (pred-artPoint)/(pred-artPoint).length
+            u2 = (succ-artPoint)/(succ-artPoint).length
+            shiftedShared = artPoint + (u1 +u2)/(u1 +u2).length * 0.001
+            # freeze and put it back into polygon
+            shiftedShared.freeze()
+            polygons[firstPoly][sharedIndx] = shiftedShared
+            return polygons
+        # end of helper functions ------------------------------------------------------
+
+        # Create dictionary polygon id -> vertices from all objects
+        polygons = {} 
+        for building in manager.buildings:
+            verts = [v for v in building.polygon.verts]
+            for v in verts: v.freeze()  # make vertices immutable
+            polygons[int(building.element.tags["id"])] = [v for v in building.polygon.verts]
+        for polyline in manager.polylines:
+            if polyline.element.closed and not 'barrier' in polyline.element.tags:
+                verts = [edge.v1 for edge in polyline.edges]
+                ccw = sum( (v2[0]-v1[0])*(v2[1]+v1[1]) for v1,v2 in _iterEdges(verts)) < 0.
+                if not ccw: verts.reverse()
+                for v in verts: v.freeze()  # make vertices immutable
+                polygons[int(polyline.element.tags["id"])] = verts
+                
+
+        # Create a mapping <vertsToIds> from vertex to polygon OSM IDs (there
+        # may be multiple IDs for shared vertices).
+        # Load class ConnectedComponents with segments
+        disjointGroups = DisjointSets()
+        vertsToIds = defaultdict(set)
+        for osmID,verts in polygons.items():
+            for v1,v2 in _iterEdges(verts):
+                disjointGroups.addSegment(v1,v2)
+                vertsToIds[v1].add(int(osmID))
+
+        # All vertices in connectedNodes belong to a connected group of objects.
+        for connectedNodes in disjointGroups:
+            # find the OSM IDs of the connected objects
+            groupIDs = set(osmID for v in connectedNodes for osmID in vertsToIds[v])
+
+            if len(groupIDs) == 1: # a single building or polyline object
+                verts = [v for v in polygons[next(iter(groupIDs))]]
+                wasRepaired,verts = repairSimpleSelfIntersection(verts)     # eventually not required ???
+                if wasRepaired:
+                    print('Mapping Conflict repaired: Self intersection in object %d'%(next(iter(groupIDs))))
+                self.geosPolyList.append( vertsToGeosPoly(verts) )
+
+            else: # we have a group of connected objects.
+                plt.close()
+                plt.subplot(1,3,1)
+                for osmID in groupIDs:
+                    plotPoly(polygons[osmID],False)
+                plt.title('original')
+                plt.gca().axis('equal')
+                problem = False
+                # plotEnd()
+
+                # Do we have segment intersections from mapping errors?
+                # The class <SweepIntersector> requires segments without duplicates
+                # stored in <uniqueSegments>
+                uniqueSegments = defaultdict(set)
+                for osmID in groupIDs:
+                    for v1,v2 in _iterEdges(v for v in polygons[osmID]):
+                        v1,v2 = tuple(v1),tuple(v2)
+                        if v1 not in uniqueSegments.get(v2,[]):
+                            uniqueSegments[v1].add(v2)
+                cleanedSegs = [(v1,v2) for v1 in uniqueSegments for v2 in uniqueSegments[v1]]
+                intersector = SweepIntersector()
+                dictOfIntersections = intersector.findIntersections(cleanedSegs)
+
+                # If there are intersections, try to merge the intersecting polygons
+                if dictOfIntersections:
+                    intersectingPolygonIDs = defaultdict(set)
+                    for seg,isects in dictOfIntersections.items():
+                        v = Vector(seg[0]).freeze()
+                        isectID = vertsToIds[v]
+                        for v in isects[1:-1]:
+                            v = Vector(v).freeze()
+                            intersectingPolygonIDs[v] = intersectingPolygonIDs[v] | isectID
+
+                    # The merge result is a change of the polygons in <polygons>
+                    polygons = mergeIntersectingPolygons(polygons,intersectingPolygonIDs)
+                    plt.subplot(1,3,2)
+                    for osmID in groupIDs:
+                        if polygons[osmID]:
+                            plotPoly(polygons[osmID],False)
+                    plt.title('intersection')
+                    plt.gca().axis('equal')
+                    problem = True
+                    # plotEnd()
+
+                articulationPoints = ArticulationPoints()   
+                for osmID in groupIDs:
+                    for v1,v2 in _iterEdges(v for v in polygons[osmID]):
+                        articulationPoints.addEdge(v1,v2)
+
+                # Do we have single shared vertices (articulation points in graph notation)
+                for artPoint in articulationPoints:
+                    connectedPolys = vertsToIds[artPoint]
+                    polygons = separateConnectedPolys(polygons,artPoint,connectedPolys)
+
+                    plt.subplot(1,3,3)
+                    for osmID in groupIDs:
+                        if polygons[osmID]:
+                            plotPoly(polygons[osmID],False)
+                    plt.title('articulation')
+                    plt.gca().axis('equal')
+                    problem = True
+
+                if problem:
+                    plotEnd()
+ 
+                # import pickle
+                # with open('D:/LEDA/SweepIntersector/problem.pkl', 'wb') as f:
+                #     pickleList = []
+                #     for seg in segList:
+                #         v1, v2 = seg[0], seg[1]
+                #         newseg = ((v1[0],v1[1]),(v2[0],v2[1]))
+                #         pickleList.append(newseg)
+                #     pickle.dump(pickleList, f)
+
+                # if problem:
+                #     for v1,v2 in subSet:
+                #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k',linewidth=1,zorder=100)
+                #     if ap:
+                #         for p in ap:
+                #             plt.plot(p[0],p[1],'bo',markersize=10)
+                #     plotEnd()  
+                # test=1
+
+        test = 1
+                # geosList = []
+                # if len(polyIDs) > 1:
+                #     segList = []
+                #     intersector = SweepIntersector()
+                #     for polyID in polyIDs:
+                #         verts = [v for v in polygons[polyID]]
+                #         # plotPoly(verts,False)
+                #         for v1,v2 in _iterEdges(verts):
+                #             segList.append((tuple(v1),tuple(v2)))
+                #     intersectingSegments = intersector.findIntersections(segList)
+                #     if intersectingSegments:
+                #         for v1, v2 in segList:
+                #             plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k',linewidth=1,zorder=100)
+                #             plt.plot(v1[0],v1[1],'b.')
+                #             plt.plot(v2[0],v2[1],'b.')
+                #         for s,isects in intersectingSegments.items():
+                #             for p in isects[1:-1]:
+                #                 plt.plot(p[0],p[1],'ro',markersize=8)
+
+                #         plotEnd()
+
+        test=1
+
+    def checkAndRepairObjectPolys_II(self,manager):
+        import queue
+        def BFSUtil(u, adj, visited):
+            subnet = []       
+            # Create a queue for BFS 
+            q = queue.Queue()            
+            # Mark the current node as visited
+            # and enqueue it 
+            visited[u] = True
+            q.put(u)            
+            # 'i' will be used to get all adjacent 
+            # vertices 4 of a vertex list<int>::iterator i         
+            while(not q.empty()):              
+                # Dequeue a vertex from queue 
+                # and print it 
+                u = q.queue[0] 
+                subnet.append(u)
+                q.get() 
+                # Get all adjacent vertices of the 
+                # dequeued vertex s. If an adjacent 
+                # has not been visited, then mark 
+                # it visited and enqueue it 
+                i = 0
+                while i != len(adj[u]):
+                    if (not visited[adj[u][i]]):
+                            visited[adj[u][i]] = True
+                            q.put(adj[u][i])
+                    i += 1
+            return subnet
+
+        geosF = GeometryFactory()
+
+        # Create dictionary polygon id -> vertices
+        polygons = {} 
+        for building in manager.buildings:
+            verts = [v for v in building.polygon.verts]
+            for v in verts: v.freeze()  # make vertices immutable
+            polygons[int(building.element.tags["id"])] = [v for v in building.polygon.verts]
+        for polyline in manager.polylines:
+            if polyline.element.closed and not 'barrier' in polyline.element.tags:
+                verts = [edge.v1 for edge in polyline.edges]
+                ccw = sum( (v2[0]-v1[0])*(v2[1]+v1[1]) for v1,v2 in _iterEdges(verts)) < 0.
+                if not ccw: verts.reverse()
+                for v in verts: v.freeze()  # make vertices immutable
+                polygons[int(polyline.element.tags["id"])] = verts
+
+        # for p,verts in polygons.items():
+        #     plotPoly(verts,False)
+
+        # Create an adjacency list <edges> of all edges. Edges that have a twin
+        # are shared edges and get removed.
+        # Create also a mapping <vertsToIds> from vertex to polygon IDs (there
+        # may be multiple ids for shared vertices)
+        self.geosPolyList = []
+
+        adj = defaultdict(list)
+        vertsToIds = defaultdict(set)
+        for polyID,verts in polygons.items():
+            for source,target in _iterEdges(verts):
+                if source in adj.get(target,[]):
+                    # edge and its twin detected -> shared edge
+                    adj[target].remove(source)
+                    if not adj[target]:
+                        del adj[target]
+                else:
+                    adj[source].append(target)
+                    vertsToIds[source].add(int(polyID))
+
+        # for source,targets in adj.items():
+        #     if len(set(targets)) > 1 and  max(len(vertsToIds[t]) for t in targets) == 1:
+        #         for t in targets:
+        #             print(vertsToIds[t])
+        #             plt.plot([source[0],t[0]],[source[1],t[1]],'r',linewidth=4)
+        #         for polyID in vertsToIds[source]:
+        #             plotPoly(polygons[polyID],False)
+        #         plt.plot(source[0],source[1],'ro',markersize=8)
+        #         # plt.text(source[0],source[1],len(test),fontsize=12)
+        #         plotEnd()
+
+        for source,targets in adj.items():
+            if len(set(targets)) > 1 and  max(len(vertsToIds[t]) for t in targets) == 1:
+                id = list(vertsToIds[source])[0]
+                verts = polygons[id]    
+                indx = verts.index(source) 
+                N = len(verts)
+                pred, succ = verts[(indx-1)%N], verts[(indx+1)%N]
+                u1 = (pred-source)/(pred-source).length
+                u2 = (succ-source)/(succ-source).length
+                shiftedShared = source + (u1 +u2)/(u1 +u2).length * 0.001
+                shiftedShared.freeze()
+                verts[indx] = shiftedShared
+                # replace new shared vertex in polygon, maybe it will be considered again
+                polygons[id][indx] = shiftedShared
+
+        adj = defaultdict(list)
+        vertsToIds = defaultdict(set)
+        for polyID,verts in polygons.items():
+            for source,target in _iterEdges(verts):
+                adj[source].append(target)
+                vertsToIds[source].add(int(polyID))
+
+        # shared = [k for k,v in adj.items() for t in v if k in adj.get(t)]
+        # for p in shared:
+        #     polyIDs = set()
+        #     for v in adj[p]:
+        #         polyIDs = polyIDs.union(vertsToIds[v])
+        #     # if len(polyIDs) == 2:
+        #     plt.plot(p[0],p[1],'ro',markersize=8)
+        #     plt.text(p[0],p[1],len(polyIDs),fontsize=12)
+        #     print(len(polyIDs))
+        # plotEnd()
+
+        visited = {k:False for k,v in adj.items()} 
+        for u in adj.keys():
+            if (visited[u] == False): 
+                subnet = BFSUtil(u, adj, visited)
+                polyIDs = set()
+                for v in subnet:
+                    polyIDs = polyIDs.union(vertsToIds[v])
+                geosList = []
+                for polyID in polyIDs:
+                    verts = [v for v in polygons[polyID]]
+                    coord = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                    geosList.append( geosF.createPolygon( geosF.createLinearRing(coord)) )
+                multiPoly = geosF.createMultiPolygon(geosList)
+                try:
+                    unified = multiPoly.union()
+                except (TopologyException) as e:
+                    plotPoly(subnet,False)
+                    plt.title('Exception')
+                    plotEnd()
+
+                if unified.geom_type == 'Polygon':
+                    self.geosPolyList.append( geosF.createPolygon(unified.exterior) )
+                    exterior = [Vector((v.x,v.y)) for v in unified.exterior.coords[:-1]]
+                    # plotPoly(exterior,False,'b',1)
+                    # if unified.interiors:
+                    #     test=1
+                else:
+                    plt.subplot(1,2,1)
+                    shared = []
+                    for i1,i2 in combinations(range(len(unified.geoms)), 2):
+                        g1 = unified.geoms[i1].exterior.coords[:-1]
+                        g2 = unified.geoms[i2].exterior.coords[:-1]
+                        sharedVertList = list(set(g1).intersection(g2))
+                        if sharedVertList:
+                            shared.append([i1,i2,sharedVertList[0]])
+                    if shared:
+                        test = shared[0][2]
+                        plt.plot(test.x,test.y,'ro')
+
+                    for geom in unified.geoms:
+                        self.geosPolyList.append( geosF.createPolygon(geom.exterior) )
+                        exterior = [Vector((v.x,v.y)) for v in geom.exterior.coords[:-1]]
+                        plotPoly(exterior,False,'k',1)
+                    plt.gca().set_title(str(len(unified.geoms)))
+                    plt.gca().axis('equal')
+                    plt.subplot(1,2,2)
+                    for polyID in polyIDs:
+                        verts = [v for v in polygons[polyID]]
+                        plotPoly(verts,False,'k')
+                    plotEnd()
+                # test = 1
+
+        for poly in self.geosPolyList:
+            plotGeosWithHoles(poly,False,'b',1)
+        # plotEnd()
+
+
 
     # Gets all polylines and buildings in scene (those with shared edges combined
     # to blocks) and collects them in a list <self.geosPolyList> of PyGeos polynoms. 
-    def checkAndRepairObjectPolys(self,manager):
+    def checkAndRepairObjectPolys_I(self,manager):
+
         # Create dictionary polygon id -> vertices
         polygons = {} 
         for building in manager.buildings:
@@ -390,6 +773,7 @@ class RoadPolygons:
                     polysToBeMerged = []
                     for polyID in involvedPolygonsIDs:
                         verts = [v for v in polygons[polyID]]
+                        plotPoly(verts,False,'r')
                         coords = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
                         polysToBeMerged.append( geosF.createPolygon( geosF.createLinearRing(coords)) )
                     joinedPoly = polysToBeMerged[0]
@@ -406,11 +790,15 @@ class RoadPolygons:
 
             if len(vertList) > 2:
                 # simple check for self-intersections
-                if simpleSelfIntersection(vertList):
+                selfIsect, isectVerts = simpleSelfIntersection(vertList)
+                if selfIsect:
                     # try to find the involved polygons
                     polyIDs = set()
                     for v in vertList:
                         polyIDs = polyIDs.union(vertsToIds[v])
+                    conflictIDs = set()
+                    for v in isectVerts:
+                        conflictIDs = polyIDs.union(vertsToIds[v])
                     if len(polyIDs) == 2:
                         # we're lucky, two polygons. Do they intersect?
                         geosPolys = []
@@ -420,8 +808,9 @@ class RoadPolygons:
                             geosPolys.append( geosF.createPolygon( geosF.createLinearRing(coord)) )
                         # haveIntersection
                         doIntersect = geosPolys[0].intersection(geosPolys[1]).area > 0.
+                        doTouch = geosPolys[0].relate(geosPolys[1],'212111212')
                         id0, id1 = list(polyIDs)
-                        if doIntersect:
+                        if doIntersect or doTouch:
                             joinedPoly = geosPolys[0].union(geosPolys[1])
                             if joinedPoly.geom_type=='Polygon' and joinedPoly.exterior.is_valid:
                                 self.geosPolyList.append( joinedPoly )
@@ -432,7 +821,34 @@ class RoadPolygons:
                         else:
                             print('Mapping CONFLICT unresolved: Polygons %s and %s removed'%(id0,id1))
                     else:
-                        print('Mapping CONFLICT unresolved: Three or more polygons removed')
+                        print('Mapping CONFLICT repaired: Conflicting objects', conflictIDs)
+                        geosList = []
+                        for polyID in polyIDs:
+                            verts = [v for v in polygons[polyID]]
+                            coord = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                            geosList.append( geosF.createPolygon( geosF.createLinearRing(coord)) )
+                        multiPoly = geosF.createMultiPolygon(geosList)
+                        try:
+                            unified = multiPoly.union()
+                        except (TopologyException) as e:
+                            plotPoly(vertList,False)
+                            plt.title('Exception')
+                            plotEnd()
+
+
+                        # # DEBUG-PLOT, to be removed when no more required
+                        # plt.close()
+                        # plt.subplot(1,2,1)
+                        # plotPoly(vertList,False)
+                        # plt.gca().axis('equal')
+                        # plt.subplot(1,2,2)
+                        # # for polyID in polyIDs:
+                        # #     verts = [v for v in polygons[polyID]]
+                        # #     coord = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+                        # #     debugPoly = geosF.createPolygon( geosF.createLinearRing(coord)) 
+                        # plotGeosWithHoles(unified,False,'k',1)
+                        # plt.title('Multiple poly conflict')
+                        # plotEnd()
                 else:
                     geosCoords = [geosF.createCoordinate(v) for v in vertList+[vertList[0]]]
                     geosRing = geosF.createLinearRing(geosCoords)
@@ -441,9 +857,9 @@ class RoadPolygons:
 
         # # DEBUG-PLOT, to be removed when no more required
         # # Show the final result of checkAndRepairObjectPolys()
-        # for poly in self.geosPolyList:
-        #     plotGeosWithHoles(poly,False,'b',2)
-        # plotEnd()
+        for poly in self.geosPolyList:
+            plotGeosWithHoles(poly,False,'b',2)
+        plotEnd()
 
     def fillObjectsInKDTree(self):
         # create mapping between the index of the vertex and index of the polygon in <geosPolyList>
@@ -573,12 +989,12 @@ class RoadPolygons:
 
                 graphCycle.triangles.extend(triangles)
 
-        for polyNr,graphCycle in enumerate(self.graphCycles):
-            for triangle in graphCycle.triangles:
-                # plotPolyFill(triangle)
-                plotPoly(triangle,False,'r',0.5)
-            print('%d triangulated'%(polyNr+1))
-        # plotEnd()
+        # for polyNr,graphCycle in enumerate(self.graphCycles):
+        #     for triangle in graphCycle.triangles:
+        #         # plotPolyFill(triangle)
+        #         plotPoly(triangle,False,'r',0.5)
+        #     print('%d triangulated'%(polyNr+1))
+        # # plotEnd()
 
     def createKdTree(self):
         from scipy.spatial import KDTree
@@ -611,11 +1027,23 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
         if vertsOrder:
             plt.text(v1[0],v1[1],str(count),fontsize=12)
         count += 1
-        # plt.plot(v1[0],v1[1],'kx')
+        plt.plot(v1[0],v1[1],'kx')
     v1, v2 = polygon[-1], polygon[0]
     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
     if vertsOrder:
         plt.text(v1[0],v1[1],str(count),fontsize=12)
+
+def plotLine(line,vertsOrder,color='k',width=1.,order=100):
+    count = 0
+    for v1,v2 in zip(line[:-1],line[1:]):
+        plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+        if vertsOrder:
+            plt.text(v1[0],v1[1],str(count),fontsize=12)
+        count += 1
+        # plt.plot(v1[0],v1[1],'kx')
+    if vertsOrder:
+        plt.text(v1[0],v1[1],str(count),fontsize=12)
+
 
 def plotGeosPoly(geosPoly,vertsOrder,color='k',width=1.,order=100):
     poly = [(c.x,c.y) for c in geosPoly.coords[:-1]]

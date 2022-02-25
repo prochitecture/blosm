@@ -214,8 +214,14 @@ def iterCircular(iterable):
     D = islice(cycle(D), 3, None)
     return zip(A, B, C, D)
 
-def simpleSelfIntersection(polygon):
-    for A, B, C, D in iterCircular(polygon):
-        if intersect(A,B,C,D):
-            return True
-    return False
+def repairSimpleSelfIntersection(poly):
+    if len(poly) <= 3:                                  # Repairs this type of intersection
+        return False, poly                              # 
+    polyIndx = range(len(poly))                         #        \  /
+    wasRepaired = False                                 #         \/
+    for a,b,c,d in iterCircular(polyIndx):              #         /\
+        if intersect(poly[a],poly[b],poly[c],poly[d]):  #        /  \
+            poly[b],poly[c] = poly[c],poly[b]           #       O----O
+            wasRepaired = True          
+    return wasRepaired,poly
+

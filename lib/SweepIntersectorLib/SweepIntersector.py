@@ -179,6 +179,7 @@ class SweepIntersector():
                 else:
                     # <nextSeg> and <seg0> are collinear; if <next_seg> is
                     # longer insert (seg0.end(),next_seg.end()) into <segQueue>
+                    print('XXXXXXXXXXXX Collinear segments in intersector')
                     p = seg0.end()
                     q = self.nextSeg.end()
                     self.assoc[seg0] = self.nextSeg

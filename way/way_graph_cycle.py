@@ -1,6 +1,8 @@
 from collections import defaultdict
 from mathutils import Vector
 from math import inf
+import matplotlib.pyplot as plt
+
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import TopologyException
@@ -116,3 +118,15 @@ class GraphCycle():
 
         return holePolys
 
+def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
+    count = 0
+    for v1,v2 in zip(polygon[:-1],polygon[1:]):
+        plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+        if vertsOrder:
+            plt.text(v1[0],v1[1],str(count),fontsize=12)
+        count += 1
+        # plt.plot(v1[0],v1[1],'kx')
+    v1, v2 = polygon[-1], polygon[0]
+    plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+    if vertsOrder:
+        plt.text(v1[0],v1[1],str(count),fontsize=12)
