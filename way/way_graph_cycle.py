@@ -15,7 +15,14 @@ class GraphCycle():
         self.subPolys = []
         self.triangles = []
  
-        boundary, holes, spurs = GraphCycle.cleanCycle(segList)
+        try:
+            boundary, holes, spurs = GraphCycle.cleanCycle(segList)
+        except:
+            nodes = [n for s in segList for n in s.path[:-1]]
+            plotPoly(nodes,True,'b',3)
+            print('Problem on cleaning graph-cycle')
+            return
+
         geosF = GeometryFactory()
         coords = [ geosF.createCoordinate(v) for v in boundary ] 
         self.cyclePoly = geosF.createPolygon(geosF.createLinearRing(coords))
@@ -56,9 +63,9 @@ class GraphCycle():
         boundary.append(boundStart)
         nextNode = boundStart
         while True:
-            thisNode = segments[nextNode][0]
+            thisNode = segments[nextNode].pop(0)
             boundary.append(thisNode)
-            del segments[nextNode]
+            if not segments[nextNode]: del segments[nextNode]
             if thisNode == boundStart:
                 break
             nextNode = thisNode
@@ -69,9 +76,9 @@ class GraphCycle():
             hole = [firstNode]
             nextNode = firstNode
             while True:
-                thisNode = segments[nextNode][0]
+                thisNode = segments[nextNode].pop(0)
                 hole.append(thisNode)
-                del segments[nextNode]
+                if not segments[nextNode]: del segments[nextNode]
                 if thisNode == firstNode:
                     break
                 nextNode = thisNode
@@ -126,7 +133,16 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
             plt.text(v1[0],v1[1],str(count),fontsize=12)
         count += 1
         # plt.plot(v1[0],v1[1],'kx')
-    v1, v2 = polygon[-1], polygon[0]
-    plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+    # v1, v2 = polygon[-1], polygon[0]
+    # plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
     if vertsOrder:
         plt.text(v1[0],v1[1],str(count),fontsize=12)
+
+def plotSegments(adj):
+    for v1,v2s in adj.items():
+        for v2 in v2s:
+            plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k')
+
+def plotEnd():
+    plt.gca().axis('equal')
+    plt.show()
