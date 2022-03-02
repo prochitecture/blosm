@@ -17,6 +17,8 @@ from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 from lib.triangulation.PolygonTriangulation import PolygonTriangulation
 from lib.triangulation.Vertex import Vertex
 
+from defs.road_polygons import ExcludedWayTags
+
 # cyclic iterate over polygons vertices
 def _iterEdges(poly):
         p1, p2= tee(poly)
@@ -53,11 +55,9 @@ class RoadPolygons:
 
         # some way tags to exclude, used also in createWaySectionNetwork(),
         # should be moved to defs.
-        excludedTags = ['steps']
-
         uniqueSegments = defaultdict(set)
         for way in wayManager.getAllWays():            
-            if [tag for tag in excludedTags if tag in way.element.tags]:
+            if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
                 continue
             for segment in way.segments:
                 v1, v2 = (segment.v1[0],segment.v1[1]),  (segment.v2[0],segment.v2[1])
@@ -129,11 +129,9 @@ class RoadPolygons:
 
         # some way tags to exclude, used also in findSelfIntersections(),
         # should be moved to defs.
-        excludedTags = ['steps']
-
         for way in wayManager.getAllWays():
             # Exclude ways with unwanted tags
-            if [tag for tag in excludedTags if tag in way.element.tags]:
+            if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
                 continue
 
             # Get the width of the way segment. Later this should be delivered from the
@@ -510,7 +508,7 @@ class RoadPolygons:
         print(' ')
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'triangulation')
-            for polyNr,poly in enumerate(graphCycle.subPolys):
+            for poly in graphCycle.subPolys:
                 holes = poly.interiors
                 # the exterior polygon must be counter-clockwise
                 polyVerts = [Vertex((v.x,v.y)) for v in poly.exterior.coords[:-1]]
@@ -539,9 +537,10 @@ class RoadPolygons:
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'plotting triangles')
             for triangle in graphCycle.triangles:
+                # plotPolyFill(triangle)
                 plotPoly(triangle,False,'r',0.5)
 
-        print('\nplt.show() -> Result')
+        print('\nplt.show() called  -->  Result')
 
     def createKdTree(self):
         from scipy.spatial import KDTree

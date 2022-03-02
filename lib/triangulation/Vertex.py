@@ -13,11 +13,14 @@ class ChainType():
     RIGHT = 2
 
 class Vertex(Vector):
+    ID = 0
     def __init__(self,xy):
         self.vType = None
         self.pred = None
         self.edge = None
         self.chainType = None
+        self.id = Vertex.ID
+        Vertex.ID += 1
 
     def __lt__(self,other):
         if self[1] == other[1]:
@@ -33,3 +36,6 @@ class Vertex(Vector):
 
     def __eq__(self,other):
         return self[0] == other[0] and self[1] == other[1]
+
+    def __hash__(self):
+        return self.id

@@ -67,6 +67,8 @@ class PolygonTriangulation():
                 self.triangulateMonotone(startEdge)
 
         # Return the list of triangles, each as tuple of three vertices of class Vertex
+        # Sometimes duplicate triangles are created, don't know why. Remove them here.
+        self.triangles = list(set(self.triangles) )
         return self.triangles
 
     def handleStartVertex(self,event):
@@ -166,7 +168,7 @@ class PolygonTriangulation():
                 while True:
                     popped = triangulationStack.pop()
                     if prevPopped:
-                        self.triangles.append( (Vector(curr), Vector(popped), Vector(prevPopped)) )
+                        self.triangles.append( (curr, popped, prevPopped) ) 
                     prevPopped = popped
                     if len(triangulationStack) <= 1:
                         break
@@ -181,7 +183,7 @@ class PolygonTriangulation():
                 while triangulationStack:
                     popped = triangulationStack.pop()
                     if self.connectionLiesInside(curr, prevPopped, popped):
-                        self.triangles.append( (Vector(curr), Vector(popped), Vector(prevPopped)) )
+                        self.triangles.append( (curr, popped, prevPopped) )
                         prevPopped = popped
                     else:
                         triangulationStack.append(popped)
