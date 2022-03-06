@@ -30,7 +30,7 @@ class PolygonTriangulation():
                  mathutils.Vector of a triangle.
         """
         # clear members, when already used once.
-        # if self.sweepStates: self.sweepStates = None
+        if self.sweepStates: self.sweepStates = None
         if self.triangles: self.triangles = []
 
         # Initialize doubly linked lists for polygon and holes and
@@ -44,6 +44,7 @@ class PolygonTriangulation():
         if splitOrMergeCount:
             # Partitioning into y-monotone pieces
             sweepEvents = self.sweepStates.sweepEvents
+            
             while sweepEvents:
                 event = heapq.heappop(sweepEvents)
                 if event.type == VertexType.START:
@@ -161,14 +162,14 @@ class PolygonTriangulation():
         triangulationStack = vertices[:2]
         for i in range(2,len(vertices)):
             curr = vertices[i]
-            # Ff the current vertex and the vertex on top of the stack are on different chains
+            # If the current vertex and the vertex on top of the stack are on different chains
             if triangulationStack[-1].chainType != curr.chainType:
                 prevPopped = None
                 # Pop all vertices from stack and create the triangles
                 while True:
                     popped = triangulationStack.pop()
                     if prevPopped:
-                        self.triangles.append( (curr, popped, prevPopped) ) 
+                        self.triangles.append( (curr, popped, prevPopped) )
                     prevPopped = popped
                     if len(triangulationStack) <= 1:
                         break

@@ -16,6 +16,7 @@ from lib.CompGeom.GraphBasedAlgos import DisjointSets, ArticulationPoints
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 from lib.triangulation.PolygonTriangulation import PolygonTriangulation
 from lib.triangulation.Vertex import Vertex
+from lib.triangulation.cleaning import cleaningForTriangulation
 
 from defs.road_polygons import ExcludedWayTags
 
@@ -496,7 +497,7 @@ class RoadPolygons:
             else:
                 graphCycle.subPolys.append(cyclePoly)
 
-        triangulation = PolygonTriangulation()
+        # triangulation = PolygonTriangulation()
         # from patchify import plotGeosPatch
         # print(' ')
         # for polyNr,graphCycle in enumerate(self.graphCycles):
@@ -506,28 +507,21 @@ class RoadPolygons:
         # return
 
         print(' ')
+        triangulation = PolygonTriangulation()
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'triangulation')
             for poly in graphCycle.subPolys:
-                holes = poly.interiors
-                # the exterior polygon must be counter-clockwise
-                polyVerts = [Vertex((v.x,v.y)) for v in poly.exterior.coords[:-1]]
-                if not poly.exterior.is_ccw:
-                    polyVerts.reverse()
-                holeVerts = []
-                for hole in holes:
-                    holeV = [Vertex((v.x,v.y)) for v in hole.coords[:-1]]
-                    if hole.is_ccw:
-                        holeV.reverse()
-                    holeVerts.append(holeV)
-
+                polyVerts, holeVerts = cleaningForTriangulation(poly)
                 try:
                     triangles = triangulation.triangulate(polyVerts,holeVerts)
                 except Exception as e:
-                    import traceback
-                    traceback.print_exception(type(e), e, e.__traceback__)
-                    print('For cyclePoly Nr.: ', polyNr)
-                    plotGeosWithHoles(poly,True,'b',2)
+                    saveData(polyNr,polyVerts,holeVerts)
+                    # import traceback
+                    # traceback.print_exception(type(e), e, e.__traceback__)
+                    print('Exception cyclePoly Nr.: ', polyNr)
+                    plotPoly(polyVerts,True,'k',1)
+                    for hole in holeVerts:
+                        plotPoly(hole,True,'r')
                     # printMultiPolyData(poly)
                     # plotEnd()
 
@@ -554,6 +548,25 @@ class RoadPolygons:
 
 # Plotting functions used during development
 #-----------------------------------------------------------------------------------
+
+def saveData(polyNr,poly,holes):
+    fid = open('C:/Users/Roger/Desktop/data/poly'+str(polyNr)+'.py','w')
+    fid.write('from mathutils import Vector\n\n')
+    fid.write('polygon = [')
+    for v in poly:
+        fid.write('%s, '%(str(v)))
+    fid.write(']\n')
+
+    fid.write('holes = [\n')
+    for hole in holes:
+        fid.write('    [')
+        for v in hole:
+            fid.write('%s, '%(str(v)))
+        fid.write('],\n')
+    fid.write(']\n')
+    fid.close()
+
+
 
 def plotEdge(v1,v2,color='k',arrow=False,width=1,order=100):
     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
@@ -599,7 +612,7 @@ def plotGeosWithHoles(geosPoly,vertsOrder,color='k',width=1.,order=100):
     poly = [(c.x,c.y) for c in geosPoly.exterior.coords[:-1]]
     plotPoly(poly,vertsOrder,color,width,order)
     for ring in geosPoly.interiors:
-        p = [(c.x,c.y) for c in ring.coords]
+        p = [(c.x,c.y) for c in ring.coords[:-1]]
         plotPoly(p,vertsOrder,'r',width,order)
 
 def plotGeneralPoly(geosPoly,vertsOrder,color='k',width=1.,order=100):

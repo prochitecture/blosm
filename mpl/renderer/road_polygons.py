@@ -69,6 +69,10 @@ class RoadPolygonsRenderer(Renderer):
             color="#ffffff", linewidth=2.,
             path_effects=[pe.Stroke(linewidth=2.4, foreground="black"), pe.Normal()]
         ),
+        raceway = dict(
+            color="#ffffff", linewidth=3.,
+            path_effects=[pe.Stroke(linewidth=3.4, foreground="black"), pe.Normal()]
+        ),
         footway = dict(color="#fa8072", linewidth=1., linestyle="dashed"),
         steps = dict(color="#fa8072", linewidth=2., linestyle="dotted"),
         path = dict(color="#fa8072", linewidth=1., linestyle="dashed"),

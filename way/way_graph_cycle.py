@@ -14,7 +14,7 @@ class GraphCycle():
         GraphCycle.ID += 1
         self.subPolys = []
         self.triangles = []
- 
+
         try:
             boundary, holes, spurs = GraphCycle.cleanCycle(segList)
         except:
@@ -24,11 +24,11 @@ class GraphCycle():
             return
 
         geosF = GeometryFactory()
-        coords = [ geosF.createCoordinate(v) for v in boundary ] 
+        coords = [ geosF.createCoordinate(v) for v in boundary+[boundary[0]] ] 
         self.cyclePoly = geosF.createPolygon(geosF.createLinearRing(coords))
         if holes:
             for hole in holes:
-                coords = [ geosF.createCoordinate(v) for v in hole ] 
+                coords = [ geosF.createCoordinate(v) for v in hole+[hole[0]] ] 
                 holePoly = geosF.createPolygon(geosF.createLinearRing(coords))
                 try:
                     self.cyclePoly = self.cyclePoly.difference(holePoly)
@@ -59,15 +59,23 @@ class GraphCycle():
                 if source[0] < boundStart[0]:
                     boundStart = source
 
+        sharedVertices = [ source for source,targets in segments.items() if len(targets)>1 ]
+
         # follow boundary, begin at <boundStart>
         boundary.append(boundStart)
         nextNode = boundStart
-        while True:
-            thisNode = segments[nextNode].pop(0)
-            boundary.append(thisNode)
+        while segments:
+            if len(segments[nextNode]) > 1:
+                # Graph-cycles are delivered in counter-clockwise order. To keep the outer
+                # boundary in case of an intersection, we have to take the rightmost vertex.
+                ccw = (segments[nextNode][0]-nextNode).cross(segments[nextNode][1]-nextNode)
+                thisNode = segments[nextNode].pop(0) if ccw >= 0 else segments[nextNode].pop(1)
+            else:
+                thisNode = segments[nextNode].pop(0)
             if not segments[nextNode]: del segments[nextNode]
             if thisNode == boundStart:
                 break
+            boundary.append(thisNode)
             nextNode = thisNode
 
         # collect remaining holes, if any
@@ -77,12 +85,38 @@ class GraphCycle():
             nextNode = firstNode
             while True:
                 thisNode = segments[nextNode].pop(0)
-                hole.append(thisNode)
                 if not segments[nextNode]: del segments[nextNode]
                 if thisNode == firstNode:
                     break
+                hole.append(thisNode)
                 nextNode = thisNode
             holes.append(hole)
+
+        if sharedVertices:
+            # Here we treat the case of shared vertices between the boundary and
+            # the holes, which can't finally be triangulated by our algorithm.
+            # such cases my look like this:
+            #          -------------
+            #         |             |
+            #     ----O-------      |
+            #     |   |       |     |
+            #     |    -------      |
+            #     |                 |
+            #      -----------------
+            # We correct the shared vertex of the hole by moving it 1mm along
+            # the bisector into the hole.
+            for shared in sharedVertices:
+                for hole in holes:
+                    if shared in hole:
+                        # find the shared vertex and its neighbors in hole 
+                        indx =  hole.index(shared)
+                        p1 = hole[indx-1]
+                        p2 = hole[(indx+1)%len(hole)]
+                        # unity vectors to the neigbors
+                        u1 = (p1-shared)/(p1-shared).length
+                        u2 = (p2-shared)/(p2-shared).length
+                        # move this point 1mm along bisector
+                        hole[indx] = shared + (u1+u2)/(u1+u2).length * 0.001
 
         return boundary, holes, spurs
 
