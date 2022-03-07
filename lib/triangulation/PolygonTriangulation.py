@@ -116,7 +116,7 @@ class PolygonTriangulation():
             self.sweepStates.diagList.insertDiagonal(event, predEdge)
         # Delete ei−1 from edge tree
         EdgeData.currentY = event.y
-        self.sweepStates.edgeTree.removeEdge(event.edge)
+        self.sweepStates.edgeTree.removeEdge(predEdge)
         # Search in edge tree to find the edge ei directly left of event
         toTheLeft = self.sweepStates.edgeTree.findToLeft(event)
         # if helper(ej) is a merge vertex
