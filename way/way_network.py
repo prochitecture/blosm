@@ -268,7 +268,7 @@ class WayNetwork(dict):
 
     
 # ------------------------------------------------------------------
-# this part is only used to temporary visualize the cycles durign development.
+# this part is only used to temporary visualize the cycles during development.
 from itertools import *
 import matplotlib.pyplot as plt
 def _iterCircularPrevNext(lst):
@@ -323,13 +323,13 @@ def plotSingleCycle(cycle):
 def plotSimpleCycle(cycle,color='k'):
     nodes = [n for s in cycle for n in s.path[:-1]]
     for v1,v2 in _iterCircularPrevNext(nodes):
-        plt.plot((v1[0], v2[0]),(v1[1], v2[1]),color,alpha = 1.0,zorder = 900,linewidth=1)
+        plt.plot((v1[0], v2[0]),(v1[1], v2[1]),color,alpha = 1.0,zorder = 900,linewidth=2)
     for i,wayseg in enumerate(cycle):
         v1,v2 = wayseg.s,wayseg.t
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
         # plt.text(x,y,str(wayseg.ID))
-        plt.text(x,y,str(i))
+        # plt.text(x,y,str(i))
 
 def plotEnd():
     plt.gca().axis('equal')

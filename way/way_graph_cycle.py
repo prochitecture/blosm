@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import TopologyException
+from defs.road_polygons import SharedVertDist
 
 class GraphCycle():
     ID = 0
@@ -108,15 +109,20 @@ class GraphCycle():
             for shared in sharedVertices:
                 for hole in holes:
                     if shared in hole:
-                        # find the shared vertex and its neighbors in hole 
+                        # # find the shared vertex and its neighbors in hole 
                         indx =  hole.index(shared)
                         p1 = hole[indx-1]
                         p2 = hole[(indx+1)%len(hole)]
-                        # unity vectors to the neigbors
-                        u1 = (p1-shared)/(p1-shared).length
+                        # unity vectors of the edges
+                        u1 = (shared-p1)/(shared-p1).length
                         u2 = (p2-shared)/(p2-shared).length
-                        # move this point 1mm along bisector
-                        hole[indx] = shared + (u1+u2)/(u1+u2).length * 0.001
+                        # move this point by <SharedVertDist> along bisector
+                        if u1.cross(u2) < 0:
+                            u1 = -u1
+                        else:
+                            u2 = -u2
+                        bisector = (u1 + u2)/(u1+u2).length
+                        hole[indx] = shared + bisector * SharedVertDist
 
         return boundary, holes, spurs
 
@@ -167,8 +173,8 @@ def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
             plt.text(v1[0],v1[1],str(count),fontsize=12)
         count += 1
         # plt.plot(v1[0],v1[1],'kx')
-    # v1, v2 = polygon[-1], polygon[0]
-    # plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+    v1, v2 = polygon[-1], polygon[0]
+    plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
     if vertsOrder:
         plt.text(v1[0],v1[1],str(count),fontsize=12)
 

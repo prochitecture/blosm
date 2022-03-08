@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from math import atan2, pi
 
 from .Vertex import Vertex
+from defs.road_polygons import SharedVertDist
 
 def removeStraightAngleVerts(poly):
     # poly is a polygon formed by vertices of type mathutils.Vector.
@@ -40,13 +41,13 @@ def cleaningForTriangulation(geosPoly):
                     # unity vectors of the edges
                     u1 = (shared-p1)/(shared-p1).length
                     u2 = (p2-shared)/(p2-shared).length
-                    # move this point 1mm along bisector
+                    # move this point by <SharedVertDist> along bisector
                     if u1.cross(u2) < 0:
                         u1 = -u1
                     else:
                         u2 = -u2
                     bisector = (u1 + u2)/(u1+u2).length
-                    hole[indx] = shared + bisector * 0.001
+                    hole[indx] = shared + bisector * SharedVertDist
 
     # cleanPoly = removeStraightAngleVerts(poly)
     polyV = [Vertex(v) for v in poly]

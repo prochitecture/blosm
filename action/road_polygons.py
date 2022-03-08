@@ -10,7 +10,7 @@ from way.way_algorithms import createSectionNetwork
 from way.way_graph_cycle import GraphCycle
 
 from lib.pygeos.geom import GeometryFactory
-from lib.pygeos.shared import CAP_STYLE, TopologyException
+from lib.pygeos.shared import TopologyException
 from lib.CompGeom.algorithms import circumCircle, SCClipper, repairSimpleSelfIntersection, progress
 from lib.CompGeom.GraphBasedAlgos import DisjointSets, ArticulationPoints
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
@@ -18,7 +18,7 @@ from lib.triangulation.PolygonTriangulation import PolygonTriangulation
 from lib.triangulation.Vertex import Vertex
 from lib.triangulation.cleaning import cleaningForTriangulation
 
-from defs.road_polygons import ExcludedWayTags
+from defs.road_polygons import ExcludedWayTags, MinDetectionSize, DetectionGridWidth, SharedVertDist
 
 # cyclic iterate over polygons vertices
 def _iterEdges(poly):
@@ -240,10 +240,10 @@ class RoadPolygons:
                 cornerData.append( (hypot,indx,u1,u2) )
 
             # select sharper corner, which is the one with minimal hypot
-            # and shift its artPoint by 1mm along bisector
+            # and shift its artPoint by <SharedVertDist> along bisector
             iP = 0 if cornerData[0][0] < cornerData[1][0] else 1
             _, indx, u1, u2 = cornerData[iP]
-            sharedArtPoint = (artPoint + (u1+u2)/(u1+u2).length * 0.001).freeze()
+            sharedArtPoint = (artPoint + (u1+u2)/(u1+u2).length * SharedVertDist).freeze()
             print('Mapping Conflict repaired: Single shared vertex between objects: ', list(connectedPolys))
 
             # bookkeeping
@@ -402,17 +402,37 @@ class RoadPolygons:
         )
 
         # the total number of vertices
-        totalNumVerts = sum(polygon.numpoints for polygon in self.geosPolyList )
+        ordinaryNumVerts = sum(polygon.numpoints for polygon in self.geosPolyList )
 
+        # Create detection vertices for large object polygons
+        detectionPoints = []
+        for polyIndex, polygon in enumerate(self.geosPolyList):
+            bbox = polygon.envelope
+            if bbox.width > MinDetectionSize or bbox.height > MinDetectionSize:
+                nW = int(np.round(bbox.width/DetectionGridWidth))
+                nH = int(np.round(bbox.height/DetectionGridWidth))
+                s = DetectionGridWidth
+                grid = [(bbox.minx + (s/2) + (x * s), bbox.miny + (s/2) + (y * s)) for x in range(nW) for y in range(nH)]
+                geosGrid = [self.geosF.createPoint(self.geosF.createCoordinate(p)) for p in grid]
+                thisPoly = [(p.coord.x,p.coord.y) for p in geosGrid if polygon.contains(p)]
+                detectionPoints.extend(thisPoly)
+                self.vertIndexToPolyIndex.extend( [polyIndex]*len(thisPoly) )
+
+        detectNumVerts = len(detectionPoints)
         # allocate the memory for an empty numpy array
-        self.polyVerts = np.zeros((totalNumVerts, 2))
+        self.polyVerts = np.zeros((ordinaryNumVerts+detectNumVerts, 2))
 
-        # fill vertices in <self.polyVerts>
+        # fill vertices into <self.polyVerts>
         index = 0
         for polygon in self.geosPolyList:
             for vert in polygon.coords:
                 self.polyVerts[index] = (vert.x,vert.y)
                 index += 1
+
+        # fill detection vertices into <self.polyVerts>
+        for vert in detectionPoints:
+            self.polyVerts[index] = vert
+            index += 1
 
         self.createKdTree()
 
@@ -515,15 +535,16 @@ class RoadPolygons:
                 try:
                     triangles = triangulation.triangulate(polyVerts,holeVerts)
                 except Exception as e:
-                    saveData(polyNr,polyVerts,holeVerts)
-                    # import traceback
-                    # traceback.print_exception(type(e), e, e.__traceback__)
+                    # saveData(polyNr,polyVerts,holeVerts)
+                    import traceback
+                    traceback.print_exception(type(e), e, e.__traceback__)
                     print('Exception cyclePoly Nr.: ', polyNr)
-                    plotPoly(polyVerts,True,'k',1)
-                    for hole in holeVerts:
-                        plotPoly(hole,True,'r')
+                    # plotPoly(polyVerts,True,'k',1)
+                    # for hole in holeVerts:
+                    #     plotPoly(hole,True,'r')
                     # printMultiPolyData(poly)
                     # plotEnd()
+                    continue
 
                 graphCycle.triangles.extend(triangles)
 
@@ -644,7 +665,7 @@ def polyCenter(geosPoly):
 def plotPolyFill(poly):
     x = [n[0] for n in poly]
     y = [n[1] for n in poly]
-    plt.fill(x,y,'#0000ff',alpha = 0.2,zorder = 500)
+    plt.fill(x,y,'#ff0000',alpha = 0.2,zorder = 500)
 
 def plotWaySeg(wayseg,color='k',width=1.,order=100):
     for v1,v2 in zip(wayseg.path[:-1],wayseg.path[1:]):
