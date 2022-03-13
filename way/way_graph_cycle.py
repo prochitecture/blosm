@@ -6,15 +6,19 @@ import matplotlib.pyplot as plt
 
 from lib.pygeos.geom import GeometryFactory
 from lib.pygeos.shared import TopologyException
-from defs.road_polygons import SharedVertDist
+from defs.road_polygons import SharedVertDist, MaxCycleSize
 
 class GraphCycle():
     ID = 0
     def __init__(self,segList):
-        self.id = GraphCycle.ID
+        self.id = GraphCycle.ID 
         GraphCycle.ID += 1
-        self.subPolys = []
-        self.triangles = []
+
+        self.segList = segList  # List of network segments (class NetSegment)
+        self.cyclePoly = None   # Cleaned cycle with its holes
+        self.spurs = None       # List of removed coincident segments (spurs)
+        self.slices = []        # List of parts (slices) of the cycle
+        self.triangles = []     # List of triangles, the final result
 
         try:
             boundary, holes, spurs = GraphCycle.cleanCycle(segList)
@@ -164,6 +168,54 @@ class GraphCycle():
             holePolys.append(holePoly)
 
         return holePolys
+
+    @staticmethod
+    def vertsToGeosPoly(verts):
+        geosF = GeometryFactory()
+        # verts is axpected as a list of vertices of a polygon without end point
+        coords = [ geosF.createCoordinate(v) for v in verts+[verts[0]] ]
+        return geosF.createPolygon( geosF.createLinearRing(coords) )
+
+    @staticmethod
+    def sliceLargeCycles(cycle,count=0):
+        geosF = GeometryFactory()
+        def geosBox(xmin, ymin, xmax, ymax, ccw=True):
+            if ccw:
+                verts = [(xmin,ymin),(xmax,ymin),(xmax,ymax),(xmin,ymax)]
+            else:
+                verts = [(xmin,ymin),(xmin,ymax),(xmax,ymax),(xmax,ymin)]
+            return GraphCycle.vertsToGeosPoly(verts)
+ 
+        b = cycle.envelope
+        if max(b.width, b.height) <= MaxCycleSize or count >= 100:
+            # polygon is small or maximum recursions reached
+            return [cycle]
+        
+        if b.height >= b.width:
+            # split left to right
+            a = geosBox(b.minx, b.miny, b.maxx, b.miny+b.height/2)
+            b = geosBox(b.minx, b.miny+b.height/2, b.maxx, b.maxy)
+        else:
+            # split top to bottom
+            a = geosBox(b.minx, b.miny, b.minx+b.width/2, b.maxy)
+            b = geosBox(b.minx+b.width/2, b.miny, b.maxx, b.maxy)
+        slices = []
+        for d in (a, b,):
+            c = cycle.intersection(d)
+            if c.geom_type in ('Polygon', 'MultiPolygon'):
+                slices.extend( GraphCycle.sliceLargeCycles(c,count+1) )
+
+        if count > 0:
+            return slices
+        # convert multipart into singlepart
+        finalSlices = []
+        for cycle in slices:
+            if cycle.geom_type == 'MultiPolygon':
+                finalSlices.extend(cycle)
+            else:
+                finalSlices.append(cycle)
+        return finalSlices
+        
 
 def plotPoly(polygon,vertsOrder,color='k',width=1.,order=100):
     count = 0

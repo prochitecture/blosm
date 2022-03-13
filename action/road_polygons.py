@@ -372,7 +372,7 @@ class RoadPolygons:
                     continue
 
 
-                # The adjacency list <agj> gets now parsed for polygons. Take a starting vertex <firstVert>
+                # The adjacency list <adj> gets now parsed for polygons. Take a starting vertex <firstVert>
                 # and follow the segments in the list until this vertex is reached again and create a polygon
                 # from its vertices.
                 while adj:
@@ -466,57 +466,60 @@ class RoadPolygons:
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'polyline subtraction')
             # print('%d/%d polyline subtraction started'%(polyNr+1,len(self.graphCycles)))
-            cyclePoly = graphCycle.cyclePoly
+            newSlices = []
+            for cycleSlice in GraphCycle.sliceLargeCycles(graphCycle.cyclePoly):
 
-            # Construct a circumscribed circle around the polygon vertices
-            # used as search range in KD-tree of polyline objects.
-            cycleVerts = [Vector((v.x,v.y)) for v in cyclePoly.exterior.coords]
-            center, radius = circumCircle(cycleVerts)
+                # Construct a circumscribed circle around the polygon vertices
+                # used as search range in KD-tree of polyline objects.
+                cycleVerts = [Vector((v.x,v.y)) for v in cycleSlice.exterior.coords]
+                center, radius = circumCircle(cycleVerts)
 
-            # Query the KD-tree for indices of polyline objects that are at least
-            # partly within the search range.
-            queryCycleIndices = set(
-                self.makeKdQuery(center, radius)
-            )
+                # Query the KD-tree for indices of polyline objects that are at least
+                # partly within the search range.
+                queryCycleIndices = set(
+                    self.makeKdQuery(center, radius)
+                )
 
-            # if polyline objects found, subtract them from the cycle polygon <cyclePoly>
-            if queryCycleIndices:
-                # Get the polyline objects in <objPolys>.
-                objPolys = [self.geosPolyList[indx] for indx in queryCycleIndices]
+                # if polyline objects found, subtract them from the cycle polygon <cyclePoly>
+                subSlices = [cycleSlice]
+                if queryCycleIndices:
+                    # Get the polyline objects in <objPolys>.
+                    objPolys = [self.geosPolyList[indx] for indx in queryCycleIndices]
 
-                # sort by size to subtract largest objects first
-                objPolys.sort(key=lambda x:x.area,reverse=True)
+                    # sort by size to subtract largest objects first
+                    objPolys.sort(key=lambda x:x.area,reverse=True)
 
-                graphCycle.subPolys.append(cyclePoly)
-                for i, objPoly in enumerate(objPolys):
-                    subPolys = graphCycle.subPolys
-                    graphCycle.subPolys = []
-                    for subPoly in subPolys:
-                        if not subPoly.area:
-                            break
-                        try:
-                            subPoly = subPoly.difference(objPoly)
-                        except (TopologyException,ValueError) as e:
-                            import traceback
-                            traceback.print_exception(type(e), e, e.__traceback__)
-                            print('For cyclePoly Nr.: ', polyNr)
-                            # plt.subplot(1,2,1)
-                            # plotGeosWithHoles(subPoly,True)
-                            # plt.gca().axis('equal')
-                            # plt.subplot(1,2,2)
-                            # plotGeosWithHoles(subPoly,False)
-                            # plotGeosWithHoles(objPoly,True,'g',2)
-                            # plt.title('exception')
-                            # plotEnd()
+                    for i, objPoly in enumerate(objPolys):
+                        subPolys = subSlices
+                        subSlices = []
+                        for subPoly in subPolys:
+                            if not subPoly.area:
+                                break
+                            try:
+                                subPoly = subPoly.difference(objPoly)
+                            except (TopologyException,ValueError) as e:
+                                import traceback
+                                traceback.print_exception(type(e), e, e.__traceback__)
+                                print('For cyclePoly Nr.: ', polyNr)
+                                # plt.subplot(1,2,1)
+                                # plotGeosWithHoles(subPoly,True)
+                                # plt.gca().axis('equal')
+                                # plt.subplot(1,2,2)
+                                # plotGeosWithHoles(subPoly,False)
+                                # plotGeosWithHoles(objPoly,True,'g',2)
+                                # plt.title('exception')
+                                # plotEnd()
 
-                        if subPoly.geom_type == 'Polygon':
-                            graphCycle.subPolys.append(subPoly)
-                        else: # Multipolygon
-                            for geom in subPoly.geoms:
-                                graphCycle.subPolys.append(geom)
-            else:
-                graphCycle.subPolys.append(cyclePoly)
+                            if subPoly.geom_type == 'Polygon':
+                                subSlices.append(subPoly)
+                            else: # Multipolygon
+                                for geom in subPoly.geoms:
+                                    subSlices.append(geom)
+                else:
+                    subSlices.append(cycleSlice)
 
+                newSlices.extend(subSlices)
+            graphCycle.slices = newSlices
         # triangulation = PolygonTriangulation()
         # from patchify import plotGeosPatch
         # print(' ')
@@ -530,7 +533,7 @@ class RoadPolygons:
         triangulation = PolygonTriangulation()
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'triangulation')
-            for poly in graphCycle.subPolys:
+            for poly in graphCycle.slices:
                 polyVerts, holeVerts = cleaningForTriangulation(poly)
                 try:
                     triangles = triangulation.triangulate(polyVerts,holeVerts)
