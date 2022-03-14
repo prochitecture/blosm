@@ -202,8 +202,11 @@ class GraphCycle():
         slices = []
         for d in (a, b,):
             c = cycle.intersection(d)
-            if c.geom_type in ('Polygon', 'MultiPolygon'):
+            if c.geom_type == 'Polygon':
                 slices.extend( GraphCycle.sliceLargeCycles(c,count+1) )
+            else:
+                for geom in c.geoms:
+                    slices.extend( GraphCycle.sliceLargeCycles(geom,count+1) )
 
         if count > 0:
             return slices

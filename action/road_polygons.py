@@ -468,7 +468,7 @@ class RoadPolygons:
             # print('%d/%d polyline subtraction started'%(polyNr+1,len(self.graphCycles)))
             newSlices = []
             for cycleSlice in GraphCycle.sliceLargeCycles(graphCycle.cyclePoly):
-
+ 
                 # Construct a circumscribed circle around the polygon vertices
                 # used as search range in KD-tree of polyline objects.
                 cycleVerts = [Vector((v.x,v.y)) for v in cycleSlice.exterior.coords]
@@ -515,8 +515,6 @@ class RoadPolygons:
                             else: # Multipolygon
                                 for geom in subPoly.geoms:
                                     subSlices.append(geom)
-                else:
-                    subSlices.append(cycleSlice)
 
                 newSlices.extend(subSlices)
             graphCycle.slices = newSlices
@@ -524,9 +522,8 @@ class RoadPolygons:
         # from patchify import plotGeosPatch
         # print(' ')
         # for polyNr,graphCycle in enumerate(self.graphCycles):
-        #     progress(polyNr+1,len(self.graphCycles),'plotting polys')
-        #     for polyNr,poly in enumerate(graphCycle.subPolys):
-        #         plotGeosPatch(poly,'r',1,0.5,500)
+        #     for polyNr,poly in enumerate(graphCycle.slices):
+        #         plotGeosPatch(poly,'r','k',1,0.5,500)
         # return
 
         print(' ')
@@ -673,8 +670,8 @@ def plotPolyFill(poly):
 def plotWaySeg(wayseg,color='k',width=1.,order=100):
     for v1,v2 in zip(wayseg.path[:-1],wayseg.path[1:]):
         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
-        plt.plot(v1[0],v1[1],'k.')
-        plt.plot(v2[0],v2[1],'k.')
+        # plt.plot(v1[0],v1[1],'k.')
+        # plt.plot(v2[0],v2[1],'k.')
         x = (v1[0]+v2[0])/2
         y = (v1[1]+v2[1])/2
         # plt.text(x,y,str(wayseg.ID),fontsize=12)
@@ -713,12 +710,15 @@ def plotFillMutliPolyList(polyList,colorCycler):
 #             tuple(p[1] for p in hole),
 #         ))
 #         polyList.append(hole_np)
-#     patch = patchify(polyList,color,2,alpha,zorder)
+#     patch = patchify(polyList,color,color,2,alpha,zorder)
 #     plt.gca().add_patch(patch)
 
 
 def plotNetwork(network):
     for count,seg in enumerate(network.iterAllSegments()):
+        plt.plot(seg.s[0],seg.s[1],'k.')
+        plt.plot(seg.t[0],seg.t[1],'k.')
+
         plotWaySeg(seg,'k',0.5)
 
 def plotCycle(cycle):
