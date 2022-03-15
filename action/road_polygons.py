@@ -413,8 +413,18 @@ class RoadPolygons:
                 nH = int(np.round(bbox.height/DetectionGridWidth))
                 s = DetectionGridWidth
                 grid = [(bbox.minx + (s/2) + (x * s), bbox.miny + (s/2) + (y * s)) for x in range(nW) for y in range(nH)]
-                geosGrid = [self.geosF.createPoint(self.geosF.createCoordinate(p)) for p in grid]
-                thisPoly = [(p.coord.x,p.coord.y) for p in geosGrid if polygon.contains(p)]
+                polyV = [(v.x,v.y) for v in polygon.exterior.coords]
+                
+                # Point in polygon test
+                thisPoly = []
+                for p in grid:
+                    odd = False
+                    for v1,v2 in zip(polyV,polyV[1:]):
+                        if ( ( (v1[1] > p[1]) != (v2[1] > p[1]) ) and \
+                            (p[0] < ( (v2[0] - v1[0]) * (p[1] - v1[1]) / (v2[1] - v1[1]) ) + v1[0]) ):
+                            odd = not odd
+                    if odd:
+                        thisPoly.append(p)
                 detectionPoints.extend(thisPoly)
                 self.vertIndexToPolyIndex.extend( [polyIndex]*len(thisPoly) )
 
