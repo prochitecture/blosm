@@ -2,32 +2,25 @@ from mathutils import Vector
 from functools import cmp_to_key
 from math import atan2, pi
 
-from lib.pygeos.geom import GeometryFactory
-from lib.pygeos.shared import CAP_STYLE
-
 from defs.way import allRoadwayCategoriesRank
 
 PI2 = 2.*pi
 
-class NetSegment():
+class NetSection():
     ID = 0  # just used during debugging
 
     def __init__(self, *args):
-        self.ID = NetSegment.ID # just used during debugging
-        NetSegment.ID += 1      # just used during debugging
+        self.ID = NetSection.ID # just used during debugging
+        NetSection.ID += 1      # just used during debugging
         if len(args) > 1:
             self.initFromDetails(*args)
         else:
             self.initFromOther(*args)
-        self.bisects = None     # computed on demand
-        self.buffer = None      # computed on demand
-        self.geosF = GeometryFactory()
 
-    def initFromDetails(self, source, target, category, length=None, width = 0., path=None):
+    def initFromDetails(self, source, target, category, length=None, path=None):
         self.s = Vector(source).freeze()    # source node
         self.t = Vector(target).freeze()    # target node
         self.category = category
-        self.width = width
         self.geomLength = (self.t-self.s).length
         if length:
             self.length = length
@@ -45,7 +38,6 @@ class NetSegment():
         self.category = other.category
         self.geomLength = other.geomLength
         self.length = other.length
-        self.width = other.width
         self.path = other.path        # includes source and target
         self.firstV = other.firstV
 
@@ -65,18 +57,9 @@ class NetSegment():
         for i in range(len(path)-1):
             yield path[i], path[i+1]
 
-    def getBuffer(self):
-        if self.buffer:
-            return self.getBuffer
-        else:
-            geosCoords = [self.geosF.createCoordinate(v) for v in self.path]
-            geosString = self.geosF.createLineString(geosCoords)
-            self.buffer = geosString.buffer(self.width/2.,resolution=3,cap_style=CAP_STYLE.square)
-            return self.buffer
-
     def __invert__(self):
         # create segment with the reversed direction
-        return self.__class__(self.t, self.s, self.category, self.length, self.width, self.path[::-1])
+        return self.__class__(self.t, self.s, self.category, self.length, self.path[::-1])
     def __eq__(self, other):
         # comparison of segments (no duplicates allowed)
         return self.category == other.category and self.path == other.path
@@ -231,7 +214,7 @@ class WayNetwork(dict):
         segmentSet = set(segment for segment in self.iterAllSegments())
 
         cycleSegs = []
-        holeSegs = []
+        islandSegs = []
         solitarySegs = []
         while (len(segmentSet) > 0):
             # start with a first segment
@@ -251,7 +234,7 @@ class WayNetwork(dict):
                     # Exception: the outer contour of the scene border
                     elif area > 0.:
                         if not all(s.category == 'scene_border' for s in segs):
-                            holeSegs.append(segs)
+                            islandSegs.append(segs)
                             # plotSimpleCycle(segs,'r')
                     # These are solitary spurs or dead-end ways
                     else:
@@ -264,7 +247,7 @@ class WayNetwork(dict):
                         break
                     segs.append(nextSeg)
                     segmentSet -= set([nextSeg])
-        return cycleSegs, holeSegs, solitarySegs
+        return cycleSegs, islandSegs, solitarySegs
 
     
 # ------------------------------------------------------------------

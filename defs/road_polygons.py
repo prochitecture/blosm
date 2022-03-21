@@ -18,6 +18,6 @@ SharedVertDist = 0.001  # 1 mm
 
 # Large graph-cycles are subdivided, if their bonding box exeeds the size of
 # <MaxCycleSize>. The subdivision is made along the smaller bounding box dimension,
-# as long as all slices are smaller than <MaxCycleSize>.
+# as long as all tiles are smaller than <MaxCycleSize>.
 MaxCycleSize = 100
 

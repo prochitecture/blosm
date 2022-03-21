@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 
-from way.way_network import WayNetwork, NetSegment
+from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
 from way.way_graph_cycle import GraphCycle
 
@@ -29,6 +29,7 @@ def _iterEdges(poly):
 class RoadPolygons:
 
     def __init__(self):
+        self.networkGraph = None
         self.sectionNetwork = None
         self.geosF = GeometryFactory()
         self.intersectingSegments = defaultdict(list)
@@ -69,46 +70,6 @@ class RoadPolygons:
         intersector = SweepIntersector()
         self.intersectingSegments = intersector.findIntersections(cleanedSegs)
 
-    # define way-widths from way tags. This part should later be replaced in the generation
-    # of the way-segments by the way manager.
-    def temporaryWayWidth(self,tags):
-        wayWidths = {
-            "motorway": 4.,
-            "motorway_link": 3.,
-            "trunk": 3.,
-            "trunk_link": 3.,
-            "primary": 3.,
-            "primary_link": 3.,
-            "secondary": 2.5,
-            "secondary_link": 2.5,
-            "tertiary": 2.5,
-            "tertiary_link": 2.5,
-            "unclassified": 2.,
-            "residential": 2.5,
-            "living_street": 3.,
-            "service": 2.,
-            "pedestrian": 1.5,
-            "track": 1.,
-            "escape": 2.,
-            "raceway": 2.,
-            "other": 1.,
-            # "road", # other
-            "steps": 2.,
-            "footway": 1.5,
-            "path": 1.,
-            "cycleway": 1.5,
-            "bridleway": 1.5           
-        }
-
-        if 'highway' in tags:
-            if tags['highway'] in wayWidths:
-                width = wayWidths[tags['highway']]
-                if 'lanes' in tags:
-                    width *= int(tags['lanes'])
-                return width
-        else:
-            return 1.   # used as default
-
     # Creates the network graph <self.sectionNetwork> for way-sctions (ways between crossings)
     def createWaySectionNetwork(self):
         # get border polygon (ounter-clockwise) of scene frame
@@ -126,7 +87,7 @@ class RoadPolygons:
         )
 
          # create full way network
-        wayManager.networkGraph = WayNetwork()
+        wayManager.networkGraph = self.networkGraph = WayNetwork()
 
         # some way tags to exclude, used also in findSelfIntersections(),
         # should be moved to defs.
@@ -134,10 +95,6 @@ class RoadPolygons:
             # Exclude ways with unwanted tags
             if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
                 continue
-
-            # Get the width of the way segment. Later this should be delivered from the
-            # way-segement and be different for every category.
-            width = self.temporaryWayWidth(way.element.tags)
 
             for waySegment in way.segments:
                 # Check for segments splitted by self-intersections
@@ -154,12 +111,12 @@ class RoadPolygons:
                     v1, v2 = Vector(segment[0]),Vector(segment[1])
                     accepted, v1, v2 = clipper.clip(v1,v2)
                     if accepted:
-                        netSeg = NetSegment(v1,v2,way.category,(v2-v1).length, width)
+                        netSeg = NetSection(v1,v2,way.category,(v2-v1).length)
                         wayManager.networkGraph.addSegment(netSeg,False)
 
         borderPolygon = clipper.getPolygon()
         for v1,v2 in zip(borderPolygon[:-1],borderPolygon[1:]):
-            netSeg = NetSegment(v1,v2,'scene_border',(v2-v1).length, 0.) # has no width
+            netSeg = NetSection(v1,v2,'scene_border',(v2-v1).length) 
             wayManager.networkGraph.addSegment(netSeg)
 
         # create way-section network
@@ -448,24 +405,34 @@ class RoadPolygons:
 
     # Creates polygons from graph cycles of the section network 
     def createCyclePolygons(self):
-        cycleSegs, holeSegs, _ = self.sectionNetwork.getCycles()
+        cycleSegs, islandSegs, solitaireSegs = self.sectionNetwork.getCycles()
         self.graphCycles = []
         for segList in cycleSegs:
             self.graphCycles.append( GraphCycle(segList) )
-        holePolys = []
-        for segList in holeSegs:
-            holePolys.extend( GraphCycle.createHoleCycles(segList) )
+        islandPolys = []
+        islandSpurs = []
+        islandIndxs = []
+        islandIndx = 0
+        for sectNr,segList in enumerate(islandSegs):
+            polys, spurs = GraphCycle.createHoleCycles(segList)
+            for _ in polys:
+                islandIndxs.append(sectNr)
+                islandSpurs.append(spurs)
+                islandIndx += 1
+            islandPolys.extend( polys )
 
-        # Hole graph-cycles are detected because they are in clockwise order.
+        # Island graph-cycles are detected because they are in clockwise order.
         # They become holes in their enclosing polygons. This computation is not
-        # very effective (O(n*m), where n is the nmber of graph-cycles and m is 
-        # the number of hole graph cycles), but they are rare, so m is small.
-        for holePoly in holePolys:
-            enclosingPolys = [cycle for cycle in self.graphCycles if cycle.cyclePoly.relate(holePoly,'T**FF*FF*')]
+        # very effective (O(n*m), where n is the number of graph-cycles and m is 
+        # the number of island  graph cycles), but they are rare, so m is small.
+        for islandIndx, islandPoly in zip(islandIndxs,islandPolys):
+            enclosingPolys = [cycle for cycle in self.graphCycles if cycle.cyclePoly.relate(islandPoly,'T**FF*FF*')]
             if enclosingPolys:
                 smallestEnclosingPoly = min(enclosingPolys,key=lambda x:x.cyclePoly.area)
+                smallestEnclosingPoly.islandSegs.update(islandSegs[islandIndx])
+                smallestEnclosingPoly.spurs.extend(islandSpurs[islandIndx])
                 try:
-                    smallestEnclosingPoly.cyclePoly = smallestEnclosingPoly.cyclePoly.difference(holePoly)
+                    smallestEnclosingPoly.cyclePoly = smallestEnclosingPoly.cyclePoly.difference(islandPoly)
                 except (TopologyException,ValueError) as e:
                     import traceback
                     traceback.print_exception(type(e), e, e.__traceback__)
@@ -527,20 +494,25 @@ class RoadPolygons:
                                     subSlices.append(geom)
 
                 newSlices.extend(subSlices)
-            graphCycle.slices = newSlices
-        # triangulation = PolygonTriangulation()
+            graphCycle.tiles = newSlices
+
         # from patchify import plotGeosPatch
-        # print(' ')
         # for polyNr,graphCycle in enumerate(self.graphCycles):
-        #     for polyNr,poly in enumerate(graphCycle.slices):
-        #         plotGeosPatch(poly,'r','k',1,0.5,500)
-        # return
+        #     fig = plt.figure()
+        #     ax = plt.Axes(fig, [0., 0., 1., 1.])
+        #     ax.set_axis_off()
+        #     fig.add_axes(ax)
+        #     for cycleSlice in graphCycle.tiles:
+        #         plotGeosPatch(cycleSlice,'g','b',2,0.3,500)
+        #     plotEnd()
+
+
 
         print(' ')
         triangulation = PolygonTriangulation()
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'triangulation')
-            for poly in graphCycle.slices:
+            for poly in graphCycle.tiles:
                 polyVerts, holeVerts = cleaningForTriangulation(poly)
                 try:
                     triangles = triangulation.triangulate(polyVerts,holeVerts)
@@ -562,7 +534,6 @@ class RoadPolygons:
         for polyNr,graphCycle in enumerate(self.graphCycles):
             progress(polyNr+1,len(self.graphCycles),'plotting triangles')
             for triangle in graphCycle.triangles:
-                # plotPolyFill(triangle)
                 plotPoly(triangle,False,'r',0.5)
 
         print('\nplt.show() called  -->  Result')

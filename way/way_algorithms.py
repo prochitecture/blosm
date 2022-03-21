@@ -2,7 +2,7 @@ from collections import deque
 import heapq
 from itertools import combinations
 from scipy.spatial import cKDTree 
-from way.way_network import WayNetwork, NetSegment
+from way.way_network import WayNetwork, NetSection
 import matplotlib.pyplot as plt
 
 class PriorityQueue:
@@ -65,7 +65,7 @@ def createSectionNetwork(network):
 
                 if segmentsToMerge:
                     forbiddenStarts.append( (nextSegment.t, nextSegment.s))
-                    mergedSegment = NetSegment(segmentsToMerge[0])
+                    mergedSegment = NetSection(segmentsToMerge[0])
                     for seg in segmentsToMerge[1:]:
                         mergedSegment.join(seg)
                     sectionNetwork.addSegment(mergedSegment,False)

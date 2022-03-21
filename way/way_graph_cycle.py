@@ -14,10 +14,11 @@ class GraphCycle():
         self.id = GraphCycle.ID 
         GraphCycle.ID += 1
 
-        self.segList = segList  # List of network segments (class NetSegment)
+        self.segList = segList  # List of network segments (class NetSection)
+        self.islandSegs = set() # List of network segments from islands (class NetSection)
         self.cyclePoly = None   # Cleaned cycle with its holes
         self.spurs = None       # List of removed coincident segments (spurs)
-        self.slices = []        # List of parts (slices) of the cycle
+        self.tiles = []         # List of parts (tiles) of the cycle
         self.triangles = []     # List of triangles, the final result
 
         try:
@@ -167,7 +168,7 @@ class GraphCycle():
             holePoly = geosF.createPolygon(geosF.createLinearRing(coords))
             holePolys.append(holePoly)
 
-        return holePolys
+        return holePolys, spurs
 
     @staticmethod
     def vertsToGeosPoly(verts):
@@ -212,11 +213,11 @@ class GraphCycle():
             return slices
         # convert multipart into singlepart
         finalSlices = []
-        for cycle in slices:
+        for slic in slices:
             if cycle.geom_type == 'MultiPolygon':
-                finalSlices.extend(cycle)
+                finalSlices.extend(slic)
             else:
-                finalSlices.append(cycle)
+                finalSlices.append(slic)
         return finalSlices
         
 

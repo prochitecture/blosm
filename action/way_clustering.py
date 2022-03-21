@@ -1,5 +1,5 @@
 from collections import deque
-from way.way_network import WayNetwork, NetSegment
+from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork, findWayJunctionsFor
 from defs.way import allRoadwayCategories, mainRoads, smallRoads
 from lib.CompGeom.algorithms import SCClipper
