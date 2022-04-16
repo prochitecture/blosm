@@ -11,6 +11,7 @@ from action.feature_detection import FeatureDetection
 from action.curved_features import CurvedFeatures
 from action.straight_angles import StraightAngles
 from action.road_polygons import RoadPolygons
+from action.road_intersections import RoadIntersections
 
 #from manager.logging import Logger
 
@@ -38,6 +39,7 @@ def setup(app, osm):
     app.argParserExtra.add_argument("--simplifyPolygons", action='store_true', help="Simplify polygons with the detected features", default=False)
     app.argParserExtra.add_argument("--restoreFeatures", action='store_true', help="Restore simplified features", default=False)
     app.argParserExtra.add_argument("--roadPolygons", action='store_true', help="Create polygons surrounding roads", default=False)
+    app.argParserExtra.add_argument("--roadIntersections", action='store_true', help="Create intersection areas", default=False)
     
     # parse the newly added command line arguments
     app.parseArgs()
@@ -54,10 +56,11 @@ def setup(app, osm):
     restoreFeatures = getattr(app, "restoreFeatures", False)
     
     roadPolygons = getattr(app, "roadPolygons", False) and app.highways
+    roadIntersections = getattr(app, "roadIntersections", False) and app.highways
     
     # managers
     
-    buildings = wayManager = roadPolygonsManager = None
+    buildings = wayManager = roadPolygonsManager = roadIntersectionsManager = None
     
     #linestring = Linestring(osm)
     #polygon = Polygon(osm)
@@ -113,7 +116,7 @@ def setup(app, osm):
         
         wayManager = WayManager(osm, app)
         
-        if roadPolygons:
+        if roadPolygons or roadIntersections:
             wayManager.addRenderer(RoadPolygonsRenderer())
             # buildings.addAction(CurvedFeatures())
             # buildings.addAction(StraightAngles())
@@ -230,4 +233,31 @@ def setup(app, osm):
             lambda tags, e: "barrier" in tags,
             None,
             roadPolygonsManager
+        )
+
+    if roadIntersections:
+        roadIntersectionsManager = RoadPolygonsManager(osm, app)
+        roadIntersectionsManager.addAction(RoadIntersections())
+        
+        # add conditions for the polylines need to create road polygons
+        #if not app.buildings:
+        #    osm.addCondition(
+        #        lambda tags, e: "building" in tags,
+        #        None, 
+        #        roadPolygonsManager
+        #    )   
+        osm.addCondition(
+            lambda tags, e: "landuse" in tags and not tags.get("landuse") in ("residential", "retail"),
+            None,
+            roadIntersectionsManager
+        )
+        osm.addCondition(
+            lambda tags, e: "natural" in tags,
+            None,
+            roadIntersectionsManager
+        )
+        osm.addCondition(
+            lambda tags, e: "barrier" in tags,
+            None,
+            roadIntersectionsManager
         )
