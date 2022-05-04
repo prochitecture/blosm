@@ -10,17 +10,19 @@ class NetSection():
     ID = 0  # just used during debugging
 
     def __init__(self, *args):
-        self.ID = NetSection.ID # just used during debugging
-        NetSection.ID += 1      # just used during debugging
+        self.ID = NetSection.ID 
+        self.sectionId = self.ID
+        NetSection.ID += 1      
         if len(args) > 1:
             self.initFromDetails(*args)
         else:
             self.initFromOther(*args)
 
-    def initFromDetails(self, source, target, category, length=None, path=None):
+    def initFromDetails(self, source, target, category, tags, length=None, path=None):
         self.s = Vector(source).freeze()    # source node
         self.t = Vector(target).freeze()    # target node
         self.category = category
+        self.tags = tags
         self.geomLength = (self.t-self.s).length
         if length:
             self.length = length
@@ -31,15 +33,21 @@ class NetSection():
         else:
             self.path = [self.s,self.t]
         self.firstV = self.path[1]-self.path[0]  # vector of first way-segment in path
+        self.oneWay = 0
+        if self.tags and 'oneway' in self.tags:
+            if self.tags['oneway'] == 'true':
+                self.oneWay = 1
 
     def initFromOther(self, other):
         self.s = other.s    # source node
         self.t = other.t    # target node
         self.category = other.category
+        self.tags = other.tags
         self.geomLength = other.geomLength
         self.length = other.length
         self.path = other.path        # includes source and target
         self.firstV = other.firstV
+        self.oneWay = other.oneWay
 
     def join(self, segment):
         assert self.category == segment.category, "segment to join must have same category"
@@ -59,7 +67,10 @@ class NetSection():
 
     def __invert__(self):
         # create segment with the reversed direction
-        return self.__class__(self.t, self.s, self.category, self.length, self.path[::-1])
+        rev = self.__class__(self.t, self.s, self.category, self.tags, self.length, self.path[::-1])
+        rev.oneWay = -self.oneWay
+        rev.sectionId = self.sectionId
+        return rev
     def __eq__(self, other):
         # comparison of segments (no duplicates allowed)
         return self.category == other.category and self.path == other.path
@@ -157,7 +168,7 @@ class WayNetwork(dict):
         # generator for all segments from the network
         for source in self.iterNodes():
             for target in self[source]:
-                if source > target: 
+                if source < target: 
                     for segment in self[source][target]:
                         yield segment
 
@@ -173,11 +184,13 @@ class WayNetwork(dict):
         # <segment>, until a crossing occurs, an end-point is reached or the 
         # way-category changes. The first return is <segment>.
         firstCategory = segment.category
+        firstTags = segment.tags
         current = segment
         yield current
         while len(self[current.t]) == 2: # order of node == 2 -> no crossing or end-point
             current = [self[current.t][source] for source in self[current.t] if source != current.s][0][0]
-            if current.category != firstCategory:
+            # if current.category != firstCategory:
+            if current.tags != firstTags:
                 break
             yield current
 
