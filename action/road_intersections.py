@@ -110,11 +110,13 @@ class RoadIntersections:
     def createIntersections(self):
         processed_nodes = []
         for nodeNr,node in enumerate(self.sectionNetwork):
+            # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
             # plt.close()
-            # if nodeNr < 37:
+            # if nodeNr == 227:
+            #     test=1
             #     continue
             if node not in processed_nodes:
-                processed_nodes.append(node)
+                # processed_nodes.append(node)
                 intersection = Intersection(node,self.sections)
                 nodes_to_merge = intersection.mergeNode(node,self.sections,self.sectionNetwork)
                 # while nodes_to_merge:

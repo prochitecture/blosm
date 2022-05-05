@@ -153,6 +153,15 @@ class Intersection():
                     if percentage1 < 1. and percentage2 < 1.:
                         break
                     # if not, reduce radius
+                    ax = plt.gca()
+                    ax.add_artist(plt.Circle(
+                        (isectP.x,isectP.y),
+                        10,
+                        alpha=0.1,
+                        color='g',
+                        zorder=100
+                    )) 
+
                     radius = 0.9 * radius
 
                 if origin:
@@ -180,7 +189,8 @@ class Intersection():
 
                     # plt.plot(isectP.x,isectP.y,'mo',markersize=6,zorder=700)
             except Exception as e:
-                print('Exception')
+                # plotEnd()
+                print('Exception 1 ')# + str(nodeNr))
 
         # for i,t in enumerate(trimLength):
         #     v1,v2 = self.outPolyLines[i]['line'].segment(int(t))
@@ -225,7 +235,8 @@ class Intersection():
             poly = geosF.createPolygon( geosF.createLinearRing(polygon+[polygon[0]]) )
             plotGeosPolyFill(poly,'#cf4b23',1,1.0,700)
         except Exception as e:
-            print('Exception')
+            # plotEnd()
+            print('Exception 2 ')# + str(nodeNr))
             
 
     # def findCollisions(self):

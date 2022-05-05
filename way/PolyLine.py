@@ -45,6 +45,9 @@ class PolyLine():
     def createOffsetPolyLine(self, distance, resolution=3, join_style=JOIN_STYLE.round, mitre_limit=5):
         geosF = GeometryFactory()
         offset = geosF.createLineString(self.coords).parallel_offset(distance, resolution, join_style, mitre_limit)
+        # GEOS Bug: https://trac.osgeo.org/geos/ticket/806#comment:4
+        # if distance < 0. and offset.geom_type != 'LineString':
+        #     offset = geosF.createLineString(self.coords).parallel_offset(distance+0.001, resolution, join_style, mitre_limit)
         if distance < 0.:
             # pyGEOS reverses order for negative offset
             return PolyLine([v for v in reversed(offset.coords)])
