@@ -4,7 +4,7 @@ from lib.pygeos.shared import Coordinate, CAP_STYLE, JOIN_STYLE
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 from way.PolyLine import PolyLine
 
-from math import sin, cos, atan2, pi, sqrt, fmod
+from math import sin, cos, atan2, pi, sqrt, floor
 from mathutils import Vector
 import numpy as np
 
@@ -65,7 +65,6 @@ class Section():
     def __init__(self,section):
         self.originalSection = section
         self.halfWidth = getRoadWidth(section.tags)/2.
-        geosF = GeometryFactory()
         self.polyline = PolyLine(section.path)
 
 # sort key for angles
@@ -94,7 +93,7 @@ class Intersection():
         nodes_to_merge = []
         for net_section in network.iterOutSegments(node):
             if net_section.category != 'scene_border':
-                if net_section.length < 10.:
+                if net_section.length < 1.:
                     pass
                 # #     # nodes_to_merge.append(net_section.t)
                 # #     # self.shortSectionIDs.append(net_section.sectionId)
@@ -107,7 +106,7 @@ class Intersection():
     def sortSections(self):
     # sort key for angles
         def sort_key(line):
-            vec = line['line'].coords[1]-line['line'].coords[0]
+            vec = line['line'].verts[1]-line['line'].verts[0]
             length = vec.length
             angle = atan2(vec.y,vec.x)
             if angle < 0:
@@ -117,107 +116,120 @@ class Intersection():
         self.outPolyLines = sorted(self.outPolyLines, key = sort_key)
 
     def findIntersectionPoly(self):
-        N = len(self.outPolyLines)
-        percLeft = [0.]*N
-        percRight = [0.]*N
+        # The outgoing polylines <self.outPolyLines> are expected to be sorted
+        # in counter-clockwise order.
+        N = len(self.outPolyLines)  # number of outgoing polylines
+        tIsect = [0.]*N
         allCircleVerts = [None]*N
-        leftLines = [None]*N
-        rightLines = [None]*N
-        for l1, l2, line1,line2 in zip(range(N),range(1,N+1),self.outPolyLines,self.outPolyLines[1:]+[self.outPolyLines[0]]):
-            try:
-                l2 = l2%N
-                leftLine = line1['line'].createOffsetPolyLine(line1['halfWidth'])
-                rightLine = line2['line'].createOffsetPolyLine(-line2['halfWidth'])
-                leftLines[l1] = leftLine
-                rightLines[l2] = rightLine
-                # plotPolyLine(leftLine,0.,'#00ff00')
-                # plotPolyLine(rightLine,0.,'#ff0000')
+        bordersL = [None]*N   # list of left borders
+        bordersR = [None]*N   # list of right borders
+        # plt.close()
+        for indx1, indx2, line1,line2 in zip(range(N),range(1,N+1),self.outPolyLines,self.outPolyLines[1:]+[self.outPolyLines[0]]):
+            # try:
+                indx2 %= N  # circular index for outgoing 
+                # line1['line'].plot('k')
+                # e = line1['line'].verts[-1]
+                # plt.text(e[0],e[1],str(indx1))
+                # line2['line'].plot('k')
+                # e = line2['line'].verts[-1]
+                # plt.text(e[0],e[1],str(indx2))
+                borderL = line1['line'].parallelOffset( line1['halfWidth'])
+                borderR = line2['line'].parallelOffset(-line2['halfWidth'])
+                bordersL[indx1] = borderL
+                bordersR[indx2] = borderR
 
-                # find intersection between left border of line 1 and right border of line 2
-                # segLength is the sum of the segment number and the percentage of this segment
-                isectP, segLength1, segLength2, unitV1, unitV2 = PolyLine.intersection(leftLine,rightLine)
-                if not isectP:
+                # borderL.plot('#00ff00')
+                # borderR.plot('#ff0000')
+
+                # find intersection between left border <borderL> of <line1> 
+                # and right border <borderR> of <line2>
+                # iP: intersection point
+                # <tL> and <tR> are the intersection parameters for left and right line.
+                # They consist of the sum of the index of the first vertex of the intersected
+                # segments and the percentage (0 ... 1) within this segment.
+                # uVL and uVR are the unit vectors of the intersected segments
+                isectParams = PolyLine.intersection(borderL,borderR)
+                if isectParams is None:
                     continue
-                # plt.plot(isectP.x,isectP.y,'mo',markersize=6)
+
+                iP,tL,tR,uVL,uVR = isectParams
+
+                # plt.plot(iP[0],iP[1],'mo',markersize=6)
 
                 # get first estimate of fillet between these segments
                 maxVel = 50.
                 radius = maxVel/9.81/0.7/2. #???
+
+                # Starting with this radius, we try to create a fillet within the intersected
+                # segments. If this is not possible, the radius is decreased.
+                lengthL = borderL.segmentLength(floor(tL))
+                lengthR = borderR.segmentLength(floor(tR))
                 while True:
-                    origin, tangentP1, tangentP2, legLength = filletCircle(isectP, unitV1, unitV2, radius)
+                    origin, tLegEndL, tLegEndR, legLength = filletCircle(iP, uVL, uVR, radius)
                     if origin is None:
                         break
                     # check whether the leg ends we are on the same segment as the intersection point
-                    percentage1 = fmod(segLength1,1) + legLength /leftLine.segmentLength(int(segLength1))
-                    percentage2 = fmod(segLength2,1) + legLength / rightLine.segmentLength(int(segLength2))
-                    if percentage1 < 1. and percentage2 < 1.:
+                    tLegL = tL%1. + legLength / lengthL
+                    tLegR = tR%1. + legLength / lengthR
+                    if tLegL < 1. and tLegR < 1.:
+                        # OK, fillet fits on these segments
                         break
-                    # if not, reduce radius
-                    ax = plt.gca()
-                    ax.add_artist(plt.Circle(
-                        (isectP.x,isectP.y),
-                        10,
-                        alpha=0.1,
-                        color='g',
-                        zorder=100
-                    )) 
 
+                    # if not, reduce radius
                     radius = 0.9 * radius
+                    # ax = plt.gca()
+                    # ax.add_artist(plt.Circle(
+                    #     (isectP.x,isectP.y),
+                    #     10,
+                    #     alpha=0.1,
+                    #     color='g',
+                    #     zorder=100
+                    # )) 
 
                 if origin:
-                    circleVerts = filletLine(origin, tangentP1, tangentP2, radius)
-                    percLeft[l1] = percentage1
-                    percRight[l2] = percentage2
-                    allCircleVerts[l1] = circleVerts
-                    for v1,v2 in zip(circleVerts[:-1],circleVerts[1:]):
-                        plt.plot([v1.x,v2.x],[v1.y,v2.y],'r')
-                    # if circleVerts:
-                    #     p = circleVerts[0]
-                    #     plt.text(p.x,p.y,' %f5.2'%(percentage1))
-                    #     p = circleVerts[-1]
-                    #     plt.text(p.x,p.y,' %f5.2'%(percentage2))
-                        # p,t = line2['line'].trimLength(circleVerts[-1],Coordinate(unitV2.y,-unitV2.x))
-                        # if t > trimLength[l2%N]:
-                        #     maxLine[l2%N] = 'right'
-                        # trimLength[l2%N] = max(trimLength[l2%N], t)
-                        # p,t = line1['line'].trimLength(circleVerts[0],Coordinate(unitV1.y,-unitV1.x))
-                        # if t > trimLength[l1]:
-                        #     maxLine[l1] = 'left'
-                        # trimLength[l1] = max(trimLength[l1], t)
-                else:
-                    continue
+                    circleVerts = filletLine(origin, tLegEndL, tLegEndR, radius)
+                    tLegL = tL + legLength / lengthL
+                    tLegR = tR + legLength / lengthR
+                    tIsect[indx1] = max(tIsect[indx1],tLegL)
+                    tIsect[indx2] = max(tIsect[indx2],tLegR)
+                    # tIsectR[indx2] = tLegR
+                    allCircleVerts[indx1] = circleVerts
+                    # for v1,v2 in zip(circleVerts[:-1],circleVerts[1:]):
+                    #     plt.plot([v1.x,v2.x],[v1.y,v2.y],'r')
 
-                    # plt.plot(isectP.x,isectP.y,'mo',markersize=6,zorder=700)
-            except Exception as e:
-                # plotEnd()
-                print('Exception 1 ')# + str(nodeNr))
-
-        # for i,t in enumerate(trimLength):
-        #     v1,v2 = self.outPolyLines[i]['line'].segment(int(t))
-        #     d = v2-v1
-        #     p = v1 + (v2-v1) * fmod(t,1)
-        #     plt.plot(p.x,p.y,'mo',markersize=6,zorder=700)
-        #     plt.text(p.x,p.y,str(i))
-
-        try:
+        # # try:
+        if True:
             polygon = []
-            for i in range(N):
-                if percLeft[i] > percRight[i]:
-                    p = rightLines[i].trimPoint(percLeft[i])
-                    # plt.text(p.x,p.y,' %f5.2'%(percLeft[i]))
-                    polygon.append(p)
-                else:
-                    p = leftLines[i].trimPoint(percRight[i])
-                    # plt.text(p.x,p.y,' %f5.2'%(percRight[i]))
-                    polygon.append(p)
+            for lineIndx in range(N):
+                t = tIsect[lineIndx]
+                polygon.append( bordersR[lineIndx].t2v(t) )
+                polygon.append( bordersL[lineIndx].t2v(t) )
+                # if tIsectL[lineIndx] >= tIsectR[lineIndx]:
+                #     polygon.append( bordersR[lineIndx].t2v(tIsectL[lineIndx]) )
+                # else:
+                #     polygon.append( bordersL[lineIndx].t2v(tIsectR[lineIndx]) )
+                # if tL[i] > tR[i]:
+                #     p = rightLines[i].t2v(tL[i])
+                #     # plt.text(p.x,p.y,' %f5.2'%(percLeft[i]))
+                #     polygon.append(p)
+                # else:
+                #     p = leftLines[i].t2v(tR[i])
+                #     # plt.text(p.x,p.y,' %f5.2'%(percRight[i]))
+                #     polygon.append(p)
                 # plt.text(p.x,p.y,str(i)+' x')
-                if allCircleVerts[i]:
-                    p = allCircleVerts[i][0]
+                if allCircleVerts[lineIndx]:
+                    p = allCircleVerts[lineIndx][0]
                     # plt.text(p.x,p.y,str(i))
-                if allCircleVerts[i] is not None:
-                    polygon.extend(allCircleVerts[i])
-                test=1
-            #     if maxLine[i] == 'left':
+                if allCircleVerts[lineIndx] is not None:
+                    polygon.extend(allCircleVerts[lineIndx])
+
+            x = [n[0] for n in polygon]
+            y = [n[1] for n in polygon]
+            plt.fill(x,y,'#cf4b23',alpha = 1.0,zorder = 900)
+
+
+        #     test=1
+        #     #     if maxLine[i] == 'left':
             #         polygon.extend(allCircleVerts[i])
             #         p = rightLine.trimPoint(trimLength[i])
             #         plt.plot(p.x,p.y,'co',markersize=6,zorder=700)
@@ -231,12 +243,13 @@ class Intersection():
             #         plt.plot(p.x,p.y,'co',markersize=6,zorder=700)
             #         polygon.append(p)
             #         polygon.extend(allCircleVerts[i])
-            geosF = GeometryFactory()
-            poly = geosF.createPolygon( geosF.createLinearRing(polygon+[polygon[0]]) )
-            plotGeosPolyFill(poly,'#cf4b23',1,1.0,700)
-        except Exception as e:
-            # plotEnd()
-            print('Exception 2 ')# + str(nodeNr))
+            # geosF = GeometryFactory()
+            # coords = [ geosF.createCoordinate(v) for v in polygon+[polygon[0]] ] 
+            # poly = geosF.createPolygon( geosF.createLinearRing(coords) )
+            # plotGeosPolyFill(poly,'#cf4b23',1,1.0,700)
+        # except Exception as e:
+        #     # plotEnd()
+        #     print('Exception 2 ')# + str(nodeNr))
             
 
     # def findCollisions(self):
@@ -299,7 +312,7 @@ def filletCircle(p, uv1, uv2, radius):
     tp1 = p + uv1 * length
     tp2 = p + uv2 * length
     # origin of circle
-    o = tp2 + Coordinate(uv2.y,-uv2.x) * radius
+    o = tp2 + Vector((uv2.y,-uv2.x)) * radius
     # plt.plot(tp1.x,tp1.y,'b.')
     # plt.plot(tp2.x,tp2.y,'r.')
     # plt.plot(o.x,o.y,'g.')
@@ -330,7 +343,7 @@ def filletLine(o, tp1, tp2, radius):
     pt = Coordinate()
     while acurr < atot:
         a = a1 + acurr
-        pt = o + Coordinate(radius * cos(a),radius * sin(a))
+        pt = o + Vector((radius * cos(a),radius * sin(a)))
         vertList.append(pt)
         acurr += ainc
 
