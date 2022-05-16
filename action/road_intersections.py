@@ -1,5 +1,4 @@
 from collections import defaultdict
-from cv2 import waitKey
 from mathutils import Vector
 import matplotlib.pyplot as plt
 from  action.plotUtilities import *
