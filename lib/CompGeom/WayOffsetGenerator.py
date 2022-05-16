@@ -150,7 +150,7 @@ class WayOffsetGenerator():
         cleaned = []
         lastValid = -1
         for i, (p1, p2) in enumerate(pairs(self.connected)):
-            if i > lastValid:
+            if i > lastValid and i<len(self.connected)-2:
                 cleaned.append(p1)
                 for j, (p3, p4) in enumerate(pairs(self.connected[i + 2:])):
                     isectRes = segmentIntersection(p1,p2,p3,p4)
@@ -170,27 +170,33 @@ class WayOffsetGenerator():
         self.offsetSegments()
         self.connectOffsetSegments()
         cleaned = self.cleanSelfIntersections()
-        # if len(cleaned) > 8:
+        # if len(cleaned) > 0:
+        #     plt.close()
         #     # for v1,v2 in zip(polyline.verts,polyline.verts[1:]):
         #     #     plt.plot([v1.x,v2.x],[v1.y,v2.y],'k')
         #     for i,(v1,v2) in enumerate(self.pline0):
         #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k')
-        #         plt.plot(v1[0],v1[1],'k.')
-        #         plt.plot(v2[0],v2[1],'k.')
-        #         plt.text(v1[0],v1[1],str(i))
+        #     #     plt.plot(v1[0],v1[1],'k.')
+        #     #     plt.plot(v2[0],v2[1],'k.')
+        #     #     plt.text(v1[0],v1[1],str(i))
         #     # for i,(v1,v2) in enumerate(self.offset):
         #     #     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'b')
         #     #     plt.text(v1[0],v1[1],str(i))
         #     # self.connected = []
         #     # self.connectOffsetSegments()
-        #     for v1,v2 in zip(self.connected,self.connected[1:]):
-        #         plt.plot([v1.x,v2.x],[v1.y,v2.y],'r')
+        #     for i,(v1,v2) in enumerate( zip(self.connected,self.connected[1:]) ):
+        #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k')
+        #         plt.plot(v1[0],v1[1],'k.')
+        #         plt.plot(v2[0],v2[1],'k.')
+        #         plt.text(v1[0],v1[1],str(i))
+        #     # for v1,v2 in zip(self.connected,self.connected[1:]):
+        #     #     plt.plot([v1.x,v2.x],[v1.y,v2.y],'r')
         #     for v1,v2 in zip(cleaned,cleaned[1:]):
         #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'g',linewidth = 5)
         #         plt.plot(v1[0],v1[1],'kx',markersize=8)
         #         plt.plot(v2[0],v2[1],'kx',markersize=8)
-        #     for v in cleaned:
-        #         print(v)
+        #     # for v in cleaned:
+        #     #     print(v)
         #     plt.title('Self-Intersection '+str(len(cleaned)))
         #     plt.gca().axis('equal')
         #     plt.show()

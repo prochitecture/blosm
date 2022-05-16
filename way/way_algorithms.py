@@ -58,7 +58,8 @@ def createSectionNetwork(network):
                 for nextSegment in network.iterAlongWay(outSegment):
                     if nextSegment.t == startNode:
                         # we are back to the start node => loop (remove completely)
-                        segmentsToMerge = []
+                        # segmentsToMerge = []
+                        segmentsToMerge.append(nextSegment)
                         break
                     else:
                         segmentsToMerge.append(nextSegment)

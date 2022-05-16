@@ -105,6 +105,7 @@ class RoadIntersections:
                 self.sections[net_section.sectionId] = section
                 line = section.polyline
                 plotPolyLine(line,section.halfWidth,'#1f85ba')
+        test=1
 
     def createIntersections(self):
         processed_nodes = []

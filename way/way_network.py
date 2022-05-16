@@ -168,7 +168,8 @@ class WayNetwork(dict):
         # generator for all segments from the network
         for source in self.iterNodes():
             for target in self[source]:
-                if source < target: 
+                # When source == target, we have a loop segment
+                if source <= target: 
                     for segment in self[source][target]:
                         yield segment
 
