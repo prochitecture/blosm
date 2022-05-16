@@ -74,6 +74,18 @@ def setup(app, osm):
     #    BaseNodeRenderer(app, path, filename, collection)
     #)
     
+    if app.highways or app.railways:
+        osm.addCondition(skip)
+        
+        wayManager = WayManager(osm, app)
+        
+        if roadPolygons or roadIntersections:
+            wayManager.addRenderer(RoadPolygonsRenderer())
+            # buildings.addAction(CurvedFeatures())
+            # buildings.addAction(StraightAngles())
+        else:
+            wayManager.addRenderer(WayVisibilityRenderer(showIDs=showIDs))
+    
     if app.buildings:
         buildings = BaseBuildingManager(osm, app, None, None)
         buildings.setRenderer(
@@ -110,18 +122,6 @@ def setup(app, osm):
         
         #if roadPolygonsManager:
         #    roadPolygonsManager.connectedManagers.append(buildings)
-    
-    if app.highways or app.railways:
-        osm.addCondition(skip)
-        
-        wayManager = WayManager(osm, app)
-        
-        if roadPolygons or roadIntersections:
-            wayManager.addRenderer(RoadPolygonsRenderer())
-            # buildings.addAction(CurvedFeatures())
-            # buildings.addAction(StraightAngles())
-        else:
-            wayManager.addRenderer(WayVisibilityRenderer(showIDs=showIDs))
     
     if app.highways:
         osm.addCondition(
