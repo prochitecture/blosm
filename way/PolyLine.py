@@ -1,11 +1,19 @@
 from itertools import product
-from lib.pygeos.shared import Coordinate, CAP_STYLE, JOIN_STYLE
-from lib.pygeos.geom import GeometryFactory
+from lib.pygeos.shared import Coordinate
 from lib.CompGeom.WayOffsetGenerator import WayOffsetGenerator
+from itertools import tee
 
-from math import floor, ceil, pi, asin, sin, tan
+from math import floor, ceil
 from mathutils import Vector
 import matplotlib.pyplot as plt
+
+# helper functions -----------------------------------------------
+def pairs(iterable):
+	# s -> (s0,s1), (s1,s2), (s2, s3), ...
+    p1, p2 = tee(iterable)
+    next(p2, None)
+    return zip(p1,p2)
+# ----------------------------------------------------------------
 
 class PolyLine():
     def __init__(self, vertList):
@@ -18,6 +26,12 @@ class PolyLine():
             self.verts = [Vector(v) for v in vertList]
         else:
             raise TypeError('PolyLine: Unexpected input type.')
+
+    def __len__(self):
+        return len(self.verts)
+
+    def clone(self):
+         return PolyLine([v for v in self.verts])
 
     def reversed(self):
         return PolyLine([v for v in reversed(self.verts)])
@@ -43,38 +57,88 @@ class PolyLine():
     def unitVectors(self):
         return [(v2-v1)/(v2-v1).length for v1, v2 in zip(self.verts[:-1],self.verts[1:])]
 
-    def t2v(self,t):
+    def projectOrthogonal(self,p,fwd):
+        s = slice(None,None,1) if fwd else slice(None,None,-1)
+        pNr = 0
+        for p1,p2 in pairs(self.verts[s]):
+            segV = p2-p1
+            t = (p-p1).dot(segV)/segV.dot(segV)
+            if 0. <= t < 1.:
+                p0 = p1 + t*segV
+                break
+            pNr += 1
+        t += pNr
+        return t if t<=len(self.verts) else None
+
+    def offsetPointAt(self,t,width):
+        if t == 0.:
+            v0 = self.verts[0]
+            v1 = self.verts[1]
+        else:
+            v0 = self.verts[floor(t)]
+            v1 = self.verts[ceil(t)]
+        p = v0 + (v1 - v0) * (t % 1)
+        d = v1-v0
+        u = d/d.length
+        pOffs = p + Vector((-u[1],u[0])) * width
+        return pOffs
+
+
+    def t2v(self,t,fwd):
         # computes the vertex given by the intersection parameter t, where t is
         # the sum of the index of the start vertex and the percentage
         # of its following segment.
-        v1 = self.verts[floor(t)]
-        v2 = self.verts[ceil(t)]
-        return v1 + (v2 - v1) * (t % 1)
+        s = slice(None,None,1) if fwd else slice(None,None,-1)
+        v0 = self.verts[s][floor(t)]
+        v1 = self.verts[s][ceil(t)]
+        return v0 + (v1 - v0) * (t % 1)
+
+    def trimS(self,t):
+        if t == 0.: return
+        n = ceil(t)
+        assert(n<len(self.verts))
+        p = self.t2v(t,True)
+        self.verts = [p] + self.verts[n:]
+
+    def slice(self,tS,tT):
+        N = len(self.verts)
+        if tS==0.:
+            pS = []
+            iS = -1
+        else:
+            iS = floor(tS)
+            v0,v1 = self.verts[iS], self.verts[iS+1]
+            pS = [v0 + (v1 - v0) * (tS % 1)]
+
+        if tT==0.:
+            pT = []
+            iT = N-1
+        else:
+            t = N-1-tT
+            iT = floor(t)
+            v0,v1 = self.verts[iT], self.verts[iT+1]
+            pT = [v0 + (v1 - v0) * (t % 1)]
+
+        inter = [v for v in self.verts[iS+1:iT+1]]
+        return PolyLine(pS+inter+pT)
+        
 
     def clone(self):
         return PolyLine(self.verts)
 
     def parallelOffset(self, distance):
-        geosF = GeometryFactory()
         offsetter = WayOffsetGenerator()
         offsetVerts = offsetter.parallel_offset(self.verts,distance)
         return PolyLine(offsetVerts)
 
-    def trimLength(self,p,nv):
-        segs = self.segments()
-        p3,p4 = p,p+nv
-        c = None
-        for i1 in range(len(segs)):
-            p1, p2 = segs[i1]
-            d1, d2 = p2-p1, p4-p3 
-            denom = d2.y*d1.x - d2.x*d1.y
-            if denom == 0.: continue # parallel
-            d5 = p1 - p3
-            ua = (d2.x*d5.y - d2.y*d5.x)/denom               
-            if ua < 0. or ua > 1.: continue # out of range
-            c = p1 + d1*ua
-            break
-        return c, i1+ua
+    def buffer(self,leftW,rightW):
+        offsetter = WayOffsetGenerator()
+        offsetL = offsetter.parallel_offset(self.verts,leftW)
+        offsetR = offsetter.parallel_offset(self.verts,-rightW)
+        offsetR.reverse()
+        offsetVerts = offsetL + offsetR
+        offsetPoly = PolyLine(offsetVerts)
+        return offsetPoly
 
     @staticmethod
     def intersectInfinite(p1,p2,p3,p4):

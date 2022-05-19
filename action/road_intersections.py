@@ -1,15 +1,14 @@
 from collections import defaultdict
 from mathutils import Vector
 import matplotlib.pyplot as plt
-from  action.plotUtilities import *
-from itertools import combinations, chain, product
 
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 from lib.CompGeom.algorithms import SCClipper
 
 from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
-from way.way_intersections import Section, Intersection
+from way.way_intersections import Intersection
+from way.way_section import WaySection
 
 from defs.road_polygons import ExcludedWayTags
 
@@ -18,7 +17,7 @@ class RoadIntersections:
     def __init__(self):
         self.networkGraph = None
         self.sectionNetwork = None
-        self.sections = dict()
+        self.waySections = dict()
         self.intersections = []
 
     def do(self, manager):
@@ -26,6 +25,7 @@ class RoadIntersections:
         self.createWaySectionNetwork()
         self.createSections()
         self.createIntersections()
+        self.plotSections()
         pass
 
     def findSelfIntersections(self, manager):
@@ -101,123 +101,49 @@ class RoadIntersections:
     def createSections(self):
         for net_section in self.sectionNetwork.iterAllSegments():
             if net_section.category != 'scene_border':
-                section = Section(net_section)
-                self.sections[net_section.sectionId] = section
-                line = section.polyline
-                plotPolyLine(line,section.halfWidth,'#1f85ba')
+                section = WaySection(net_section)
+                self.waySections[net_section.sectionId] = section
+                # line = section.polyline
+                # plotPolyLine(line,section.leftWidth,'#1f85ba')
         test=1
 
     def createIntersections(self):
         processed_nodes = []
         for nodeNr,node in enumerate(self.sectionNetwork):
+            # print(nodeNr)
             # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
             # plt.close()
-            # if nodeNr == 227:
+            # if nodeNr != 181:
             #     test=1
             #     continue
             if node not in processed_nodes:
                 # processed_nodes.append(node)
-                intersection = Intersection(node,self.sections)
-                nodes_to_merge = intersection.mergeNode(node,self.sections,self.sectionNetwork)
-                # while nodes_to_merge:
-                #     node = nodes_to_merge.pop()
-                #     if node not in processed_nodes:
-                #         processed_nodes.append(node)
-                #         nodes_to_merge.extend(intersection.mergeNode(node,self.sections,self.sectionNetwork))
+                intersection = Intersection(node, self.sectionNetwork, self.waySections)
 
-                if len(intersection.outPolyLines) > 2:
-                    intersection.sortSections()
-                    intersection.findIntersectionPoly()
-                    # intersection.findCollisions()
-
-                    # for line in intersection.outPolyLines:
-                    #     plotPolyLine(line['line'],line['halfWidth'],'#0000ff')
-                    #     plotPolyLine(line['line'],0.,'#0000ff')
-                    #     c = intersection.position
-                    #     plt.plot(c.x,c.y,'ko',markersize=2)
-                    # for id in intersection.shortSectionIDs:
-                    #     line = self.sections[id].polyline
-                    #     plotPolyLine(line,self.sections[id].halfWidth,'#00ff00')
+                if intersection.order > 2:
+                     polygon = intersection.findIntersectionPoly() 
+                     plotPolygon(polygon,False,'r',1.,True,0.3,100)
 
                     # plt.title(str(nodeNr))
                     # plotEnd()
 
+    def plotSections(self):
+        for nr,section in enumerate(self.waySections.values()):
+            totalT = section.trimS +section.trimT
+            if 0. <= totalT < len(section.polyline)-1:
+                # print(nr)
+                waySlice = section.polyline.slice(section.trimS,section.trimT)
+                waySegPoly = waySlice.buffer(section.leftWidth, section.rightWidth)
+                plotPolygon(waySegPoly,False,'b',1.,True,0.3,100)
+
         test=1
 
-                # width = 4.#getRoadWidth(section.tags)
-                # color = '#ff0000' if width == 4 * 2.6 else '#0000ff'
-                # geosCoords = [geosF.createCoordinate(v) for v in section.path]
-                # geosString = geosF.createLineString(geosCoords)
-                # buffer = geosString.buffer(width/2.,resolution=3,cap_style=CAP_STYLE.flat)
-                # plotGeosPolyFill(buffer,color,1,0.4,600)
-
-        # for node in self.sectionNetwork:
-        #     isect = Intersection(node)
-        #     isect.addSections([section for section in self.sectionNetwork.iterOutSegments(node) if section.category != 'scene_border'])
-        #     if len(isect.sections) < 3:
-        #         continue
-        #     # isect.boundaryCollisions()
-        #     isect.unionIntersections()
-
-        #     for sect in isect.sections:
-        #         section = sect.originalSection
-        #         width = sect.halfWidth
-        #         geosCoords = [geosF.createCoordinate(v) for v in section.path]
-        #         geosString = geosF.createLineString(geosCoords)
-        #         buffer = geosString.buffer(width,resolution=3,cap_style=CAP_STYLE.flat)
-        #         plotGeosPolyFill(buffer,'b',1,0.2,600)
-        #         plotGeomPoly(buffer,False,'b')
-        #         for v1,v2 in zip(section.path[:-1],section.path[1:]):
-        #             plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k')
-
-        #         for c in sect.collisions:
-        #             plt.plot(c.x,c.y,'rx',markersize=8)
-
-        #     plotEnd()
-
-        #     # if len(isect.ways) < 2:
-        #     #     continue
-
-        #     # isect.ways = sorted(isect.ways, key = sort_key)
-        #     # isect.centerLines = []
-        #     # isect.leftLines = []
-        #     # isect.rightLines = []
-        #     # isect.widths = []
-
-        #     # # find intersections
-        #     # geosF = GeometryFactory()
-        #     # plt.plot(node.x,node.y,'ro')
-        #     # for way in isect.ways:
-        #     #     width = getRoadWidth(way.tags)
-        #     #     centerLine = geosF.createLineString([geosF.createCoordinate(v) for v in way.path])
-        #     #     leftLine = centerLine.parallel_offset(width/2,3,JOIN_STYLE.round,5)
-        #     #     rightLine = centerLine.parallel_offset(-width/2,3,JOIN_STYLE.round,5)
-        #     #     isect.centerLines.append(centerLine)
-        #     #     isect.leftLines.append(leftLine)
-        #     #     isect.rightLines.append(rightLine)
-        #     #     isect.widths.append(width)
-        #     #     plotGeosString(centerLine,False,'k')
-        #     #     plotGeosString(leftLine,False,'b')
-        #     #     plotGeosString(rightLine,False,'r')
-        #     # # plotEnd()
-
-        #     # for leftLine,rightLine in zip(isect.leftLines,isect.rightLines[1:]+[isect.rightLines[0]]):
-        #     #     leftL = leftLine.coords
-        #     #     rightL = rightLine.coords
-        #     #     leftsegs = [((v1.x,v1.y),(v2.x,v2.y)) for v1,v2 in zip(leftL[:-1],leftL[1:])]
-        #     #     rightsegs = [((v1.x,v1.y),(v2.x,v2.y)) for v1,v2 in zip(rightL[:-1],rightL[1:])]
-        #     #     segs = leftsegs + rightsegs
-        #     # #     # plotGeom(leftLine,False,'b')
-        #     #     # plotGeom(rightLine,False,'r')
-        #     #     # plotEnd()
-        #     #     intersector = SweepIntersector()
-        #     #     intersectingSegments = intersector.findIntersections(segs)
-        #     #     # print(len(intersectingSegments))
-        #     #     for seg,isects in intersectingSegments.items():
-        #     #         for p in isects[1:-1]:
-        #     #             plt.plot(p[0],p[1],'rx',markersize=8)
-        #     #         break
-        #     # plotEnd()
-        #     # test=1
-
-
+def plotPolygon(poly,vertsOrder,color='k',width=1.,fill=True,alpha = 0.2,order=100):
+    x = [n[0] for n in poly] + [poly[0][0]]
+    y = [n[1] for n in poly] + [poly[0][1]]
+    if fill:
+        plt.fill(x[:-1],y[:-1],color=color,alpha=alpha,zorder = order)
+    plt.plot(x,y,color,linewidth=width,zorder=order)
+    if vertsOrder:
+        for i,(xx,yy) in enumerate(zip(x[:-1],y[:-1])):
+            plt.text(xx,yy,str(i))

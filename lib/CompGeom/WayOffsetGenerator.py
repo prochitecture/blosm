@@ -150,7 +150,7 @@ class WayOffsetGenerator():
         cleaned = []
         lastValid = -1
         for i, (p1, p2) in enumerate(pairs(self.connected)):
-            if i > lastValid and i<len(self.connected)-2:
+            if i > lastValid:# and i<len(self.connected)-2:
                 cleaned.append(p1)
                 for j, (p3, p4) in enumerate(pairs(self.connected[i + 2:])):
                     isectRes = segmentIntersection(p1,p2,p3,p4)
