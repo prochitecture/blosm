@@ -86,7 +86,6 @@ class RoadPolygonsRenderer(Renderer):
     )
     
     def render(self, wayManager, data):
-        return
         self.mpl.ax.set_facecolor("#f2efe9")
         self.plotWay(wayManager.networkGraph)
         self.plotJunctions(wayManager.waySectionGraph, wayManager.junctions[0], 'red')
