@@ -1,4 +1,4 @@
-from way.PolyLine import PolyLine
+from lib.CompGeom.PolyLine import PolyLine
 
 roadTypes = {
     "motorway" : 'driving',
@@ -38,7 +38,7 @@ def getRoadWidth(tags):
                 nrOfLanes = 1
             if not tags.get('oneway','no') == 'yes':
                 nrOfLanes *= 2
-            return nrOfLanes * 2.7#2.5
+            return nrOfLanes * 2.5#2.5
         elif rType == 'cycling':
             return 1.8
         elif rType == 'walking':

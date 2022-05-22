@@ -1,11 +1,11 @@
-# from lib.pygeos.shared import Coordinate
-from way.PolyLine import PolyLine
-
 from math import sin, cos, atan2, pi, sqrt, floor
 from mathutils import Vector
 from itertools import tee,islice, cycle
 from itertools import cycle
+from lib.CompGeom.PolyLine import PolyLine
+import matplotlib.pyplot as plt
 
+# helper functions and classes -----------------------------------
 def cyclePair(lst):
     prevs, nexts = tee(lst)
     prevs = islice(cycle(prevs), len(lst) - 1, None)
@@ -16,6 +16,7 @@ class OutLine():
         self.section = section
         self.polyline = polyline
         self.fwd = fwd
+# ----------------------------------------------------------------
 
 class Intersection():
     def __init__(self,position,network,waySections,shortestSection=0.):
@@ -76,33 +77,26 @@ class Intersection():
         # plotEnd()
 
     def findIntersectionPoly(self):
-        # The outgoing polylines in <self.outWayLines> of class Outline are expected 
-        # to be sorted in counter-clockwise order.
-        N = self.order              # number of outgoing polylines
-        tParams = [0.]*N            # Parameter along a polyline, sum of the index of the first
-                                    # vertex of a segmentand the percentage of the length of this segment.
-        allFilletVerts = [None]*N
-        bordersL = [None]*N         # list of left borders of outgoing ways
-        bordersR = [None]*N         # list of right borders of outgoing ways
-        # plt.close()
+        # The outgoing polylines in <self.outWayLines> of the intersection 
+        # are of class Outline. They are expected here to be sorted in
+        # counter-clockwise order.
+        N = self.order              # Number of outgoing polylines
+        tSmax = [0.]*N              # List of maximum line parameter along polyline (meaning see PolyLine.py)
+        filletVertsList = [None]*N      # List of fillet vertices per border line intersection
+        bordersL = [None]*N         # List of left border polylines of outgoing ways
+        bordersR = [None]*N         # list of right border polylines of outgoing ways
+
+        doDebug = False
 
         for (lineIndx1, lineIndx2), (line1,line2) in zip(cyclePair(range(N)),cyclePair(self.outWayLines)):
-        # for lineIndx1, lineIndx2, line1,line2 in zip(range(N),range(1,N+1),self.outWayLines,self.outWayLines[1:]+[self.outWayLines[0]]):
+            # <line1> and <line2> are consecutive outgpoing polylines in counter-clockwise order of the
+            # intersection. These are the centerlines of the way-sections, <line1> is to the right of <line2>.
             try:
-                # plt.close()
-                lineIndx2 %= N  # circular index for outgoing 
-
-                # line1['line'].plot('k')
-                # e = line1['line'].verts[1]
-                # plt.text(e[0],e[1],str(indx1))
-                # line2['line'].plot('k')
-                # e = line2['line'].verts[1]
-                # plt.text(e[0],e[1],str(indx2))
-
-                # Compute the left and right border of the outgoing polylines.
-                # For way-loops, the forward and backward polyline is in consecutive order
+                # Compute the left border <borderL> of the way-section given by line1 and the 
+                # right border <borderR> of the way-section given by line2.
+                # For way-loops, the forward and backward polyline is in expected consecutive order
                 # in <self.outWayLines>. For loop-ways, a parallel offset can't be computed
-                # correctly, therefore, only the first segments are used.
+                # correctly, therefore, only their first segments are used.
                 if line1.section.isLoop and line2.section.isLoop:
                     trimmed1 = PolyLine(line1.polyline[:2])
                     trimmed2 = PolyLine(line2.polyline[:2])
@@ -115,21 +109,24 @@ class Intersection():
                 # Find intersection between left border <borderL> of <line1> 
                 # and right border <borderR> of <line2>
                 # In <isectParams>, <iP> is the intersection point, <tL> and <tR> are the
-                # intersection parameters for left and right line. They consist of the 
-                # sum of the index of the first vertex of the intersected segments
-                # and the percentage (0 ... 1) within the length of this segment.
-                # <uVL> and <uVR> are the unit vectors of the intersected segments
+                # line parameters of the intersection point (see PolyLine.py) for left and
+                # right border. <uVL> and <uVR> are the unit vectors of the intersecting
+                # segments
                 isectParams = PolyLine.intersection(borderL,borderR)
                 if isectParams is None:
-                    # print('no intersection')
+                    if doDebug:
+                        borderL.plot('c')
+                        borderR.plot('m')
                     continue
                 iP,tL,tR,uVL,uVR = isectParams
 
-                # plt.plot(iP[0],iP[1],'mo',markersize=6)
+                if doDebug:
+                    plt.plot(iP[0],iP[1],'mo',markersize=6)
 
-                # If the intersection parameter is negative, then the intersection point
-                # is on the extended infinite line of the first segment. This segment is
-                # extended to the intersection point to simplify the following calculations.
+                # If an intersection parameter is negative, then the intersection point
+                # is on the extended infinite line of the first segment, before the segment.
+                # This segment is then extended here to the intersection point to simplify
+                # the following calculations.
                 if tL < 0.:
                     borderL.verts[0] = iP
                     tL = 0.
@@ -137,12 +134,13 @@ class Intersection():
                     borderR.verts[0] = iP
                     tR = 0.
 
-                # Store them for later use.
+                # Store the polylines of the borders for later use.
                 bordersL[lineIndx1] = borderL
                 bordersR[lineIndx2] = borderR
 
-                # borderL.plot('#00ff00')
-                # borderR.plot('#ff0000')
+                if doDebug:
+                    borderL.plot('#00ff00')
+                    borderR.plot('#ff0000')
 
                 # get first estimate of fillet radius between these segments
                 # TODO: Replace this by better radius values.
@@ -156,124 +154,117 @@ class Intersection():
                 lengthL = borderL.segmentLength(floor(tL))
                 lengthR = borderR.segmentLength(floor(tR))
 
-                while True: # Loop to find possible radius
-                    # Try to find an arc using the segments given by <iP>, <uVLY, <uVR> as tangents.
-                    # <origin> is the circle origin of the arc, <legEndL> and <legEndR> are the 
-                    # tangent points and <legLength> is the distance between the intersection point
-                    # and the tangent points.
+                while True: # Loop to find a valid radius
+                    # Try to find an arc with radius <radius> and using the segments <iP>-<uVLY and
+                    # <iP>-<uVR> as tangents. In the result, <origin> is the circle origin of the arc,
+                    # <legEndL> and <legEndR> are the tangent vertices and <legLength> is the distance
+                    # between the intersection point and the tangent vertices.
                     origin, tLegEndL, tLegEndR, legLength = filletArc(iP, uVL, uVR, radius)
                     if origin is None: # No arc possible, segments are almost parallel.
                         break
 
-                    # Check whether the leg ends we are on the intersecting segments.
+                    # To check whether the leg ends we are on the intersecting segments, the line
+                    # parameters of the tangent vertices are computed (see PolyLine.py). For a 
+                    # valid fillet, they must be both less than 1.
                     tLegL = tL%1. + legLength / lengthL
                     tLegR = tR%1. + legLength / lengthR
                     if tLegL < 1. and tLegR < 1.:
-                        # OK, fillet fits with these segments and this radius
+                        # OK, fillet fits between these segments using this radius
                         break
 
                     # if not, reduce radius
                     radius = 0.9 * radius
 
-                    # ax = plt.gca()
-                    # ax.add_artist(plt.Circle(
-                    #     (isectP.x,isectP.y),
-                    #     10,
-                    #     alpha=0.1,
-                    #     color='g',
-                    #     zorder=100
-                    # )) 
-
                 # If a fillet arc has been found.
                 if origin:
-                    # plt.plot(tLegEndL[0],tLegEndL[1],'go',markersize=6)
-                    # plt.plot(tLegEndR[0],tLegEndR[1],'ro',markersize=6)
+                    if doDebug:
+                        plt.plot(tLegEndL[0],tLegEndL[1],'go',markersize=6)
+                        plt.plot(tLegEndR[0],tLegEndR[1],'ro',markersize=6)
 
                     # Create the vertices for the fillet.
                     filletVerts = filletLine(origin, tLegEndL, tLegEndR, radius)
 
-                    t1 = tL + legLength / lengthL
-                    t2 = tR + legLength / lengthR
-                    # t1 = line1.polyline.projectOrthogonal(tLegEndL,True)
-                    # t2 = line2.polyline.projectOrthogonal(tLegEndR,True)
-                    test=1
+                    # Maybe, the borders and the centerline of a way-segment do not have
+                    # the same shape. To get reliable line parameters, the tangent vertices
+                    # are projected onto the centerline and the line parameter of this 
+                    # projection is computed (<t1> for <line1> and <t2> for <line2>).
+                    t1 = line1.polyline.projectOrthogonal(tLegEndL,True)
+                    if doDebug:
+                        q = line1.polyline.verts[-1]
+                        plt.text(q[0],q[1],str(lineIndx1))
+                    t2 = line2.polyline.projectOrthogonal(tLegEndR,True)
+                    if doDebug:
+                        q = line2.polyline.verts[-1]
+                        plt.text(q[0],q[1],str(lineIndx2))
 
-                    # Project the tangent points onto the center line and
-                    # get their intersection parameters.
-                    # t1 = line1.polyline.projectOrthogonal(tLegEndL,True)
-                    # t2 = line2.polyline.projectOrthogonal(tLegEndR,True)
-
-                    # p1 = line1.polyline.t2v(t1,line1.fwd)
-                    # p2 = line2.polyline.t2v(t2,line2.fwd)
-                    # plt.plot(tLegEndL[0],tLegEndL[1],'co',markersize=6)
-                    # plt.plot(tLegEndR[0],tLegEndR[1],'mo',markersize=6)
-                    # plt.plot(p1[0],p1[1],'go',markersize=6)
-                    # plt.plot(p2[0],p2[1],'ro',markersize=6)
-                    # line1.polyline.plot('k')
-                    # line2.polyline.plot('k')
-
-                    # store the maximum of the intersection parameters
-                    tParams[lineIndx1] = max(tParams[lineIndx1],t1)
-                    tParams[lineIndx2] = max(tParams[lineIndx2],t2)
+                    # store the maximum of these intersection parameters,
+                    # indexed by the line index.
+                    tSmax[lineIndx1] = max(tSmax[lineIndx1],t1)
+                    tSmax[lineIndx2] = max(tSmax[lineIndx2],t2)
 
                     # Store the fillet vertices for <line1>.
-                    allFilletVerts[lineIndx1] = filletVerts
+                    filletVertsList[lineIndx1] = filletVerts
 
-                    # for v1,v2 in zip(filletVerts[:-1],filletVerts[1:]):
-                    #     plt.plot([v1.x,v2.x],[v1.y,v2.y],'c:')
+                    if doDebug:
+                        for v1,v2 in zip(filletVerts[:-1],filletVerts[1:]):
+                            plt.plot([v1.x,v2.x],[v1.y,v2.y],'c:')
                 else:
-                    pass
-                    # print('no fillet')
+                    pass    # No possible fillet found
+                    print('No possible fillet found')
 
             except (Exception,ValueError) as e:
                 import traceback
                 traceback.print_exception(type(e), e, e.__traceback__)
-                print('exception 1')
+                print('Exception on fillet computation')
         try:
-        # if True:
             polygon = []
             # Construct the intersection polygon
-            for (indx1, indx2), (line1,line2) in zip(cyclePair(range(N)),cyclePair(self.outWayLines)):
-                filletVerts = allFilletVerts[indx1]
-                tParamL = tParams[indx1]
-                tParamR = tParams[indx2]
+            for (lineIndx1, lineIndx2), (line1,line2) in zip(cyclePair(range(N)),cyclePair(self.outWayLines)):
+            # <line1> and <line2> are consecutive outgpoing polylines in counter-clockwise order of the
+            # intersection. These are the centerlines of the way-sections, <line1> is to the right of <line2>.
+                filletVerts = filletVertsList[lineIndx1]
+                tS1 = tSmax[lineIndx1]  # Line parameters of trim points.
+                tS2 = tSmax[lineIndx2]
 
+                # The way sections will have to be trimmed to the length not occupied by
+                # the polygon of the intersection area. Depending on the direction of
+                # the way section as outgoing polyline (forward => fwd==True), these
+                # values have to be stored in the corresponding way section object.
                 if line1.fwd:
-                    line1.section.trimS = max(tParamL,line1.section.trimS)
+                    line1.section.trimS = tS1
                 else:
-                    line1.section.trimT = max(tParamL,line1.section.trimT)
+                    line1.section.trimT = tS2
 
-                # we start with the offset point of the left border of line1
-                pL = line1.polyline.offsetPointAt(tParamL,line1.section.leftWidth)
+                # Starting with the left border of the centerline <line1>.
+                # Given the line parameter of the trim point on the centerline, we can 
+                # compute the point <pL> perpendicularly offset to the left.
+                pL = line1.polyline.offsetPointAt(tS1,line1.section.leftWidth)
                 if filletVerts:
+                    # By a simple check of coordinate differences, we may decide if
+                    # <pL> is a vertex of the fillet.
                     dL = sum(pL-filletVerts[0])
                     if abs(dL) > 1.e-4:
+                        # If not on the fillet, add to polygon
                         polygon.append(pL)
+                    # then extend polygon by fillet verts.
                     polygon.extend(filletVerts)
                 else:
                     polygon.append(pL)
 
-                
-
-                pR = line2.polyline.offsetPointAt(tParamR,-line2.section.rightWidth)
+                # The same porcedure is then done for the right border of the centerline <line2>
+                pR = line2.polyline.offsetPointAt(tS2,-line2.section.rightWidth)
                 if filletVerts:
                     dR = sum(pR-filletVerts[-1])
                     if abs(dR) > 1.e-4:
                         polygon.append(pR)
                 else:
                     polygon.append(pR)
-                # bordersL[indx1].plot('g')
-                # bordersR[indx2].plot('r')
-                
-            # x = [n[0] for n in polygon]
-            # y = [n[1] for n in polygon]
-            # plt.fill(x,y,'#cf4b23',alpha = 0.4,zorder = 900)
-            # plt.plot(x,y,'r')
 
         except (Exception,ValueError) as e:
             import traceback
             traceback.print_exception(type(e), e, e.__traceback__)
-            print('exception 2')
+            print('Exception on construction of intersection polygon')
+            plotEnd()
 
         return polygon
 

@@ -33,7 +33,7 @@ def pairs(iterable):
     return zip(p1,p2)
 # ----------------------------------------------------------------
 
-class WayOffsetGenerator():
+class OffsetGenerator():
     def __init__(self,resolution=8):
         self.filletAngleQuantum = pi / 2.0 / resolution
         self.distance = 0.

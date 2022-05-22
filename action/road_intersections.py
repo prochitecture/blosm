@@ -108,24 +108,21 @@ class RoadIntersections:
         test=1
 
     def createIntersections(self):
-        processed_nodes = []
         for nodeNr,node in enumerate(self.sectionNetwork):
             # print(nodeNr)
             # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
             # plt.close()
-            # if nodeNr != 181:
+            # if nodeNr != 43:
             #     test=1
             #     continue
-            if node not in processed_nodes:
-                # processed_nodes.append(node)
-                intersection = Intersection(node, self.sectionNetwork, self.waySections)
+            intersection = Intersection(node, self.sectionNetwork, self.waySections)
 
-                if intersection.order > 2:
-                     polygon = intersection.findIntersectionPoly() 
-                     plotPolygon(polygon,False,'r',1.,True,0.3,100)
+            if intersection.order > 2:
+                polygon = intersection.findIntersectionPoly() 
+                plotPolygon(polygon,False,'k','r',1.,True,0.2,100)
 
-                    # plt.title(str(nodeNr))
-                    # plotEnd()
+                # plt.title(str(nodeNr))
+                # plotEnd()
 
     def plotSections(self):
         for nr,section in enumerate(self.waySections.values()):
@@ -134,16 +131,16 @@ class RoadIntersections:
                 # print(nr)
                 waySlice = section.polyline.slice(section.trimS,section.trimT)
                 waySegPoly = waySlice.buffer(section.leftWidth, section.rightWidth)
-                plotPolygon(waySegPoly,False,'b',1.,True,0.3,100)
+                plotPolygon(waySegPoly,False,'b','#aaaaff',1.,True,0.2,100)
 
         test=1
 
-def plotPolygon(poly,vertsOrder,color='k',width=1.,fill=True,alpha = 0.2,order=100):
+def plotPolygon(poly,vertsOrder,lineColor='k',fillColor='k',width=1.,fill=True,alpha = 0.2,order=100):
     x = [n[0] for n in poly] + [poly[0][0]]
     y = [n[1] for n in poly] + [poly[0][1]]
     if fill:
-        plt.fill(x[:-1],y[:-1],color=color,alpha=alpha,zorder = order)
-    plt.plot(x,y,color,linewidth=width,zorder=order)
+        plt.fill(x[:-1],y[:-1],color=fillColor,alpha=alpha,zorder = order)
+    plt.plot(x,y,lineColor,linewidth=width,zorder=order)
     if vertsOrder:
         for i,(xx,yy) in enumerate(zip(x[:-1],y[:-1])):
             plt.text(xx,yy,str(i))
