@@ -12,6 +12,8 @@ from way.way_section import WaySection
 
 from defs.road_polygons import ExcludedWayTags
 
+# from plotUtilities import *
+
 class RoadIntersections:
 
     def __init__(self):
@@ -34,7 +36,7 @@ class RoadIntersections:
         # some way tags to exclude, used also in createWaySectionNetwork(),
         # should be moved to defs.
         uniqueSegments = defaultdict(set)
-        for way in wayManager.getAllWays():            
+        for way in wayManager.getAllWays():
             if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
                 continue
             for segment in way.segments:
@@ -83,7 +85,6 @@ class RoadIntersections:
                     segments.append((waySegment.v1,waySegment.v2))
 
                 for segment in segments:
-                    way.element.tags
                     v1, v2 = Vector(segment[0]),Vector(segment[1])
                     accepted, v1, v2 = clipper.clip(v1,v2)
                     if accepted:
@@ -112,7 +113,7 @@ class RoadIntersections:
             # print(nodeNr)
             # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
             # plt.close()
-            # if nodeNr != 43:
+            # if nodeNr != 213:
             #     test=1
             #     continue
             intersection = Intersection(node, self.sectionNetwork, self.waySections)
@@ -128,10 +129,19 @@ class RoadIntersections:
         for nr,section in enumerate(self.waySections.values()):
             totalT = section.trimS +section.trimT
             if 0. <= totalT < len(section.polyline)-1:
+                # center = sum(section.polyline.verts,Vector((0,0)))/len(section.polyline.verts)
+                # plt.text(center[0],center[1],str(section.id),zorder=120)
                 # print(nr)
                 waySlice = section.polyline.slice(section.trimS,section.trimT)
                 waySegPoly = waySlice.buffer(section.leftWidth, section.rightWidth)
                 plotPolygon(waySegPoly,False,'b','#aaaaff',1.,True,0.2,100)
+            # else:
+            #     center = sum(section.polyline.verts,Vector((0,0)))/len(section.polyline.verts)
+            #     trimText = ' %4.2f %4.2f'%(section.trimS,section.trimT)
+                # plt.text(center[0],center[1],str(section.id)+trimText,zorder=120)
+                # print(nr)
+                # waySegPoly = section.polyline.buffer(section.leftWidth, section.rightWidth)
+                # plotPolygon(waySegPoly,False,'g','#00ff00',1.,True,0.8,100)
 
         test=1
 

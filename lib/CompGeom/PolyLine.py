@@ -219,9 +219,14 @@ class PolyLine():
             if isect is None: continue
 
             iP, t1, t2 = isect
-            if t1 > 1. or t2 > 1.: continue # out of segment
-            # if t1 < 0. or t1 > 1.: continue # out of segment
-            # if t2 < 0. or t2 > 1.: continue # out of segment
+            # Accept intersection of infinite lines (negative line parameters)
+            # only between first segments.
+            if (i1,i2) == (0,0): 
+                if t1 > 1. or t2 > 1.:
+                    continue # out of segment
+            else:
+                if t1 < 0. or t1 > 1. or t2 < 0. or t2 > 1.:
+                    continue # out of segment
             found = True
             break # valid intersection between PolyLines found
 

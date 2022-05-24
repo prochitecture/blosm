@@ -121,7 +121,7 @@ class Intersection():
                 iP,tL,tR,uVL,uVR = isectParams
 
                 if doDebug:
-                    plt.plot(iP[0],iP[1],'mo',markersize=6)
+                    plt.plot(iP[0],iP[1],'mx',markersize=10)
 
                 # If an intersection parameter is negative, then the intersection point
                 # is on the extended infinite line of the first segment, before the segment.
@@ -232,8 +232,14 @@ class Intersection():
                 # values have to be stored in the corresponding way section object.
                 if line1.fwd:
                     line1.section.trimS = tS1
+                    # pS = line1.section.polyline.t2v(tS1,True)
+                    # plt.plot(pS[0],pS[1],'gx',markersize=15)
+                    # plt.text(pS[0],pS[1],' %5.2f'%(tS1))
                 else:
-                    line1.section.trimT = tS2
+                    line1.section.trimT = tS1
+                    # pS = line1.section.polyline.t2v(tS1,False)
+                    # plt.plot(pS[0],pS[1],'rx',markersize=15)
+                    # plt.text(pS[0],pS[1],' %5.2f'%(tS1))
 
                 # Starting with the left border of the centerline <line1>.
                 # Given the line parameter of the trim point on the centerline, we can 
