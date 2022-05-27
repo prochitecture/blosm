@@ -1,6 +1,6 @@
 from . import Way, Railway
 from defs.base.polyline import Polyline
-from defs.way import allWayCategories, facadeVisibilityWayCategories
+from defs.way import allWayCategories, facadeVisibilityWayCategories, wayIntersectionCategories
 
 
 class WayManager:
@@ -38,6 +38,9 @@ class WayManager:
     
     def getAllWays(self):
         return (way for category in allWayCategories for way in self.layers[category])
+    
+    def getAllIntersectionWays(self):
+        return (way for category in wayIntersectionCategories for way in self.layers[category])
     
     def getFacadeVisibilityWays(self):
         return (

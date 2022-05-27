@@ -69,7 +69,7 @@ class RoadIntersections:
 
         # some way tags to exclude, used also in findSelfIntersections(),
         # should be moved to defs.
-        for way in wayManager.getAllWays():
+        for way in wayManager.getAllIntersectionWays():
             # Exclude ways with unwanted tags
             if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
                 continue
@@ -128,6 +128,10 @@ class RoadIntersections:
     def plotSections(self):
         for nr,section in enumerate(self.waySections.values()):
             totalT = section.trimS +section.trimT
+            # if 'lanes' in section.originalSection.tags:
+            #     continue
+            # if section.originalSection.category not in ['pedestrian']:
+            #     continue
             if 0. <= totalT < len(section.polyline)-1:
                 # center = sum(section.polyline.verts,Vector((0,0)))/len(section.polyline.verts)
                 # plt.text(center[0],center[1],str(section.id),zorder=120)

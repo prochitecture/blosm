@@ -1,4 +1,5 @@
 from lib.CompGeom.PolyLine import PolyLine
+from way.way_properties import estimateWayWidth
 
 roadTypes = {
     "motorway" : 'driving',
@@ -54,8 +55,8 @@ class WaySection():
     ID = 0
     def __init__(self,net_section):
         self.originalSection = net_section
-        self.leftWidth = getRoadWidth(net_section.tags)/2.
-        self.rightWidth = getRoadWidth(net_section.tags)/2.
+        self.leftWidth = estimateWayWidth(net_section.category,net_section.tags)/2.
+        self.rightWidth = estimateWayWidth(net_section.category,net_section.tags)/2.
         self.polyline = PolyLine(net_section.path)
         self.isLoop = net_section.s == net_section.t
         self._sV = None  # vector of first segment

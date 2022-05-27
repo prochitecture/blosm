@@ -43,9 +43,47 @@ allRailwayCategories = (
 )
 allRailwayCategoriesSet = set(allRailwayCategories)
 
-
 allWayCategories = allRoadwayCategories + allRailwayCategories
 
+roadwayIntersectionCategories  = (
+    "motorway",
+    "motorway_link",
+    "trunk",
+    "trunk_link",
+    "primary",
+    "primary_link",
+    "secondary",
+    "secondary_link",
+    "tertiary",
+    "tertiary_link",
+    "unclassified",
+    "residential",
+    "living_street",
+    "service",
+    "pedestrian",
+    "track",
+    "escape",
+    "raceway",
+    "other_roadway",
+    "footway",
+    "path",
+    "cycleway",
+    "bridleway"
+)
+roadwayIntersectionCategoriesSet = set(roadwayIntersectionCategories)
+
+railwayIntersectionCategories = (
+    "rail",
+    "subway",
+    "light_rail",
+    "tram",
+    "funicular",
+    "monorail",
+    "other_railway"
+)
+railwayIntersectionCategoriesSet = set(railwayIntersectionCategories)
+
+wayIntersectionCategories = roadwayIntersectionCategories + railwayIntersectionCategories
 
 facadeVisibilityWayCategories = (
     "primary",

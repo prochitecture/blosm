@@ -183,15 +183,22 @@ class WayNetwork(dict):
     def iterAlongWay(self,segment):
         # Generator for nodes that follow the way in the direction given by the
         # <segment>, until a crossing occurs, an end-point is reached or the 
-        # way-category changes. The first return is <segment>.
+        # way-type changes. The first return is <segment>.
+        def changedWayType(category1,category2,tags1,tags2):
+            if category1 != category2: return True
+            if tags1 and tags2: # category 'scene_border' has no tags
+                if tags1.get('lanes') != tags2.get('lanes'): return True
+                if tags1.get('oneway') != tags2.get('oneway'): return True
+                if tags1.get('bridge') != tags2.get('bridge'): return True
+            return False
+
         firstCategory = segment.category
         firstTags = segment.tags
         current = segment
         yield current
         while len(self[current.t]) == 2: # order of node == 2 -> no crossing or end-point
             current = [self[current.t][source] for source in self[current.t] if source != current.s][0][0]
-            # if current.category != firstCategory:
-            if current.tags != firstTags:
+            if changedWayType(firstCategory,current.category,firstTags,current.tags):
                 break
             yield current
 

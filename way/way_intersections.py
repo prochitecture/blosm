@@ -3,6 +3,7 @@ from mathutils import Vector
 from itertools import tee,islice, cycle
 from itertools import cycle
 from lib.CompGeom.PolyLine import PolyLine
+from way.way_properties import estFilletRadius
 import matplotlib.pyplot as plt
 
 # helper functions and classes -----------------------------------
@@ -142,10 +143,15 @@ class Intersection():
                     borderL.plot('#00ff00')
                     borderR.plot('#ff0000')
 
-                # get first estimate of fillet radius between these segments
-                # TODO: Replace this by better radius values.
-                maxVel = 50.
-                radius = maxVel/9.81/0.7/2. #???
+                # Get an estimate of fillet radius between these segments
+                radius1 = estFilletRadius(line1.section.originalSection.category,line1.section.originalSection.tags)
+                radius2 = estFilletRadius(line2.section.originalSection.category,line2.section.originalSection.tags)
+                radius = min(radius1,radius2)
+
+                # Reduce fillet radius continuously when angle gets smaller
+                cosAngle = uVL.dot(uVR)
+                if cosAngle > 0.1:
+                    radius *= cosAngle
 
                 # Starting with this radius, we try to create a fillet within the intersected
                 # segments. If this is not possible, the radius is decreased.
@@ -270,7 +276,6 @@ class Intersection():
             import traceback
             traceback.print_exception(type(e), e, e.__traceback__)
             print('Exception on construction of intersection polygon')
-            plotEnd()
 
         return polygon
 
