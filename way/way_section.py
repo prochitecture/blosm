@@ -1,55 +1,7 @@
 from lib.CompGeom.PolyLine import PolyLine
-from way.way_properties import estimateWayWidth
+from way.way_properties import estimateWayWidth, getLanes
 
-roadTypes = {
-    "motorway" : 'driving',
-    "motorway_link" : 'driving',
-    "trunk" : 'driving',
-    "trunk_link" : 'driving',
-    "primary" : 'driving',
-    "primary_link" : 'driving',
-    "secondary" : 'driving',
-    "secondary_link" : 'driving',
-    "tertiary" : 'driving',
-    "tertiary_link" : 'driving',
-    "unclassified" : 'default',
-    "residential" : 'driving',
-    "living_street" : 'driving',
-    "service" : 'driving',
-    "pedestrian" : 'walking',
-    "track" : 'walking',
-    "escape" : 'driving',
-    "raceway" : 'driving',
-    "steps" : 'walking',
-    "footway" : 'walking',
-    "path" : 'walking',
-    "cycleway" : 'cycling',
-    "bridleway" : 'walking'
-}
-
-def getRoadWidth(tags):
-    rType = tags.get('highway',None)
-    if rType:
-        rType = roadTypes[rType]
-        if rType == 'driving':
-            lanes = tags.get('lanes',None)
-            if lanes:
-                nrOfLanes = int(lanes)
-            else:
-                nrOfLanes = 1
-            if not tags.get('oneway','no') == 'yes':
-                nrOfLanes *= 2
-            return nrOfLanes * 2.5#2.5
-        elif rType == 'cycling':
-            return 1.8
-        elif rType == 'walking':
-            return 3.0
-        else:
-            return 1.0  # ????
-    else:
-        return 1.0
-
-    pass
+import matplotlib.pyplot as plt
 
 class WaySection():
     ID = 0
@@ -62,9 +14,11 @@ class WaySection():
         self._sV = None  # vector of first segment
         self._tV = None  # vector of last segment
         self.trimS = 0.    # trim factor for start
-        self.trimT = 0.    # trim factor for starget
+        self.trimT = 0.    # trim factor for target
         self.id = WaySection.ID
+        self.turnParams = None  # parameters for turning lanes
         WaySection.ID += 1
+        self.processTurnLanes()
 
     @property
     def sV(self):
@@ -83,3 +37,32 @@ class WaySection():
 
     def rev(self):
         return [v for v in self.polyline.reversed()]
+
+    def processTurnLanes(self):
+        width = estimateWayWidth(self.originalSection.category,self.originalSection.tags)
+        tags = self.originalSection.tags
+        if 'turn:lanes' in tags:
+            nrOfLanes = getLanes(tags)
+
+            # p = self.originalSection.s
+            # q = self.originalSection.s + 0.05*(self.originalSection.t-self.originalSection.s)
+            # plt.text(p[0],p[1],tags['turn:lanes']+' '+str(self.id)+' '+str(nrOfLanes),fontsize=12,color='k')
+            # color = 'go' if self.originalSection.forward else 'ro'
+            # plt.plot(q[0],q[1],color,markersize=8,zorder=900)
+            # plt.plot(p[0],p[1],'bx',markersize=12,zorder=900)
+
+            laneWidth = width/nrOfLanes
+            laneDescs = tags['turn:lanes'].split('|')
+            leftTurnLanes = sum(1 for tag in laneDescs if 'left' in tag)
+            rightTurnLanes = sum(1 for tag in laneDescs if 'right' in tag)
+            if leftTurnLanes == rightTurnLanes:
+                self.leftWidth = width/2.
+                self.rightWidth = width/2.
+            else:
+                halfSymLaneWidth = laneWidth*(nrOfLanes - leftTurnLanes - rightTurnLanes)/2
+                self.leftWidth = halfSymLaneWidth + leftTurnLanes * laneWidth
+                self.rightWidth = halfSymLaneWidth + rightTurnLanes * laneWidth
+        else:
+            self.leftWidth = width/2.
+            self.rightWidth = width/2.
+

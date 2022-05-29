@@ -4,6 +4,7 @@ from itertools import tee,islice, cycle
 from itertools import cycle
 from lib.CompGeom.PolyLine import PolyLine
 from way.way_properties import estFilletRadius
+from way.way_properties import estimateWayWidth, getLanes
 import matplotlib.pyplot as plt
 
 # helper functions and classes -----------------------------------
@@ -17,6 +18,16 @@ class OutLine():
         self.section = section
         self.polyline = polyline
         self.fwd = fwd
+
+def spline_4p( t, v0, p0, p1, v1 ):
+    # (Catmull-Rom) Cubic curve goes from p0 to p1, and outer points v0 and v1
+    # determine the slopes at p0 and p1.
+    # assert 0 <= t <= 1
+    return (
+          t*((2-t)*t - 1)     * v0
+        + (t*t*(3*t - 5) + 2) * p0
+        + t*((4 - 3*t)*t + 1) * p1
+        + (t-1)*t*t           * v1 ) / 2
 # ----------------------------------------------------------------
 
 class Intersection():
@@ -278,6 +289,79 @@ class Intersection():
             print('Exception on construction of intersection polygon')
 
         return polygon
+
+    def findTransitionPoly(self):
+        # Transitions are intersections of order==2 and have an incoming and
+        # an outgoing way. They have to be processed before the others, as
+        # way widths may be altered due to turning lanes.
+        line1, line2 = self.outWayLines
+        outLine, inLine = (line1, line2) if line1.fwd else (line2, line1)
+        inTags, outTags = inLine.section.originalSection.tags, outLine.section.originalSection.tags
+
+        # Do we have turn lanes? They are only possible in the outLine.
+        if 'turn:lanes' in outTags:
+            # There is no transition polygon required. The outgoing way section
+            # becomes eventually a turning lane.
+            laneDescs = outTags['turn:lanes'].split('|')
+            leftTurnLanes = sum(1 for tag in laneDescs if 'left' in tag)
+            rightTurnLanes = sum(1 for tag in laneDescs if 'right' in tag)
+            if leftTurnLanes or rightTurnLanes:
+                leftWidthDifference = outLine.section.leftWidth - inLine.section.leftWidth
+                rightWidthDifference = outLine.section.rightWidth - inLine.section.rightWidth
+                if leftWidthDifference or rightWidthDifference:
+                    outLine.section.turnParams = [leftWidthDifference,rightWidthDifference]
+
+        # Prepare transition polygon (3 m each side)
+        if outLine.section.turnParams:
+            transitionWidth = 0.5
+        else:
+            inWidth = inLine.section.leftWidth + inLine.section.leftWidth
+            outWidth = outLine.section.leftWidth + outLine.section.leftWidth
+            widthDiff = abs(inWidth-outWidth)
+            transitionWidth = min(10.,max(1.,2 * widthDiff))
+        inT = inLine.polyline.length2t(transitionWidth,inLine.fwd)
+        outT = outLine.polyline.length2t(transitionWidth,outLine.fwd)
+        if inT is None or outT is None:
+            pass
+            # plt.plot(self.position[0],self.position[1],'rx',markersize=20,zorder=950)
+        else:
+            assert inT is not None
+            assert outT is not None
+
+            # compute cornerpoints
+            inLeft = inLine.polyline.offsetPointAt(inT,inLine.section.leftWidth)
+            inRight = inLine.polyline.offsetPointAt(inT,-inLine.section.rightWidth)
+            outLeftWidth = inLine.section.leftWidth if outLine.section.turnParams else outLine.section.leftWidth
+            outRightWidth = inLine.section.rightWidth if outLine.section.turnParams else outLine.section.rightWidth
+            outLeft = outLine.polyline.offsetPointAt(outT,outLeftWidth)
+            outRight = outLine.polyline.offsetPointAt(outT,-outRightWidth)
+
+            poly = []#[inLeft,inRight,outLeft,outRight]
+            import numpy as np
+            t0 = np.linspace(0,1,10)#[0.0,0.2,0.4,0.6,0.8,1.0]
+            p0, p1 = inRight, outLeft
+            v0, v1 = p0 - inLine.polyline.unitEndVec(False)*transitionWidth, p1 - outLine.polyline.unitEndVec(False)*transitionWidth
+            for t in t0:
+                sp = spline_4p( t, v0, p0, p1, v1 )
+                poly.append( sp )
+            p0, p1 = outRight, inLeft
+            v0, v1 = p0 - outLine.polyline.unitEndVec(False)*transitionWidth, p1 - inLine.polyline.unitEndVec(False)*transitionWidth
+            for t in t0:
+                sp = spline_4p( t, v0, p0, p1, v1 )
+                poly.append( sp )
+
+
+            if inLine.fwd:
+                inLine.section.trimS = inT
+            else:
+                inLine.section.trimT = inT
+            if outLine.fwd:
+                outLine.section.trimS = outT
+            else:
+                outLine.section.trimT = outT
+
+            return poly
+
 
 def filletArc(p, uv1, uv2, radius):
     # p: corner point (class Vector)

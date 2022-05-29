@@ -21,6 +21,7 @@ class NetSection():
     def initFromDetails(self, source, target, category, tags, length=None, path=None):
         self.s = Vector(source).freeze()    # source node
         self.t = Vector(target).freeze()    # target node
+        self.forward = True
         self.category = category
         self.tags = tags
         self.geomLength = (self.t-self.s).length
@@ -41,6 +42,7 @@ class NetSection():
     def initFromOther(self, other):
         self.s = other.s    # source node
         self.t = other.t    # target node
+        self.forward = other.forward
         self.category = other.category
         self.tags = other.tags
         self.geomLength = other.geomLength
@@ -69,6 +71,7 @@ class NetSection():
         # create segment with the reversed direction
         rev = self.__class__(self.t, self.s, self.category, self.tags, self.length, self.path[::-1])
         rev.oneWay = -self.oneWay
+        rev.forward = not self.forward
         rev.sectionId = self.sectionId
         return rev
     def __eq__(self, other):
@@ -119,8 +122,8 @@ class WayNetwork(dict):
         self.addNode(s)
         self.addNode(t)
         self[s].setdefault(t, list() ).append(segment)
-        if s != t:  # a loop is added only once
-            self[t].setdefault(s, list() ).append(~segment)
+        # if s != t:  # a loop is added only once
+        self[t].setdefault(s, list() ).append(~segment)
 
     def delSegment(self,segment):
         # remove a <segment> from the network
@@ -171,6 +174,14 @@ class WayNetwork(dict):
                 # When source == target, we have a loop segment
                 if source <= target: 
                     for segment in self[source][target]:
+                        yield segment
+
+    def iterAllForwardSegments(self):
+        # generator for all segments from the network
+        for source in self.iterNodes():
+            for target in self[source]:
+                for segment in self[source][target]:
+                    if segment.forward:
                         yield segment
 
     def iterAllIntersectionNodes(self):

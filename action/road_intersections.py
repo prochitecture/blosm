@@ -12,8 +12,6 @@ from way.way_section import WaySection
 
 from defs.road_polygons import ExcludedWayTags
 
-# from plotUtilities import *
-
 class RoadIntersections:
 
     def __init__(self):
@@ -100,7 +98,7 @@ class RoadIntersections:
         wayManager.sectionNetwork = self.sectionNetwork = createSectionNetwork(wayManager.networkGraph)
 
     def createSections(self):
-        for net_section in self.sectionNetwork.iterAllSegments():
+        for net_section in self.sectionNetwork.iterAllForwardSegments():
             if net_section.category != 'scene_border':
                 section = WaySection(net_section)
                 self.waySections[net_section.sectionId] = section
@@ -118,9 +116,29 @@ class RoadIntersections:
             #     continue
             intersection = Intersection(node, self.sectionNetwork, self.waySections)
 
-            if intersection.order > 2:
+            if intersection.order == 2:
+                # Transition have to be processed first, because ways may be altered.
+                polygon = intersection.findTransitionPoly()
+                if polygon:
+                    plotPolygon(polygon,False,'g','g',2.,True,0.4,100)
+
+        for nodeNr,node in enumerate(self.sectionNetwork):
+            # print(nodeNr)
+            # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
+            # plt.close()
+            # if nodeNr != 213:
+            #     test=1
+            #     continue
+            intersection = Intersection(node, self.sectionNetwork, self.waySections)
+
+            if intersection.order == 2:
+                # Transition have to be processed first, because ways may be altered.
+                polygon = intersection.findTransitionPoly()
+            elif intersection.order > 2:
+                pass
                 polygon = intersection.findIntersectionPoly() 
                 plotPolygon(polygon,False,'k','r',1.,True,0.2,100)
+
 
                 # plt.title(str(nodeNr))
                 # plotEnd()
@@ -137,7 +155,10 @@ class RoadIntersections:
                 # plt.text(center[0],center[1],str(section.id),zorder=120)
                 # print(nr)
                 waySlice = section.polyline.slice(section.trimS,section.trimT)
-                waySegPoly = waySlice.buffer(section.leftWidth, section.rightWidth)
+                if section.turnParams:
+                    waySegPoly = waySlice.parabolicBuffer(section.leftWidth, section.rightWidth,section.turnParams[0],section.turnParams[1])
+                else:
+                    waySegPoly = waySlice.buffer(section.leftWidth, section.rightWidth)
                 plotPolygon(waySegPoly,False,'b','#aaaaff',1.,True,0.2,100)
             # else:
             #     center = sum(section.polyline.verts,Vector((0,0)))/len(section.polyline.verts)
