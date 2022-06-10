@@ -2,6 +2,7 @@ from mathutils import Vector
 import numpy as np
 from random import shuffle
 from itertools import *
+from collections import defaultdict
 
 MULT_EPSILON = 1 + 1e-14
 
@@ -224,6 +225,42 @@ def repairSimpleSelfIntersection(poly):
             poly[b],poly[c] = poly[c],poly[b]           #       O----O
             wasRepaired = True          
     return wasRepaired,poly
+
+def polygonAdjacencyRook(polys):
+    # Adapted from Laura, Jason R. and Sergio J. Rey.
+    # Scaling Polygon Adjacency Algorithms to Big Data
+    # Geospatial Analysis. (2014).
+    # polys: List of pyGEOS polygons
+    # Rook type neighborhood: one common egde
+    edges = defaultdict(set)
+    for i, poly in enumerate(polys):
+        newEdges = [(v1,v2) if v1<v2 else (v2,v1) for v1,v2 in zip(poly.coords[:-1],poly.coords[1:])]
+        for v in newEdges:
+            edges[v].add(i)
+
+    w = defaultdict(set)
+    for neighbors in edges.values():
+        for neighbor in neighbors:
+            w[neighbor] = w[neighbor] | neighbors
+    return w
+
+def polygonAdjacencyQueen(polys):
+    # Adapted from Laura, Jason R. and Sergio J. Rey.
+    # Scaling Polygon Adjacency Algorithms to Big Data
+    # Geospatial Analysis. (2014).
+    # polys: List of pyGEOS polygons
+    # Queen type neighborhood: one common vertex
+    vertices = defaultdict(set)
+    for i, poly in enumerate(polys):
+        newvertices = poly.coords[:-1]
+        for v in newvertices:
+            vertices[v].add(i)
+
+    w = defaultdict(set)
+    for neighbors in vertices.values():
+        for neighbor in neighbors:
+            w[neighbor] = w[neighbor] | neighbors
+    return w
 
 import sys
 def progress(count, total, status=''):

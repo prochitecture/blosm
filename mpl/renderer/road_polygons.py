@@ -82,7 +82,8 @@ class RoadPolygonsRenderer(Renderer):
         scene_border = dict(color="#ff0000", linewidth=1., linestyle="solid"),
         # railways
         tram = dict(color="#000000", linewidth=2., linestyle="solid"),
-        rail = dict(color="#000000", linewidth=3., linestyle="solid")
+        rail = dict(color="#000000", linewidth=3., linestyle="solid"),
+        light_rail = dict(color="#000000", linewidth=1., linestyle="solid")
     )
     
     def render(self, wayManager, data):

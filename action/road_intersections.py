@@ -1,14 +1,16 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 from mathutils import Vector
 import matplotlib.pyplot as plt
 
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
-from lib.CompGeom.algorithms import SCClipper
+from lib.CompGeom.algorithms import SCClipper, polygonAdjacencyRook
+from lib.CompGeom.boundingRectangle import boundingRectangle
 
 from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
 from way.way_intersections import Intersection
 from way.way_section import WaySection
+from way.way_graph_cycle import GraphCycle
 
 from defs.road_polygons import ExcludedWayTags
 
@@ -26,7 +28,8 @@ class RoadIntersections:
         self.createSections()
         self.createIntersections()
         self.plotSections()
-        pass
+        self.clusterWays()
+
 
     def findSelfIntersections(self, manager):
         wayManager = self.app.managersById["ways"]
@@ -117,10 +120,10 @@ class RoadIntersections:
             intersection = Intersection(node, self.sectionNetwork, self.waySections)
 
             if intersection.order == 2:
-                # Transition have to be processed first, because ways may be altered.
+                # Transitions have to be processed first, because ways may be altered.
                 polygon = intersection.findTransitionPoly()
                 if polygon:
-                    plotPolygon(polygon,False,'g','g',2.,True,0.4,100)
+                    plotPolygon(polygon,False,'m','m',2.,True,0.4,100)
 
         for nodeNr,node in enumerate(self.sectionNetwork):
             # print(nodeNr)
@@ -168,7 +171,54 @@ class RoadIntersections:
                 # waySegPoly = section.polyline.buffer(section.leftWidth, section.rightWidth)
                 # plotPolygon(waySegPoly,False,'g','#00ff00',1.,True,0.8,100)
 
-        test=1
+    def clusterWays(self):
+        hiThresh = 0.8
+        loThresh = 0.7
+        widthThresh = 20.
+        cycles = []
+        elongations = []
+        widths = []
+
+        cycleSegs, _, _ = self.sectionNetwork.getCycles()
+        polyNr = 0
+        for sectList in cycleSegs:
+            graphCycle = GraphCycle(sectList)
+            length,width,_ = boundingRectangle(graphCycle.cyclePoly.coords)
+            elongation = 1. - width/length
+
+            # Split polygons with high elongation but large width into tiles
+            if elongation > hiThresh and width > widthThresh:
+                for slice in GraphCycle.sliceLargeCycles(graphCycle.cyclePoly):
+                    length,width,_ = boundingRectangle(slice.coords)
+                    elongation = 1. - width/length
+                    if elongation > hiThresh:
+                        cycles.append(slice)
+                        elongations.append(elongation)
+                        widths.append(width)
+            else:
+                cycles.append(graphCycle.cyclePoly)
+                elongations.append(elongation)
+                widths.append(width)
+
+        # hysteresis thresholding
+        adj = polygonAdjacencyRook(cycles)
+        queue = deque( i for i in range(len(elongations)) if elongations[i] > hiThresh )
+        selected = set()
+        while queue:
+            indx = queue.popleft()
+            if indx not in selected and elongations[indx] > loThresh:
+                selected.add(indx)
+                for i in adj[indx]:
+                    if i != indx:
+                        queue.append(i)
+
+        for i in range(len(cycles)):
+            cycVerts = [(v.x,v.y) for v in cycles[i].coords]
+            if elongations[i] > hiThresh and widths[i] < widthThresh:
+                plotPolygon(cycVerts,False,'k','g',0.5,True,0.4,999)
+            elif i in selected and widths[i] < widthThresh:
+                plotPolygon(cycVerts,False,'c','c',0.5,True,0.4,999)
+
 
 def plotPolygon(poly,vertsOrder,lineColor='k',fillColor='k',width=1.,fill=True,alpha = 0.2,order=100):
     x = [n[0] for n in poly] + [poly[0][0]]

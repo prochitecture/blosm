@@ -85,6 +85,8 @@ railwayIntersectionCategoriesSet = set(railwayIntersectionCategories)
 
 wayIntersectionCategories = roadwayIntersectionCategories + railwayIntersectionCategories
 
+allWayIntersectionCategoriesRank = dict(zip(wayIntersectionCategories, range(len(wayIntersectionCategories))))
+
 facadeVisibilityWayCategories = (
     "primary",
     "secondary",

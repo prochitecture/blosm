@@ -43,25 +43,29 @@ class WaySection():
         tags = self.originalSection.tags
         if 'turn:lanes' in tags:
             nrOfLanes = getLanes(tags)
+            if nrOfLanes:
 
-            # p = self.originalSection.s
-            # q = self.originalSection.s + 0.05*(self.originalSection.t-self.originalSection.s)
-            # plt.text(p[0],p[1],tags['turn:lanes']+' '+str(self.id)+' '+str(nrOfLanes),fontsize=12,color='k')
-            # color = 'go' if self.originalSection.forward else 'ro'
-            # plt.plot(q[0],q[1],color,markersize=8,zorder=900)
-            # plt.plot(p[0],p[1],'bx',markersize=12,zorder=900)
+                # p = self.originalSection.s
+                # q = self.originalSection.s + 0.05*(self.originalSection.t-self.originalSection.s)
+                # plt.text(p[0],p[1],tags['turn:lanes']+' '+str(self.id)+' '+str(nrOfLanes),fontsize=12,color='k')
+                # color = 'go' if self.originalSection.forward else 'ro'
+                # plt.plot(q[0],q[1],color,markersize=8,zorder=900)
+                # plt.plot(p[0],p[1],'bx',markersize=12,zorder=900)
 
-            laneWidth = width/nrOfLanes
-            laneDescs = tags['turn:lanes'].split('|')
-            leftTurnLanes = sum(1 for tag in laneDescs if 'left' in tag)
-            rightTurnLanes = sum(1 for tag in laneDescs if 'right' in tag)
-            if leftTurnLanes == rightTurnLanes:
+                laneWidth = width/nrOfLanes
+                laneDescs = tags['turn:lanes'].split('|')
+                leftTurnLanes = sum(1 for tag in laneDescs if 'left' in tag)
+                rightTurnLanes = sum(1 for tag in laneDescs if 'right' in tag)
+                if leftTurnLanes == rightTurnLanes:
+                    self.leftWidth = width/2.
+                    self.rightWidth = width/2.
+                else:
+                    halfSymLaneWidth = laneWidth*(nrOfLanes - leftTurnLanes - rightTurnLanes)/2
+                    self.leftWidth = halfSymLaneWidth + leftTurnLanes * laneWidth
+                    self.rightWidth = halfSymLaneWidth + rightTurnLanes * laneWidth
+            else:
                 self.leftWidth = width/2.
                 self.rightWidth = width/2.
-            else:
-                halfSymLaneWidth = laneWidth*(nrOfLanes - leftTurnLanes - rightTurnLanes)/2
-                self.leftWidth = halfSymLaneWidth + leftTurnLanes * laneWidth
-                self.rightWidth = halfSymLaneWidth + rightTurnLanes * laneWidth
         else:
             self.leftWidth = width/2.
             self.rightWidth = width/2.

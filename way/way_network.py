@@ -200,7 +200,7 @@ class WayNetwork(dict):
             if tags1 and tags2: # category 'scene_border' has no tags
                 if tags1.get('lanes') != tags2.get('lanes'): return True
                 if tags1.get('oneway') != tags2.get('oneway'): return True
-                if tags1.get('bridge') != tags2.get('bridge'): return True
+                # if tags1.get('bridge') != tags2.get('bridge'): return True
             return False
 
         firstCategory = segment.category
