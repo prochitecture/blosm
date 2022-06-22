@@ -17,7 +17,8 @@ from action.road_intersections import RoadIntersections
 
 
 def skip(tags, e):
-    if tags.get("area") == "yes" or tags.get("tunnel") == "yes" or tags.get("ice_road") == "yes":
+    if tags.get("area") == "yes" or tags.get("tunnel") == "yes" or\
+    tags.get("ice_road") == "yes" or "indoor" in tags:
         e.valid = False
         return True
     return False
