@@ -247,18 +247,18 @@ def setup(app, osm):
         #        None, 
         #        roadPolygonsManager
         #    )   
-        # osm.addCondition(
-        #     lambda tags, e: "landuse" in tags and not tags.get("landuse") in ("residential", "retail"),
-        #     None,
-        #     roadIntersectionsManager
-        # )
-        # osm.addCondition(
-        #     lambda tags, e: "natural" in tags,
-        #     None,
-        #     roadIntersectionsManager
-        # )
-        # osm.addCondition(
-        #     lambda tags, e: "barrier" in tags,
-        #     None,
-        #     roadIntersectionsManager
-        # )
+        osm.addCondition(
+            lambda tags, e: "landuse" in tags and not tags.get("landuse") in ("residential", "retail", "cemetery","railway","commercial","industrial"),
+            None,
+            roadIntersectionsManager
+        )
+        osm.addCondition(
+            lambda tags, e: "natural" in tags,
+            None,
+            roadIntersectionsManager
+        )
+        osm.addCondition(
+            lambda tags, e: "barrier" in tags,
+            None,
+            roadIntersectionsManager
+        )

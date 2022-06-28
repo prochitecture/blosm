@@ -62,5 +62,6 @@ def boundingRectangle(verts):
     # rotate it back
     back = Matrix( [ (minArea[1][0], minArea[1][1]), (-minArea[1][1], minArea[1][0]) ] )
     rect = [ (v @ back) for v in minRect ]
-
-    return length, width, rect
+    dx, dy = Vector((1.,0.)) @ back if a>b else Vector((0.,1.)) @ back
+    dx,dy = (dx,dy) if dy>0. else (-dx,-dy)
+    return length, width, rect, dx, dy
