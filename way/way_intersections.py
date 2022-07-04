@@ -1,4 +1,4 @@
-from math import sin, cos, atan2, pi, sqrt, floor
+from math import sin, cos, atan2, pi, sqrt, floor, ceil
 from mathutils import Vector
 from itertools import tee,islice, cycle
 from itertools import cycle
@@ -48,7 +48,7 @@ class Intersection():
     def addSection(self,waySection):
         # The polylines of the outgoing lines of the intersection in <self.outWayLines> start all
         # at the intersection point. If this is the same direction as in the corresponding way
-        # section <waySection>, the attribuet <fwd> in <Outline> is set to True, and False,
+        # section <waySection>, the attribute <fwd> in <Outline> is set to True, and False,
         # if reversed. <self.order> is the number of outgoing ways and determines the type of the
         # intersection. Loop ways have their two ends at the intersection and are marked in 
         # <waySection> with waySection.isLoop == True.
@@ -109,14 +109,16 @@ class Intersection():
                 # For way-loops, the forward and backward polyline is in expected consecutive order
                 # in <self.outWayLines>. For loop-ways, a parallel offset can't be computed
                 # correctly, therefore, only their first segments are used.
+                w1 = line1.section.leftWidth if line1.fwd else line1.section.rightWidth
+                w2 = line2.section.rightWidth if line2.fwd else line2.section.leftWidth
                 if line1.section.isLoop and line2.section.isLoop:
                     trimmed1 = PolyLine(line1.polyline[:2])
                     trimmed2 = PolyLine(line2.polyline[:2])
-                    borderL = trimmed1.parallelOffset( line1.section.leftWidth)
-                    borderR = trimmed2.parallelOffset(-line2.section.rightWidth)
+                    borderL = trimmed1.parallelOffset(w1 )
+                    borderR = trimmed2.parallelOffset(-w2 )
                 else:
-                    borderL = line1.polyline.parallelOffset( line1.section.leftWidth)
-                    borderR = line2.polyline.parallelOffset(-line2.section.rightWidth)
+                    borderL = line1.polyline.parallelOffset(w1 )
+                    borderR = line2.polyline.parallelOffset(-w2 )
 
                 # Find intersection between left border <borderL> of <line1> 
                 # and right border <borderR> of <line2>
@@ -261,7 +263,9 @@ class Intersection():
                 # Starting with the left border of the centerline <line1>.
                 # Given the line parameter of the trim point on the centerline, we can 
                 # compute the point <pL> perpendicularly offset to the left.
-                pL = line1.polyline.offsetPointAt(tS1,line1.section.leftWidth)
+                w1 = line1.section.leftWidth if line1.fwd else line1.section.rightWidth
+                w2 = line2.section.rightWidth if line2.fwd else line2.section.leftWidth
+                pL = line1.polyline.offsetPointAt(tS1,w1)
                 if filletVerts:
                     # By a simple check of coordinate differences, we may decide if
                     # <pL> is a vertex of the fillet.
@@ -274,8 +278,8 @@ class Intersection():
                 else:
                     polygon.append(pL)
 
-                # The same porcedure is then done for the right border of the centerline <line2>
-                pR = line2.polyline.offsetPointAt(tS2,-line2.section.rightWidth)
+                # The same procedure is then done for the right border of the centerline <line2>
+                pR = line2.polyline.offsetPointAt(tS2,-w2)
                 if filletVerts:
                     dR = sum(pR-filletVerts[-1])
                     if abs(dR) > 1.e-4:
@@ -311,7 +315,7 @@ class Intersection():
                 if leftWidthDifference or rightWidthDifference:
                     outLine.section.turnParams = [leftWidthDifference,rightWidthDifference]
 
-        # Prepare transition polygon (3 m each side)
+        # Prepare transition polygon 
         if outLine.section.turnParams:
             transitionWidth = 0.5
         else:
@@ -329,8 +333,10 @@ class Intersection():
             assert outT is not None
 
             # compute cornerpoints
-            inLeft = inLine.polyline.offsetPointAt(inT,inLine.section.leftWidth)
-            inRight = inLine.polyline.offsetPointAt(inT,-inLine.section.rightWidth)
+            # inLeft = inLine.polyline.offsetPointAt(inT,inLine.section.leftWidth)
+            # inRight = inLine.polyline.offsetPointAt(inT,-inLine.section.rightWidth)
+            inLeft = inLine.polyline.offsetPointAt(inT,inLine.section.rightWidth)
+            inRight = inLine.polyline.offsetPointAt(inT,-inLine.section.leftWidth)
             outLeftWidth = inLine.section.leftWidth if outLine.section.turnParams else outLine.section.leftWidth
             outRightWidth = inLine.section.rightWidth if outLine.section.turnParams else outLine.section.rightWidth
             outLeft = outLine.polyline.offsetPointAt(outT,outLeftWidth)

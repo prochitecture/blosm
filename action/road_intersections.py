@@ -24,14 +24,27 @@ class RoadIntersections:
         self.intersectionPolys = dict()
 
     def do(self, manager):
-        self.findSelfIntersections(manager)
-        self.createWaySectionNetwork()
-        self.createSections()
-        self.createIntersections()
-        self.typeDetection()
+        evalType = 'cycleDetails'
 
-        # self.plotSections()
-        # self.clusterWays()
+        if evalType == 'cycleDetails':
+            self.findSelfIntersections(manager)
+            self.createWaySectionNetwork()
+            self.createSections()
+            self.createIntersections()
+            self.typeDetection()
+        elif evalType == 'overView':
+            self.findSelfIntersections(manager)
+            self.createWaySectionNetwork()
+            self.createSections()
+            self.createIntersections()
+            self.plotSections()
+        elif evalType == 'clusterWays':
+            self.findSelfIntersections(manager)
+            self.createWaySectionNetwork()
+            self.createSections()
+            self.createIntersections()
+            self.plotSections()
+            self.clusterWays()
 
 
     def findSelfIntersections(self, manager):
@@ -113,34 +126,23 @@ class RoadIntersections:
         test=1
 
     def createIntersections(self):
-        # for nodeNr,node in enumerate(self.sectionNetwork):
-        #     # print(nodeNr)
-        #     # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
-        #     # plt.close()
-        #     # if nodeNr != 213:
-        #     #     test=1
-        #     #     continue
-        #     intersection = Intersection(node, self.sectionNetwork, self.waySections)
-
-        #     if intersection.order == 2:
-        #         # Transitions have to be processed first, because ways may be altered.
-        #         polygon = intersection.findTransitionPoly()
-        #         # if polygon:
-        #         #     plotPolygon(polygon,False,'m','m',2.,True,0.4,100)
-        #         self.intersectionPolys[node] = polygon
-
         for nodeNr,node in enumerate(self.sectionNetwork):
             # print(nodeNr)
             # plt.text(node[0],node[1],str(nodeNr),fontsize=12,zorder=900)
-            # plt.close()
-            # if nodeNr != 213:
-            #     test=1
+            # if nodeNr in (26,):
             #     continue
+            # if nodeNr != 26:
+            #     continue
+            debug = False
+            if debug:
+                plt.close()
             intersection = Intersection(node, self.sectionNetwork, self.waySections)
 
             if intersection.order == 2:
                 # Transition have to be processed first, because ways may be altered.
                 polygon = intersection.findTransitionPoly()
+                # if polygon:
+                #     plotPolygon(polygon,False,'m','m',2.,True,0.4,300)
                 self.intersectionPolys[node] = polygon
             elif intersection.order > 2:
                 pass
@@ -148,9 +150,10 @@ class RoadIntersections:
                 # plotPolygon(polygon,False,'k','r',1.,True,0.2,100)
                 self.intersectionPolys[node] = polygon
 
-
-                # plt.title(str(nodeNr))
-                # plotEnd()
+            if debug:
+                plotPolygon(polygon,False,'r:','r',1.,False,1,100)
+                plt.title(str(nodeNr))
+                plotEnd()
 
     def plotSections(self):
         for nr,section in enumerate(self.waySections.values()):
@@ -168,7 +171,7 @@ class RoadIntersections:
                     waySegPoly = waySlice.parabolicBuffer(section.leftWidth, section.rightWidth,section.turnParams[0],section.turnParams[1])
                 else:
                     waySegPoly = waySlice.buffer(section.leftWidth, section.rightWidth)
-                # plotPolygon(waySegPoly,False,'b','#aaaaff',1.,True,0.2,100)
+                plotPolygon(waySegPoly,False,'b','#aaaaff',1.,True,0.2,100)
             # else:
             #     center = sum(section.polyline.verts,Vector((0,0)))/len(section.polyline.verts)
             #     trimText = ' %4.2f %4.2f'%(section.trimS,section.trimT)
@@ -176,6 +179,10 @@ class RoadIntersections:
                 # print(nr)
                 # waySegPoly = section.polyline.buffer(section.leftWidth, section.rightWidth)
                 # plotPolygon(waySegPoly,False,'g','#00ff00',1.,True,0.8,100)
+
+        for polygon in self.intersectionPolys.values():
+            if polygon:
+                plotPolygon(polygon,False,'k','r',1.,True,0.8,100)
 
     def clusterWays(self):
         hiThresh = 0.8
@@ -530,10 +537,11 @@ def plotNetwork(network):
     for count,seg in enumerate(network.iterAllSegments()):
         # plt.plot(seg.s[0],seg.s[1],'k.')
         # plt.plot(seg.t[0],seg.t[1],'k.')
+        color = 'r' if seg.category=='scene_border' else 'y'
 
         for v1,v2 in zip(seg.path[:-1],seg.path[1:]):
             plt.plot( (v1[0], v2[0]), (v1[1], v2[1]), **RoadPolygonsRenderer.styles[seg.category], zorder=50 )
-        # plotWaySeg(seg,'k',0.5)
+        # plotWaySeg(seg,color,1)
 
 def plotWaySeg(wayseg,color='k',width=1.,order=100):
     for v1,v2 in zip(wayseg.path[:-1],wayseg.path[1:]):
@@ -585,3 +593,7 @@ def plotPolygon(poly,vertsOrder,lineColor='k',fillColor='k',width=1.,fill=True,a
     if vertsOrder:
         for i,(xx,yy) in enumerate(zip(x[:-1],y[:-1])):
             plt.text(xx,yy,str(i))
+
+def plotEnd():
+    plt.gca().axis('equal')
+    plt.show()
