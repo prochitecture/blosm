@@ -148,6 +148,9 @@ class WayNetwork(dict):
         # generator for all nodes from the network
         return iter(self)
 
+    def order(self,source):
+        return sum(1 for target in self[source] for segment in self[target][source])
+
     def iterInSegments(self, source):
         # generator for all in-segments from the network
         source = Vector(source).freeze()

@@ -149,19 +149,26 @@ class OffsetGenerator():
         EPSILON = 0.001
         cleaned = []
         lastValid = -1
+        self.connected = [self.pline0[0][0]] + self.connected + [self.pline0[-1][1]]
         for i, (p1, p2) in enumerate(pairs(self.connected)):
             if i > lastValid:# and i<len(self.connected)-2:
                 cleaned.append(p1)
+                p0 = NonelastValid0 = None
                 for j, (p3, p4) in enumerate(pairs(self.connected[i + 2:])):
                     isectRes = segmentIntersection(p1,p2,p3,p4)
                     if isectRes is not None:
                         p, t1, t2 = isectRes
                         if EPSILON <= t1 <= 1.-EPSILON and EPSILON <= t2 <= 1.+EPSILON:
-                            cleaned.append(p)
-                            lastValid = j+ i + 1
-                            break
+                            p0 = p
+                            lastValid0 = j+ i + 2
+                if p0:
+                    cleaned.append(p0)
+                    lastValid = lastValid0
+                            # cleaned.append(p)
+                            # lastValid = j+ i + 2
+                            # break
         cleaned.append(self.connected[-1])
-        return cleaned
+        return cleaned[1:-1]
          
     def parallel_offset(self, polyline, distance):
         self.reset()
@@ -172,29 +179,27 @@ class OffsetGenerator():
         cleaned = self.cleanSelfIntersections()
         # if len(cleaned) > 0:
         #     plt.close()
-        #     # for v1,v2 in zip(polyline.verts,polyline.verts[1:]):
-        #     #     plt.plot([v1.x,v2.x],[v1.y,v2.y],'k')
         #     for i,(v1,v2) in enumerate(self.pline0):
         #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k')
-        #     #     plt.plot(v1[0],v1[1],'k.')
-        #     #     plt.plot(v2[0],v2[1],'k.')
-        #     #     plt.text(v1[0],v1[1],str(i))
+        #         plt.plot(v1[0],v1[1],'k.')
+        #         plt.plot(v2[0],v2[1],'k.')
+        #         plt.text(v1[0],v1[1],str(i))
+
         #     # for i,(v1,v2) in enumerate(self.offset):
         #     #     plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'b')
         #     #     plt.text(v1[0],v1[1],str(i))
-        #     # self.connected = []
-        #     # self.connectOffsetSegments()
+
         #     for i,(v1,v2) in enumerate( zip(self.connected,self.connected[1:]) ):
         #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'k')
         #         plt.plot(v1[0],v1[1],'k.')
         #         plt.plot(v2[0],v2[1],'k.')
         #         plt.text(v1[0],v1[1],str(i))
-        #     # for v1,v2 in zip(self.connected,self.connected[1:]):
-        #     #     plt.plot([v1.x,v2.x],[v1.y,v2.y],'r')
+
         #     for v1,v2 in zip(cleaned,cleaned[1:]):
         #         plt.plot([v1[0],v2[0]],[v1[1],v2[1]],'g',linewidth = 5)
         #         plt.plot(v1[0],v1[1],'kx',markersize=8)
         #         plt.plot(v2[0],v2[1],'kx',markersize=8)
+
         #     # for v in cleaned:
         #     #     print(v)
         #     plt.title('Self-Intersection '+str(len(cleaned)))

@@ -13,10 +13,11 @@ class WaySection():
         self.isLoop = net_section.s == net_section.t
         self._sV = None  # vector of first segment
         self._tV = None  # vector of last segment
-        self.trimS = 0.    # trim factor for start
-        self.trimT = 0.    # trim factor for target
+        self.trimS = 0.                      # trim factor for start
+        self.trimT = len(self.polyline)-1    # trim factor for target
         self.id = WaySection.ID
         self.turnParams = None  # parameters for turning lanes
+        self.isValid = True
         WaySection.ID += 1
         self.processTurnLanes()
 
