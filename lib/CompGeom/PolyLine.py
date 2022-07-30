@@ -192,7 +192,10 @@ class PolyLine():
             iE = itE+1
             pE = [self.t2v(tE)]
 
-        return PolyLine(pS + self.verts[self.view][iS:iE] + pE)
+        if iS == iE:
+            return PolyLine(pS + pE)
+        else:
+            return PolyLine(pS + self.verts[self.view][iS:iE] + pE)
 
         # N = len(self.verts)
         # if tS==0.:
@@ -334,6 +337,19 @@ class PolyLine():
             return iP, i1+t1, i2+t2, d1/d1.length, d2/d2.length
         else:
             return None
+
+    def intersectSegment(self, p1, p2):
+        for v1,v2 in pairs(self.verts[self.view]):
+            d1, d2 = v2-v1, p2-p1
+            cross = d1.cross(d2)
+            if cross == 0.:
+                continue
+            d3 = v1-p1
+            t1 = (d2[0]*d3[1] - d2[1]*d3[0])/cross
+            t2 = (d1[0]*d3[1] - d1[1]*d3[0])/cross
+            if 0. <= t1 <= 1. and 0. <= t2 <= 1:
+                return v1 + d1*t1, t1
+        return None
 
     def parallelOffset(self, dist):
         # Returns the PolyLine that is offset perpendicularly by

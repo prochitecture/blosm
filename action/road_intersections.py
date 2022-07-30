@@ -3,12 +3,12 @@ from mathutils import Vector
 import matplotlib.pyplot as plt
 
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
-from lib.CompGeom.algorithms import SCClipper, polygonAdjacencyRook
+from lib.CompGeom.algorithms import SCClipper, polygonAdjacencyRook, polygonAdjacencyQueen
 from lib.CompGeom.boundingRectangle import boundingRectangle
 
 from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
-from way.way_intersections import Intersection
+from way.way_intersections import Intersection, IntersectionCluster
 from way.way_section import WaySection
 from way.way_graph_cycle import GraphCycle
 
@@ -24,9 +24,10 @@ class RoadIntersections:
         self.transitionPolys = dict()
         self.intersectionPolys = dict()
         self.wayPolys = dict()
+        self.clusteredNodes = []
 
     def do(self, manager):
-        evalType = 'overView'
+        evalType = 'hashTypeCluster'
         self.useFillet = True
 
         if evalType == 'overView':
@@ -44,11 +45,20 @@ class RoadIntersections:
             self.createIntersectionPolys()
             self.typeDetection()
 
-        elif evalType == 'clusterWays':
+        elif evalType == 'elongatedCycles':
             self.findSelfIntersections(manager)
             self.createWaySectionNetwork()
             self.createSections()
             self.clusterElongatedWays()
+
+        elif evalType == 'hashTypeCluster':
+            self.findSelfIntersections(manager)
+            self.createWaySectionNetwork()
+            self.createSections()
+            self.createIntersectionPolys()
+            self.createWayPolys()
+            self.plotPolygonAreas()
+            self.hashTypeCluster()
 
     def findSelfIntersections(self, manager):
         wayManager = self.app.managersById["ways"]
@@ -57,7 +67,7 @@ class RoadIntersections:
         # should be moved to defs.
         uniqueSegments = defaultdict(set)
         for way in wayManager.getAllWays():
-            if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
+            if [tag for tag in ExcludedWayTags if tag in way.category]:
                 continue
             for segment in way.segments:
                 v1, v2 = (segment.v1[0],segment.v1[1]),  (segment.v2[0],segment.v2[1])
@@ -91,7 +101,7 @@ class RoadIntersections:
         # should be moved to defs.
         for way in wayManager.getAllIntersectionWays():
             # Exclude ways with unwanted tags
-            if [tag for tag in ExcludedWayTags if tag in way.element.tags]:
+            if [tag for tag in ExcludedWayTags if tag in way.category]:
                 continue
 
             for waySegment in way.segments:
@@ -157,11 +167,12 @@ class RoadIntersections:
                     self.intersectionPolys[node] = polygon
 
     def createWayPolys(self):
-        for sectionNr,section in enumerate(self.waySections.values()):
+        for sectionNr,section in self.waySections.items():
             # center = sum(section.polyline.verts,Vector((0,0)))/len(section.polyline.verts)
             # plt.text(center[0],center[1],str(nr),zorder=120)
             waySlice = None
             wayLength = 0.
+            # if abs(section.trimT - section.trimS) > 1.e-6:
             if section.trimT > section.trimS:
                 waySlice = section.polyline.trimmed(section.trimS,section.trimT)
                 if section.turnParams:
@@ -174,11 +185,13 @@ class RoadIntersections:
 
     def plotPolygonAreas(self):
         for node,polygon in self.transitionPolys.items():
-            plotPolygon(polygon,False,'m','m',1.,True,0.4,100)
+            plotPolygon(polygon,False,'m','m',1.,True,0.2,100)
         for node,polygon in self.intersectionPolys.items():
-            plotPolygon(polygon,False,'r','r',1.,True,0.4,200)
+            if node not in self.clusteredNodes:
+                plotPolygon(polygon,False,'r','r',1.,True,0.2,200)
         for nr,polygon in self.wayPolys.items():
-            plotPolygon(polygon,False,'b','b',1.,True,0.4,200)
+            if self.waySections[nr].isValid:
+                plotPolygon(polygon,False,'b','b',1.,True,0.2,200)
 
     def clusterElongatedWays(self):
         hiThresh = 0.8
@@ -227,7 +240,6 @@ class RoadIntersections:
                 plotPolygon(cycVerts,False,'k','g',0.5,True,0.4,999)
             elif i in selected and widths[i] < widthThresh:
                 plotPolygon(cycVerts,False,'c','c',0.5,True,0.4,999)
-
 
     def typeDetection(self):
         # local functions --------------------------------------------------
@@ -431,7 +443,77 @@ class RoadIntersections:
                 plt.tight_layout()
                 plt.show()
 
+    def hashTypeCluster(self):
+        majorCategories = [ "motorway","motorway_link","trunk","trunk_link","primary",
+                            "primary_link","secondary","secondary_link","tertiary","tertiary_link"]
 
+        cycleSegs, _, _ = self.sectionNetwork.getCycles()
+        cycles = [GraphCycle(sectList) for sectList in cycleSegs]
+        neighbors = polygonAdjacencyQueen([cycle.cyclePoly for cycle in cycles])
+
+        def expandCoreToSections(core,intersections,border):
+            borders = [(v2-v1).length for v1,v2 in zip(core[1:]+[core[0]],core[2:]+core[:2])]
+            lines = []
+            for i,p1,p2 in zip(range(4),core,core[1:]+[core[0]]):
+                edgeVec = p2-p1
+                edgeLength = edgeVec.length
+                edgePerp = Vector((edgeVec[1]/edgeLength,-edgeVec[0]/edgeLength)) 
+                maxD = 10.#float('-inf')
+                for p in intersections:
+                    d = edgeVec.cross(p1-p) / edgeLength
+                    maxD = max(maxD, d)
+                lines.append((p1+edgePerp*(maxD+border),edgeVec))
+
+            result = []
+            for lin1,lin2 in zip(lines,lines[1:]+[lines[0]]):
+                d1,d2 = lin1[1],lin2[1]
+                d3 = lin1[0]-lin2[0]
+                cross = d1.cross(d2)
+                t = (d2[0]*d3[1] - d2[1]*d3[0])/cross
+                result.append( (lin1[0] + d1*t).freeze() )
+
+            return result
+
+        for nr,cycle in enumerate(cycles):
+            sectList = cycle.segList
+
+            # Find possible intersection qudrangle pattern in cycles
+            if len(sectList) == 4 and all((s.category in majorCategories) and s.length<20. for s in sectList):
+                doDebug = False
+                if doDebug:
+                    plt.close()
+
+                # <cycle> is now such a quadrangle, let me call it 'core cycle'. Store its
+                # intersection positions
+                core = [s.s for s in sectList]
+                # Now check if there are neighbor cycles with an area that does not exceed
+                # double the area of the core cycle.
+                neighCycles = neighbors[nr]
+                cluster = set()
+                for ni in neighCycles:
+                    if ni != nr and cycles[ni].cyclePoly.area < 2*cycle.cyclePoly.area:
+                        # There are neighbors, add their intersection positions to the set.
+                        cluster = cluster.union({s.s for s in cycles[ni].segList})
+                        
+                # compute the bounding rectangle
+                # length, width, clusterRect, dx, dy = boundingRectangle(list(cluster))
+                # plotPolygon(clusterRect,False,'k:','g',0.5,False,0.2,999)
+                width = sum((v2-v1).length for v1,v2 in zip(core,core[1:]+[core[0]]))/4
+                rect = expandCoreToSections(list(core),list(cluster),2.5)
+                # if doDebug:
+                    # plotPolygon(rect,False,'r:','g',4,False,0.2,999)
+                #     # plotEnd()
+                #     pass
+                cluster.update(core)
+                isectCluster = IntersectionCluster(list(cluster),rect,self.sectionNetwork,self.waySections)
+                polygon = isectCluster.intersectionPoly_noFillet()
+                if doDebug and polygon:
+                    plt.title(str(nr))
+
+                plotPolygon(polygon,False,'k','g',1.,True,0.5,999)
+                if doDebug:
+                    plotEnd()
+                        
 
 
 from itertools import *
@@ -461,6 +543,15 @@ def plotNetwork(network):
         for v1,v2 in zip(seg.path[:-1],seg.path[1:]):
             plt.plot( (v1[0], v2[0]), (v1[1], v2[1]), **RoadPolygonsRenderer.styles[seg.category], zorder=50 )
         # plotWaySeg(seg,color,1)
+
+def plotLine(line,vertsOrder,color='k',width=1.,order=100):
+    count = 0
+    for v1,v2 in zip(line[:-1],line[1:]):
+        plt.plot([v1[0],v2[0]],[v1[1],v2[1]],color,linewidth=width,zorder=order)
+        if vertsOrder:
+            plt.text(v1[0],v1[1],str(count),fontsize=12)
+        count += 1
+        # plt.plot(v1[0],v1[1],'kx')
 
 def plotWaySeg(wayseg,color='k',width=1.,order=100):
     for v1,v2 in zip(wayseg.path[:-1],wayseg.path[1:]):
