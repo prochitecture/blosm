@@ -27,7 +27,7 @@ class RoadIntersections:
         self.clusteredNodes = []
 
     def do(self, manager):
-        evalType = 'hashTypeCluster'
+        evalType = 'overView'
         self.useFillet = True
 
         if evalType == 'overView':
@@ -59,6 +59,11 @@ class RoadIntersections:
             self.createWayPolys()
             self.plotPolygonAreas()
             self.hashTypeCluster()
+
+        if evalType == 'detectPatterns':
+            self.findSelfIntersections(manager)
+            self.createWaySectionNetwork()
+            self.detectPatterns()
 
     def findSelfIntersections(self, manager):
         wayManager = self.app.managersById["ways"]
@@ -513,8 +518,173 @@ class RoadIntersections:
                 plotPolygon(polygon,False,'k','g',1.,True,0.5,999)
                 if doDebug:
                     plotEnd()
-                        
 
+    def detectPatterns(self):  
+        from math import prod
+        from defs.way import allRoadwayCategories
+        CatOrder = dict(zip(allRoadwayCategories, reversed(range(len(allRoadwayCategories)))))                      
+        def pseudoangle(v):
+            p = v[0]/(abs(v[0])+abs(v[1])) 
+            return 3 + p if v[1] < 0 else 1 - p
+        def createEdgeDescriptor(categories,angles):
+            descCat = [CatOrder[c] for c in categories]
+            order = len(categories)
+            return order, {'C':descCat,'A':angles}
+        def createEdgeTemplate(pattern):
+            catS,angS,catT,angT,catC,lenC = pattern
+            angS = [a/90. for a in angS]
+            descS = createEdgeDescriptor(catS,angS)
+            angT = [a/90. for a in angT]
+            descT = createEdgeDescriptor(catT,angT)
+            descC = {'C':[CatOrder[catC]],'L':lenC}
+            descriptors = (descS,descT)
+            orderS = len(angS)
+            orderT = len(angT)
+            return orderS,orderT,descC,descriptors
+        def createMeasuredDescriptor(network,edge):
+            # find outgoing sections for start node of edge
+            angle0 = pseudoangle(edge.path[1]-edge.path[0]) # angle of edge at start
+            # outgoing sections and their angles
+            sectS = [[s,pseudoangle(s.firstV)-angle0] for target in network.iterAdjacentNodes(edge.s) for s in network[edge.s][target] \
+                        if target != edge.t and s.category != 'scene_border']
+            # adjust if negative angles
+            sectS = [[s,a if a>=0. else a+4.] for (s,a) in sectS]
+            # sort by angle to have the outgoing sections ordered counter-clockwise
+            sectS = sorted(sectS, key=lambda d: d[1])
+            orderS = len(sectS)
+
+            # find outgoing sections for target node of edge
+            angle0 = pseudoangle(edge.path[-2]-edge.path[-1]) # angle of edge at start
+            # outgoing sections and their angles
+            sectT = [[s,pseudoangle(s.firstV)-angle0] for target in network.iterAdjacentNodes(edge.t) for s in network[edge.t][target] \
+                        if target != edge.s and s.category != 'scene_border']
+            # adjust if negative angles
+            sectT = [[s,a if a>=0. else a+4.] for (s,a) in sectT]
+            # sort by angle to have the outgoing sections ordered counter-clockwise
+            sectT = sorted(sectT, key=lambda d: d[1])
+            orderT = len(sectT)
+
+            if orderS > 1 and orderT > 1:
+                catS = [s[0].category for s in sectS]
+                angS = [s[1] for s in sectS]
+                catT = [s[0].category for s in sectT]
+                angT = [s[1] for s in sectT]
+                descS = createEdgeDescriptor(catS,angS)
+                descT = createEdgeDescriptor(catT,angT)
+                descC = {'C':[CatOrder[edge.category]],'L':edge.length}
+                return descC, descS, descT
+            else:
+                return None
+        def computeSim(d1,d2,maxDiff):
+            sim = prod( 1.-min(abs(c1-c2),maxDiff)/maxDiff for c1,c2 in zip(d1,d2) )
+            return sim
+        def descSimilarity(templ, desc2):
+            sim = 1.
+            w = 0
+            simA = simC = simL = None
+            for key in templ:
+                d1 = templ[key]
+                d2 = desc2[key]
+                if key=='A':
+                    w += len(d1)
+                    simA = computeSim(d1,d2,0.5)
+                elif key=='C':
+                    w += len(d1)
+                    simC = computeSim(d1,d2,5.)
+                elif key=='L':
+                    simL = computeSim([d1],[d2],20.) if d2 > d1 else 1.
+                    w += 1
+            sim = (simA if simA is not None else 1.) * (simC if simC is not None else 1.) * (simL if simL is not None else 1.)
+            return sim# - disSim/w
+        def plotEdge(edge,sim,eNr,color):
+            if sim < 0.01:
+                return
+            # plt.plot(edge.s[0],edge.s[1],'ro',zorder=998)
+            # plt.plot(edge.t[0],edge.t[1],'go',zorder=998)
+            # plt.gca().add_artist(plt.Circle(
+            #     ( edge.s[0],edge.s[1]),
+            #     2.,
+            #     alpha=0.2,
+            #     color='red',
+            #     zorder=998
+            # )) 
+            # plt.gca().add_artist(plt.Circle(
+            #     ( edge.t[0],edge.t[1]),
+            #     2. ,
+            #     alpha=0.2,
+            #     color='green',
+            #     zorder=998
+            # )) 
+            plt.plot([edge.s[0],edge.t[0]],[edge.s[1],edge.t[1]],'b',linewidth = 2,zorder=998)
+            v0 = (edge.s + edge.t)/2.
+            vL = (edge.s-edge.t).length/2 * 1.1
+            # plt.text(v0[0],v0[1],'  %d, %4.2e'%(eNr,sim),fontsize=10,zorder=999)
+            plt.gca().add_artist(plt.Circle(
+                ( v0[0],v0[1]),
+                vL ,
+                alpha=0.4,
+                color=color,
+                zorder=999
+            )) 
+            plt.text(v0[0],v0[1]+1,'    %4.2f'%(sim),fontsize=10,zorder=999)
+        def detectPattern(patterns,colors):
+            for eNr,edge in enumerate(self.sectionNetwork.iterAllForwardSegments()):
+                if edge.category == 'scene_border':
+                    continue
+                retDesc = createMeasuredDescriptor(self.sectionNetwork,edge)
+                if retDesc is None:
+                    continue
+                descC, descS, descT = retDesc
+                maxSim = 0.
+                nrMax = None
+                for iPat, pattern in enumerate(patterns.values()):
+                    orderS,orderT,tempC,templates = createEdgeTemplate(pattern)
+                    if orderS == orderT:    # same order for both ends
+                        if (descS[0]==orderS and descT[0]==orderS):
+                            edgeSim = descSimilarity(tempC,descC)
+                            tempS, tempT = templates
+                            sim1 = descSimilarity(tempS[1],descS[1]) * descSimilarity(tempT[1],descT[1])
+                            sim2 = descSimilarity(tempT[1],descS[1]) * descSimilarity(tempS[1],descT[1])
+                            sim = max(sim1,sim2) * edgeSim
+                        else:
+                            continue
+                    else: # different order of ends
+                        if (descS[0],descT[0]) == (orderS,orderT) or (descS[0],descT[0]) == (orderT,orderS):
+                            edgeSim = descSimilarity(tempC,descC)
+                            tempS,tempT = templates
+                            tempS,tempT = (tempS,tempT) if descS[0]==tempS[0] else (tempT,tempS)
+                            sim = descSimilarity(tempS[1],descS[1]) * descSimilarity(tempT[1],descT[1]) * edgeSim
+                        else:
+                            continue
+                    if sim > maxSim:
+                        maxSim = sim
+                        nrMax = iPat
+
+                    # print(eNr,iPat,sim,maxSim,nrMax)
+                if nrMax is not None:
+                    # print(maxSim,nrMax)
+                    plotEdge(edge,maxSim,nrMax,colors[nrMax])
+
+        patterns = {
+            'sidePrimary': [
+                ['primary','tertiary','primary'],[90,180,270], # out-segments of S
+                ['primary','tertiary','primary'],[90,180,270], # out-segments of E
+                'tertiary',15.,                                # way-section
+            ],
+            'sideSecondary': [
+                ['secondary','residential','secondary'],[90,180,270],
+                ['secondary','residential','secondary'],[90,180,270],
+                'residential',15.,
+            ],
+            'onesideTertiary': [
+                ['tertiary','residential','tertiary'],[90,180,270],
+                ['tertiary','tertiary'],[90,270],
+                'residential',15.,
+            ],
+        }
+
+        colors = ['red', 'green', 'lime']
+        detectPattern(patterns,colors)
 
 from itertools import *
 def _iterEdges(poly):
