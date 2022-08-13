@@ -520,7 +520,7 @@ class RoadIntersections:
                     plotEnd()
 
     def detectPatterns(self):  
-        from functools import reduce
+        from math import prod
         from defs.way import allRoadwayCategories
         CatOrder = dict(zip(allRoadwayCategories, reversed(range(len(allRoadwayCategories)))))                      
         def pseudoangle(v):
@@ -576,7 +576,7 @@ class RoadIntersections:
             else:
                 return None
         def computeSim(d1,d2,maxDiff):
-            sim = reduce((lambda x, y: x * y), [1.-min(abs(c1-c2),maxDiff)/maxDiff for c1,c2 in zip(d1,d2)])
+            sim = prod(1.-min(abs(c1-c2),maxDiff)/maxDiff for c1,c2 in zip(d1,d2))
             return sim
         def descSimilarity(templ, desc2):
             sim = 1.
