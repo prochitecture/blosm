@@ -111,12 +111,12 @@ class RoadPolygons:
                     v1, v2 = Vector(segment[0]),Vector(segment[1])
                     accepted, v1, v2 = clipper.clip(v1,v2)
                     if accepted:
-                        netSeg = NetSection(v1,v2,way.category,(v2-v1).length)
+                        netSeg = NetSection(v1,v2,way.category,way.element.tags,(v2-v1).length)
                         wayManager.networkGraph.addSegment(netSeg,False)
 
         borderPolygon = clipper.getPolygon()
         for v1,v2 in zip(borderPolygon[:-1],borderPolygon[1:]):
-            netSeg = NetSection(v1,v2,'scene_border',(v2-v1).length) 
+            netSeg = NetSection(v1,v2,'scene_border',None,(v2-v1).length) 
             wayManager.networkGraph.addSegment(netSeg)
 
         # create way-section network
