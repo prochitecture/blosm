@@ -34,6 +34,7 @@ class Junction():
 def createSectionNetwork(network):
     sectionNetwork = WayNetwork()
     # Intialize a container with all nodes that are intersections or ends (degree != 2)
+    # or nodes where the way type changes. 
     # For each node <sectionStart> in this container:
     #     Find next neighbor of this node
     #     For each edge to these neighbors:
@@ -45,6 +46,7 @@ def createSectionNetwork(network):
     #             The edges from <sectionStart> to <sectionEnd> get merged to a new
     #             way-segment and added to the new graph
     startNodes = deque( [node for node in network.iterAllIntersectionNodes()])
+    # startNodes.extend([node for node in network.iterAllChangeWayTypeNodes()])
     forbiddenStarts = []
 
     while len(startNodes) > 0:

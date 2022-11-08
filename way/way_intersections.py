@@ -4,7 +4,6 @@ from mathutils import Vector
 from itertools import tee,islice, cycle
 from itertools import cycle
 from lib.CompGeom.PolyLine import PolyLine
-from lib.CompGeom.algorithms import repairSimpleSelfIntersection
 from way.way_properties import estFilletRadius
 import matplotlib.pyplot as plt
 
