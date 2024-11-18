@@ -234,3 +234,17 @@ class BlenderRenderer:
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
             self.gltfImporterPatched = True
+        elif bv[0] == 4 and bv[1] == 3:
+            from .gltf_patch import set_convert_functions_4_0, select_imported_objects_4_1
+            from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+            from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
+            from io_scene_gltf2.blender.imp.scene import BlenderScene
+            
+            glTFImporter._offset = self.centerCoords
+            self._set_convert_functions = BlenderGlTF.set_convert_functions
+            BlenderGlTF.set_convert_functions = set_convert_functions_4_0
+            
+            self._select_imported_objects = BlenderScene.select_imported_objects
+            BlenderScene.select_imported_objects = select_imported_objects_4_1
+            
+            self.gltfImporterPatched = True
