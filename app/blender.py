@@ -355,6 +355,9 @@ class BlenderApp(BaseApp):
             addon.geometricError
         )
         
+        if not "io_scene_gltf2" in context.preferences.addons:
+            raise Exception("Enable Blender's built-in glTF addon. It's used by the Blosm addon.")
+        
         if addon.threedTilesSource == "google":
             prefs = bpy.context.preferences.addons
             if addonName in prefs:
