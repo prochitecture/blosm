@@ -25,7 +25,8 @@ class BlenderRenderer:
         self.licenseRePattern = re.compile(b'\"copyright\":\s*\"(\w+)\"')
         self.copyrightHolders = {}
         
-        self.gltfImporterPatched = False
+        # <self._gltfImporterPatched> is used to store some Python objects related to Blender's glTF importer if its patching is performed
+        self._gltfImporterPatched = None
         # the original static function <BlenderGlTF.set_convert_functions> of the glTF importer will be stored in the attribute below
         self._set_convert_functions = None
         # the original static function <BlenderScene.select_imported_objects> of the glTF importer will be stored in the attribute below
@@ -71,7 +72,7 @@ class BlenderRenderer:
             
             # set the origin of the resulting Blender object at <centerCoords>
             _cursorLocation = bpy.context.scene.cursor.location.copy()
-            bpy.context.scene.cursor.location = (0., 0., 0.) if self.gltfImporterPatched else centerCoords
+            bpy.context.scene.cursor.location = (0., 0., 0.) if self._gltfImporterPatched else centerCoords
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
             bpy.context.scene.cursor.location = _cursorLocation
             
@@ -80,11 +81,11 @@ class BlenderRenderer:
             #location[2] -= heightOffset
             joinedObject.matrix_local = matrix#Matrix.Translation(location) @ matrix
         else:
-            if not self.gltfImporterPatched:
+            if not self._gltfImporterPatched:
                 # rotate the vector <centerCoords>
                 centerCoords = matrix @ centerCoords
             for obj, location in zip(self.importedObjects, locationsAfterRotation):
-                if not self.gltfImporterPatched:
+                if not self._gltfImporterPatched:
                     location[2] -= centerCoords[2]
                 obj.matrix_local = Matrix.Translation(location) @ matrix
                 obj.select_set(True)
@@ -105,10 +106,8 @@ class BlenderRenderer:
         self.importedObjects.clear()
         self.collection = None
         
-        if self.gltfImporterPatched:
-            from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
-            from io_scene_gltf2.blender.imp.gltf2_blender_gltf import BlenderGlTF
-            from io_scene_gltf2.blender.imp.gltf2_blender_scene import BlenderScene
+        if self._gltfImporterPatched:
+            glTFImporter, BlenderGlTF, BlenderScene = self._gltfImporterPatched
             
             # clean everything up after patching
             
@@ -117,6 +116,8 @@ class BlenderRenderer:
             delattr(glTFImporter, "_offset")
             
             BlenderScene.select_imported_objects = self._select_imported_objects
+            
+            self._gltfImporterPatched = None
         
         return numImportedTiles
     
@@ -233,7 +234,7 @@ class BlenderRenderer:
             self._select_imported_objects = BlenderScene.select_imported_objects
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
-            self.gltfImporterPatched = True
+            self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
         elif bv[0] == 4 and bv[1] == 3:
             from .gltf_patch import set_convert_functions_4_0, select_imported_objects_4_1
             from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
@@ -247,4 +248,4 @@ class BlenderRenderer:
             self._select_imported_objects = BlenderScene.select_imported_objects
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
-            self.gltfImporterPatched = True
+            self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
