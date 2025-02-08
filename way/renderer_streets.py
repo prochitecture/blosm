@@ -104,17 +104,21 @@ class StreetRenderer:
         gnMeshToCurve = "blosm_mesh_to_curve"
     
     def render(self, manager, data):
+        from . import debug as _debug
+        
         # split neighbor street sections for the side lane transitions
         for sideLane in manager.transitionSideLanes:
             sideLane.splitAffectedSection()
         
         # render instances of the class <Bundle>
         for bundle in manager.iterBundles():
+            _debug.printBundleConten(bundle)
             for street in bundle.streetsHead:
                 self.initStreet(street)
         
         # render instances of the class <Street>
         for street in manager.iterStreets():
+            _debug.printStreetContent(street)
             self.initStreet(street)
 
         # render instances of class <Intersection>
