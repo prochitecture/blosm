@@ -98,7 +98,7 @@ class StreetRenderer(Renderer):
                             section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             if self.debug:
                                 p = section.src
-                                plt.text(p[0],p[1]+1.5,' sect'+str(section.id),fontsize=10,color='red')
+                                plt.text(p[0],p[1]+1.5,' sect'+str(section.id),fontsize=10,color=color)
 
                     if isinstance(item,Intersection):
                         if not item.isMinor:
