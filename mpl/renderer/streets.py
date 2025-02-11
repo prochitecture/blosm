@@ -98,7 +98,7 @@ class StreetRenderer(Renderer):
                             section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             if self.debug:
                                 p = section.src
-                                plt.text(p[0],p[1]+1.5,' sect'+str(section.id),fontsize=10,color=color)
+                                plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
 
                     if isinstance(item,Intersection):
                         if not item.isMinor:
@@ -167,6 +167,8 @@ class StreetRenderer(Renderer):
                             upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
                             section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             vertices.extend(section.centerline)
+                            p = section.src
+                            plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
 
             for street in bundle.streetsTail:
                 if street in bundle.streetsHead:
@@ -183,6 +185,8 @@ class StreetRenderer(Renderer):
                             upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
                             section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             vertices.extend(section.centerline)
+                            p = section.src
+                            plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
 
             c = sum(vertices,Vector((0,0)))/len(vertices)
             plt.text(c[0],c[1]+upset,str(bundle.id),fontsize=18,color='red',ha='center', va='center')
