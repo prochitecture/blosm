@@ -108,7 +108,7 @@ def setup(app, osm):
             
             styleStore = StyleStore(app.pmlFilepathStreet, app.assetsDir, styles=None)
             
-            wayManager.addAction(StreetGenerator(styleStore, getStyle=getStyleStreet))
+            wayManager.addAction(StreetGenerator(styleStore, getStyle=getStyleStreet, doDebug=True))
             wayManager.addRenderer(StreetRenderer(debug=debugStreetRendering))
         else:
             wayManager.addRenderer(WayVisibilityRenderer(showIDs=showIDs))

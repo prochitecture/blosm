@@ -47,10 +47,11 @@ def _pseudoangle(d):
 
 class StreetGenerator():
     
-    def __init__(self, styleStore, getStyle, leftHandTraffic=True):
+    def __init__(self, styleStore, getStyle, leftHandTraffic=True, doDebug=False):
         self.styleStore = styleStore
         self.getStyle = getStyle
         self.leftHandTraffic = leftHandTraffic
+        self.doDebug = doDebug
 
         self.networkGraph = None
         self.sectionNetwork = None
@@ -410,9 +411,7 @@ class StreetGenerator():
         for street in self.wayManager.iterStreetsFromWaymap():
             self.streets[street.id] = street
 
-        doDebug = False and self.app.type == AppType.commandLine
-
-        if doDebug:
+        if self.doDebug and self.app.type == AppType.commandLine:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             def plotStreet(street,color, arrows=False):
@@ -432,8 +431,7 @@ class StreetGenerator():
             plotEnd()
 
     def circularStreets(self):
-        doDebug = True and self.app.type == AppType.commandLine
-
+        
         def tagsOfStreet(street):
             for item in street.iterItems():
                 if isinstance(item, Section):
@@ -462,7 +460,7 @@ class StreetGenerator():
             if possibleCircular:
                 circularStreets.append(street)
 
-        if doDebug:
+        if self.doDebug and self.app.type == AppType.commandLine:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             plotQualifiedNetwork(self.sectionNetwork,False)
@@ -473,7 +471,6 @@ class StreetGenerator():
             plotEnd()
 
     def createParallelStreets(self):
-        doDebug = True and self.app.type == AppType.commandLine
 
         def categoryOfStreet(street):
             for item in street.iterItems():
@@ -593,7 +590,7 @@ class StreetGenerator():
 
         # DEBUG: Show clusters of parallel way-sections.
         # The plotting functions for this debug part are at the end of this module
-        if doDebug:
+        if self.doDebug and self.app.type == AppType.commandLine:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             inBundles = False
@@ -632,7 +629,7 @@ class StreetGenerator():
             # END DEBUG
                             
     def createBundles(self):
-        doDebug = False and self.app.type == AppType.commandLine
+        doDebug = self.doDebug and self.app.type == AppType.commandLine
 
         if doDebug:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
@@ -801,7 +798,7 @@ class StreetGenerator():
             mergeBundles(self,involvedBundles)
 
     def createBundleIntersections(self):
-        doDebug = False and self.app.type == AppType.commandLine
+        doDebug = self.doDebug and self.app.type == AppType.commandLine
         if doDebug:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
