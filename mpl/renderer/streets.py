@@ -19,7 +19,7 @@ class StreetRenderer(Renderer):
 
     def __init__(self, debug):
         super().__init__()
-        self.debug = True#debug
+        self.debug = debug
     
     def prepare(self):
         return
