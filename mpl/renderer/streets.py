@@ -169,6 +169,17 @@ class StreetRenderer(Renderer):
                             vertices.extend(section.centerline)
                             p = section.src
                             plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
+                    if isinstance(item,SideLane):
+                        p = item.location
+                        plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                        if self.debug:
+                            plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+                    if isinstance(item,SymLane):
+                        p = item.location
+                        plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                        if self.debug:
+                            plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
             for street in bundle.streetsTail:
                 if street in bundle.streetsHead:
@@ -187,6 +198,18 @@ class StreetRenderer(Renderer):
                             vertices.extend(section.centerline)
                             p = section.src
                             plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
+
+                    if isinstance(item,SideLane):
+                        p = item.location
+                        plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                        if self.debug:
+                            plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+                    if isinstance(item,SymLane):
+                        p = item.location
+                        plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                        if self.debug:
+                            plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
             c = sum(vertices,Vector((0,0)))/len(vertices)
             plt.text(c[0],c[1]+upset,str(bundle.id),fontsize=18,color='red',ha='center', va='center')
