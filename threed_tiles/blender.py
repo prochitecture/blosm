@@ -220,6 +220,7 @@ class BlenderRenderer:
     
     def patchGltfImporter(self):
         centerCoords = self.centerCoords
+        # <_get_node_trs> will be set later in the code
         _get_node_trs = None
         
         def get_node_trs(gltf, pynode):
