@@ -107,13 +107,12 @@ class BlenderRenderer:
         self.collection = None
         
         if self._gltfImporterPatched:
-            glTFImporter, BlenderGlTF, BlenderScene = self._gltfImporterPatched
+            vnode, BlenderScene = self._gltfImporterPatched
             
             # clean everything up after patching
             
-            BlenderGlTF.set_convert_functions = self._set_convert_functions
-            self._set_convert_functions = None
-            delattr(glTFImporter, "_offset")
+            vnode.get_node_trs = self._get_node_trs
+            self._get_node_trs = None
             
             BlenderScene.select_imported_objects = self._select_imported_objects
             
@@ -220,32 +219,42 @@ class BlenderRenderer:
         bpy.ops.object.mode_set(mode='OBJECT')
     
     def patchGltfImporter(self):
+        centerCoords = self.centerCoords
+        _get_node_trs = None
+        
+        def get_node_trs(gltf, pynode):
+            t, r, s = _get_node_trs(gltf, pynode)
+            
+            # Unit conversion factor in (Blender units) per meter
+            u = 1.0 / bpy.context.scene.unit_settings.scale_length
+            
+            t = t/u
+            t = u * (t - centerCoords)
+            return t, r, s
+        
+        
         bv = bpy.app.version
         if (bv[0] == 3 and bv[1] == 6) or (bv[0] == 4 and bv[1] <= 2):
-            from .gltf_patch import set_convert_functions_4_0, select_imported_objects_4_1
-            from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
-            from io_scene_gltf2.blender.imp.gltf2_blender_gltf import BlenderGlTF
+            from .gltf_patch import select_imported_objects_4_1
+            import io_scene_gltf2.blender.imp.gltf2_blender_vnode as vnode
             from io_scene_gltf2.blender.imp.gltf2_blender_scene import BlenderScene
             
-            glTFImporter._offset = self.centerCoords
-            self._set_convert_functions = BlenderGlTF.set_convert_functions
-            BlenderGlTF.set_convert_functions = set_convert_functions_4_0
+            _get_node_trs = self._get_node_trs = vnode.get_node_trs
+            vnode.get_node_trs = get_node_trs
             
             self._select_imported_objects = BlenderScene.select_imported_objects
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
-            self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
+            self._gltfImporterPatched = (vnode, BlenderScene)
         elif bv[0] == 4 and bv[1] == 3:
-            from .gltf_patch import set_convert_functions_4_0, select_imported_objects_4_1
-            from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
-            from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
+            from .gltf_patch import select_imported_objects_4_1
+            import io_scene_gltf2.blender.imp.vnode as vnode
             from io_scene_gltf2.blender.imp.scene import BlenderScene
             
-            glTFImporter._offset = self.centerCoords
-            self._set_convert_functions = BlenderGlTF.set_convert_functions
-            BlenderGlTF.set_convert_functions = set_convert_functions_4_0
+            _get_node_trs = self._get_node_trs = vnode.get_node_trs
+            vnode.get_node_trs = get_node_trs
             
             self._select_imported_objects = BlenderScene.select_imported_objects
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
-            self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
+            self._gltfImporterPatched = (vnode, BlenderScene)
