@@ -1041,8 +1041,8 @@ class BlosmProperties(bpy.types.PropertyGroup):
             ("lod2", "districts", "districts"),
             ("lod3", "groups of buildings", "groups of buildings"),
             ("lod4", "separate buildings", "separate buildings"),
-            ("lod5", "buildings with details", "buildings with details")#,
-            #("lod6", "buildings with more details", "buildings with more details") temporily disabled: see https://github.com/vvoovv/blosm/issues/587
+            ("lod5", "buildings with details", "buildings with details"),
+            ("lod6", "buildings with more details", "buildings with more details")
         ),
         description = "Choose a level of details (LoD)",
         default = "lod3"
