@@ -63,11 +63,15 @@ class BlenderRenderer:
         if self.calculateHeightOffset:
             self.heightOffset = heightOffset
         
+        # select the imported objects
         bpy.ops.object.select_all(action='DESELECT')
+        for obj in self.importedObjects:
+            obj.select_set(True)
+        
+        # apply possible rotation after Blender's glTF importer
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
         
         if self.join3dTilesObjects:
-            for obj in self.importedObjects:
-                obj.select_set(True)
             self.joinObjects()
             
             # set the origin of the resulting Blender object at <centerCoords>
@@ -90,7 +94,7 @@ class BlenderRenderer:
                 obj.matrix_local = Matrix.Translation(location) @ matrix
                 obj.select_set(True)
         
-        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False) 
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
         bpy.ops.object.select_all(action='DESELECT')
         
         bpy.context.scene.blosm.copyright = "; ".join(
