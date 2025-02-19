@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import Circle,Rectangle
 from mathutils import Vector
 from lib.CompGeom.PolyLine import PolyLine
+from way.item import Section
 
 def plotNetwork(network,waySections=None):
     from mpl.renderer.road_polygons import RoadPolygonsRenderer
@@ -141,3 +142,13 @@ def plotStreetGroup(streetGroup,color='blue',doEnd=False):
 
     if doEnd:
         plotEnd()
+
+def plotStreet(street,color, arrows=False):
+    for item in street.iterItems():
+        if isinstance(item, Section):
+            width = 6 if item.id==398 else 3
+            if arrows:
+                item.polyline.plotWithArrows(color,width,0.5,'solid',False,950)
+            else:
+                item.polyline.plot(color,width,'solid',False,950)
+
