@@ -47,11 +47,29 @@ def _pseudoangle(d):
 
 class StreetGenerator():
 
-    def __init__(self, styleStore, getStyle, leftHandTraffic=True, doDebug=False):
+    def __init__(self, styleStore, getStyle, leftHandTraffic=True,
+            debugCircularStreets = False, debugParallelStreets = False, debugBundle=False, plotStreetID=None
+        ):
         self.styleStore = styleStore
         self.getStyle = getStyle
         self.leftHandTraffic = leftHandTraffic
-        self.doDebug = doDebug
+        
+        #
+        # Debug configuration
+        #
+        
+        # debug for self.circularStreets
+        self.debugCircularStreets = debugCircularStreets
+        # If self.debugParallel is True, all groups of streets considered as parallel are plotted at once.
+        self.debugParallelStreets = debugParallelStreets
+        # If self.debugBundle is True, the heads and tails and the inner street of every Bundle are plotted.
+        self.debugBundle = debugBundle
+        # If ID is given: plots the street[ID] with identifier ID in createStreets()
+        # This may help to localize a buggy street.
+        self.plotStreetID = plotStreetID
+        #
+        # End of debug configuration
+        #
 
         self.networkGraph = None
         self.sectionNetwork = None
@@ -66,24 +84,6 @@ class StreetGenerator():
         # for vehicles. If True: wayManager.getAllWays() are used, else those from
         # wayManager.getAllVehicleWays()
         self.allWays = True
-
-        # ****************************************************************************
-        # Debug configuration (Ony activated if self.doDebug is True
-
-        # If ID is given: plots the street[ID] with identifier ID in createStreets()
-        # This may help to localize a buggy street.
-        self.plotStreetID = None
-
-        # If self.debugParallel is True, all groups of streets considered as parallel
-        # are plotted at once.
-        self.debugParallel = True
-
-        # If self.debugBundle is True, The heads and tails and the inner street of eery
-        # Bundle are plotted.
-        self.debugBundle = False
-
-        # End of debug configuration
-        # ****************************************************************************
 
     def do(self, manager):
 
@@ -468,7 +468,7 @@ class StreetGenerator():
             self.streets[street.id] = street
 
         # Debug plot of street[self.plotStreetID].
-        if self.doDebug and self.plotStreetID and self.app.type == AppType.commandLine:
+        if self.plotStreetID and self.app.type == AppType.commandLine:
             from debug import plt, plotQualifiedNetwork, randomColor, plotStreet, plotEnd
 
             plotStreet(self.streets[self.plotStreetID],'red')
@@ -509,7 +509,7 @@ class StreetGenerator():
                 circularStreets.append(street)
 
         # Debug plot of possibly circular streets
-        if self.doDebug and self.app.type == AppType.commandLine:
+        if self.debugCircularStreets and self.app.type == AppType.commandLine:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             plotQualifiedNetwork(self.sectionNetwork,False)
@@ -540,9 +540,8 @@ class StreetGenerator():
             centerlineVerts = list(dict.fromkeys(centerlineVerts))
             centerline = PolyLine(centerlineVerts)
             return centerline, centerlineVerts
-
-        # update debug state from configuration
-        self.debugParallel = self.debugParallel and self.app.type == AppType.commandLine
+        
+        debugParallelStreets = self.debugParallelStreets and self.app.type == AppType.commandLine
 
         # Spatial index (R-tree) of candidate Streets
         candidateIndex = StaticSpatialIndex()
@@ -643,7 +642,7 @@ class StreetGenerator():
                             self.parallelStreets.addSegment(sampleStreet,neighborStreet)
 
         # DEBUG: Show clusters of parallel way-sections.
-        if self.debugParallel:
+        if debugParallelStreets:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             inBundles = False
@@ -686,9 +685,9 @@ class StreetGenerator():
 
     # Constructs the Bundles and includes their inner streets
     def createBundles(self):
-        self.debugBundle = self.debugBundle and self.doDebug and self.app.type == AppType.commandLine
+        debugBundle = self.debugBundle and self.app.type == AppType.commandLine
 
-        if self.debugBundle:
+        if debugBundle:
             from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
             colorIter = randomColor(19)
 
@@ -725,7 +724,7 @@ class StreetGenerator():
             # the splitting streets at the intersection have to be removed.
             wasSplit, splittedGroups, splittingStreets = removeSplittingStreets(self,gIndex,streetGroup,groupIntersections)
             self.allSplittingStreets.extend(splittingStreets)
-            if self.debugBundle:
+            if debugBundle:
                 if wasSplit:
                     for group in splittedGroups:
                         streetGroup.plot('blue', 1, False)
@@ -749,7 +748,7 @@ class StreetGenerator():
                 continue
             head, tail = orderHeadTail(streetGroup)
 
-            if self.debugBundle:
+            if debugBundle:
                 plotQualifiedNetwork(self.sectionNetwork)
                 streetGroup.plot()
                 for indx in range(len(head)):
@@ -771,7 +770,7 @@ class StreetGenerator():
 
             innerStreets = findInnerStreets(streetGroup,self.leftHandTraffic)
 
-            if self.debugBundle:
+            if debugBundle:
                 plotQualifiedNetwork(self.sectionNetwork)
                 streetGroup.plot()
 
