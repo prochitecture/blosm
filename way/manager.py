@@ -40,9 +40,9 @@ class WayManager:
         self.waySectionLines = dict()
         self.wayClusters = dict()
         
-        # <self.networkGraph>, <self.waySectionGraph> and <self.junctions> are set in an action,
+        # <self.networkGraph>, <self.waySectionGraph> are set in an action,
         # for example <action.way_clustering.Way>
-        self.networkGraph = self.waySectionGraph = self.junctions = None
+        self.networkGraph = self.waySectionGraph = None
         
         app.addManager(self)
 
@@ -109,6 +109,10 @@ class WayManager:
         for bundle in self.bundles.values():
             yield bundle
 
+    # This is an iterator, that delivers instances of Street from the current waymap,
+    # by concatenating of Streets, that are separated by minor intersections. These are
+    # intersections with two major ways and one or more minor ways (of categories 'footway',
+    # 'cycleway' or'service').
     def iterStreetsFromWaymap(self):
         def findMinorNodes(street):
             srcIsect = self.waymap.getMinorNode(street.src)
