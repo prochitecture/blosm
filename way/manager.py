@@ -22,6 +22,7 @@ class WayManager:
         self.acceptBroken = False
         
         self.layers = dict((category, []) for category in allWayCategories)
+        self.layers["other"] = []
         
         self.renderers = []
         

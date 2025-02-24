@@ -165,6 +165,17 @@ class Setup:
             ptStopManager
         )
     
+    def aviation(self):
+        osm = self.osm
+        wayManager = self.getWayManager()
+        
+        osm.addCondition(
+            lambda tags, e: tags.get("aeroway") in ("runway", "taxiway"),
+            "aviation",
+            wayManager
+        )
+        
+    
     def getFeatureDetectionAction(self, simplifyPolygons):
         if not self.featureDetectionAction:
             from action.feature_detection import FeatureDetection

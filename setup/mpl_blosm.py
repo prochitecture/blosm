@@ -118,3 +118,6 @@ def setup(app, osm):
     
     if app.railways:
         setup.railways()
+    
+    if app.aviation:
+        setup.aviation()

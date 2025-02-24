@@ -53,6 +53,7 @@ class CommandLineApp(BaseApp):
         argParser.add_argument("--water", action='store_true', help="Import water objects", default=False)
         argParser.add_argument("--forests", action='store_true', help="Import forests", default=False)
         argParser.add_argument("--vegetation", action='store_true', help="Import vegetation", default=False)
+        argParser.add_argument("--aviation", action='store_true', help="Import aviation infrastructure", default=False)
         
         # arguments for an overlay
         argParser.add_argument("--overlayDir", help="A directory for overlay images")

@@ -43,7 +43,14 @@ allRailwayCategories = (
 )
 allRailwayCategoriesSet = set(allRailwayCategories)
 
-allWayCategories = allRoadwayCategories + allRailwayCategories
+allAviationCategories = (
+    "runway",
+    "taxi"
+)
+allAviationCategoriesSet = set(allAviationCategories)
+
+allWayCategories = allRoadwayCategories + allRailwayCategories + allAviationCategories
+allWayCategoriesSet = set(allWayCategories)
 
 roadwayIntersectionCategories  = (
     "motorway",
@@ -82,6 +89,12 @@ railwayIntersectionCategories = (
     "other_railway"
 )
 railwayIntersectionCategoriesSet = set(railwayIntersectionCategories)
+
+aviationIntersectionCategories = (
+    "runway",
+    "taxi"
+)
+aviationIntersectionCategoriesSet = set(aviationIntersectionCategories)
 
 wayIntersectionCategories = roadwayIntersectionCategories + railwayIntersectionCategories
 
