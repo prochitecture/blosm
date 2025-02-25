@@ -559,7 +559,7 @@ class StreetGenerator():
         for street in self.wayManager.iterStreets():
             # Some categories are excluded.
             category =  categoryOfStreet(street)
-            if category in ('steps', 'footway', 'cycleway', 'path', 'service'):
+            if category in ('steps', 'footway', 'cycleway', 'path', 'service', 'runway', 'taxi'):
                 continue
 
             # Find the centerline of the whole street.
@@ -771,8 +771,6 @@ class StreetGenerator():
             innerStreets = findInnerStreets(streetGroup,self.leftHandTraffic)
 
             if debugBundle:
-                plotQualifiedNetwork(self.sectionNetwork)
-                streetGroup.plot()
 
                 for street in innerStreets:
                     allVertices = []
@@ -785,6 +783,8 @@ class StreetGenerator():
                         plt.text(c[0],c[1],'S '+str(street.id),color='k',fontsize=8,zorder=130,ha='left', va='top', clip_on=True)
 
                 if innerStreets:
+                    plotQualifiedNetwork(self.sectionNetwork)
+                    streetGroup.plot()
                     plt.title('Inner streets of street group %d'%gIndex)
                 else:
                     plt.title('No inner streets in street group %d'%gIndex)

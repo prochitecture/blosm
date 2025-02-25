@@ -31,6 +31,9 @@ class Section(Item):
         self.pred = None
         self.succ = None
 
+        self.railway = net_section.tags['railway'] if 'highway' in net_section.tags and 'railway' in net_section.tags else None
+        self.aeroway = net_section.tags['aeroway'] if 'highway' in net_section.tags and 'aeroway' in net_section.tags else None
+
         # The following attributes are used only internally in StreetGenerator
         self.tags = net_section.tags
 
