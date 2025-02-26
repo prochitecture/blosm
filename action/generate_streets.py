@@ -559,7 +559,7 @@ class StreetGenerator():
         for street in self.wayManager.iterStreets():
             # Some categories are excluded.
             category =  categoryOfStreet(street)
-            if category in ('steps', 'footway', 'cycleway', 'path', 'service', 'runway', 'taxi'):
+            if category in ('steps', 'footway', 'cycleway', 'path', 'service', 'runway', 'taxiway'):
                 continue
 
             # Find the centerline of the whole street.

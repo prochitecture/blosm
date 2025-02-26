@@ -45,7 +45,7 @@ allRailwayCategoriesSet = set(allRailwayCategories)
 
 allAviationCategories = (
     "runway",
-    "taxi"
+    "taxiway"
 )
 allAviationCategoriesSet = set(allAviationCategories)
 
@@ -92,7 +92,7 @@ railwayIntersectionCategoriesSet = set(railwayIntersectionCategories)
 
 aviationIntersectionCategories = (
     "runway",
-    "taxi"
+    "taxiway"
 )
 aviationIntersectionCategoriesSet = set(aviationIntersectionCategories)
 

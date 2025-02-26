@@ -26,13 +26,13 @@ class StreetRenderer(Renderer):
 
     def render(self, manager, data):
         def isSmallestCategory(section):
-             return  section.category in  ['footway', 'cycleway']
+            return  section.category in  ['footway', 'cycleway']
         
         def isMinorCategory(section):
             return  section.category in  ['footway', 'cycleway','service']
         
         def isAirwayCategory(section):
-            return  section.category in  ['runway', 'taxi']
+            return  section.category in  ['runway', 'taxiway']
         
         for location,isect in manager.majorIntersections.items():
             p = location
