@@ -26,10 +26,13 @@ class StreetRenderer(Renderer):
 
     def render(self, manager, data):
         def isSmallestCategory(section):
-             return  section.category in  ['footway', 'cycleway']
+            return  section.category in  ['footway', 'cycleway']
         
         def isMinorCategory(section):
             return  section.category in  ['footway', 'cycleway','service']
+        
+        def isAirwayCategory(section):
+            return  section.category in  ['runway', 'taxiway']
         
         for location,isect in manager.majorIntersections.items():
             p = location
@@ -88,14 +91,17 @@ class StreetRenderer(Renderer):
                         section = item
                         allVertices.extend(section.centerline)
                         if section.valid:
-                            color = 'gray' if isSmallestCategory(section) else 'b' if isMinorCategory(section) else 'r'
-                            width = 0.8 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 1.2
-                            style = 'dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid'
+                            color = 'orange' if isAirwayCategory(section) else ('gray' if isSmallestCategory(section) else 'b' if isMinorCategory(section) else 'r')
+                            width = 4 if isAirwayCategory(section) else (0.8 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 1.2)
+                            style = 'solid' if isAirwayCategory(section) else ('dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid')
                             if interiorOfBundle:
                                 color = 'gold'
                                 style='solid'
                                 width = width+0.5
-                            section.polyline.plotWithArrows(color,width,0.5,style,False,950)
+                            if isAirwayCategory(section):
+                                section.polyline.plot(color,width,style,False,order=950)
+                            else:
+                                section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             if self.debug:
                                 p = section.src
                                 plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
@@ -212,7 +218,7 @@ class StreetRenderer(Renderer):
                             plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
             c = sum(vertices,Vector((0,0)))/len(vertices)
-            plt.text(c[0],c[1]+upset,str(bundle.id),fontsize=18,color='red',ha='center', va='center')
+            plt.text(c[0],c[1]+upset,'B'+str(bundle.id),fontsize=18,color='red',ha='center', va='center')
             
 
 

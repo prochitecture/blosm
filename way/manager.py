@@ -22,6 +22,7 @@ class WayManager:
         self.acceptBroken = False
         
         self.layers = dict((category, []) for category in allWayCategories)
+        self.layers["other"] = []
         
         self.renderers = []
         
@@ -128,11 +129,13 @@ class WayManager:
             if street in processedStreets:
                 continue
 
+            processedStreetsInLoop = set()
             srcIsectInit, dstIsectInit = findMinorNodes(street)
             hasMinors = srcIsectInit or dstIsectInit
 
+            processedStreetsInLoop.add(street)
             if not hasMinors:
-                processedStreets.add(street)
+
                 streetStyle = self.styleStore.get( self.getStyle(street) )
                 street.style = streetStyle
                 street.setStyleBlockFromTop(streetStyle)
@@ -150,10 +153,10 @@ class WayManager:
                     dstIsectCurr = dstIsectInit
                     while True:
                         nextStreet = dstIsectCurr.leaving
-                        if nextStreet in processedStreets:
+                        if nextStreet in processedStreetsInLoop:
                             break
                         longStreet.insertStreetEnd(nextStreet)
-                        processedStreets.add(nextStreet)
+                        processedStreetsInLoop.add(nextStreet)
                         _, dstIsectCurr = findMinorNodes(nextStreet)
                         if not dstIsectCurr:
                             if nextStreet.succ is not None:
@@ -174,10 +177,10 @@ class WayManager:
                     srcIsectCurr = srcIsectInit
                     while True:
                         prevStreet = srcIsectCurr.arriving
-                        if prevStreet in processedStreets:
+                        if prevStreet in processedStreetsInLoop:
                             break
                         longStreet.insertStreetFront(prevStreet)
-                        processedStreets.add(prevStreet)
+                        processedStreetsInLoop.add(prevStreet)
                         srcIsectCurr, _ = findMinorNodes(prevStreet)
                         if not srcIsectCurr:
                             if prevStreet.pred is not None:
@@ -196,6 +199,12 @@ class WayManager:
                 longStreet.setStyleBlockFromTop(streetStyle)
                 longStreet.setStyleForItems()
 
+                # Undo concatenation, if result is a circular Street
+                if longStreet.src == longStreet.dst:
+                    continue
+                
+                processedStreets = processedStreets.union(processedStreetsInLoop)
+                
                 yield longStreet
 
 class RailwayManager:

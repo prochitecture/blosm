@@ -1,5 +1,5 @@
 from mathutils import Vector
-from defs.way import allRoadwayCategoriesSet, allRailwayCategoriesSet
+from defs.way import allWayCategoriesSet, allRoadwayCategoriesSet, allRailwayCategoriesSet
 
 
 class WaySegment:
@@ -38,8 +38,8 @@ class Way:
     def __init__(self, element, manager):
         self.element = element
         
-        highwayTag = element.tags.get("highway")
-        self.category = highwayTag if highwayTag in allRoadwayCategoriesSet else "other"
+        tag = element.tags.get("aeroway") or element.tags.get("railway") or element.tags.get("highway")
+        self.category = tag if tag in allWayCategoriesSet else "other"
         self.tunnel = "tunnel" in element.tags
         self.bridge = "bridge" in element.tags
         
