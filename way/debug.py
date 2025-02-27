@@ -20,7 +20,7 @@ def printStreetContent(street, processBundle=False):
     )
 
 
-def printBundleConten(bundle):
+def printBundleContent(bundle):
     print("Bundle:{0}".format(bundle.id))
     for street in bundle.streetsHead:
         printStreetContent(street, processBundle=True)

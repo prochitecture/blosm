@@ -17,7 +17,7 @@ def setup(app, osm):
     # Reason: instances of way.Way must be already initialized when actions for the building manager
     # are processed
     
-    if app.highways or app.railways or classifyFacades:
+    if app.highways or app.railways or app.aviation or classifyFacades:
         setup.skipWays()
         
         wayManager = setup.getWayManager()
@@ -51,6 +51,9 @@ def setup(app, osm):
         
         if app.railways:
             setup.railways()
+        
+        if app.aviation:
+            setup.aviation()
         
     if app.forests:
         setup_forests(app, osm)

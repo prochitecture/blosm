@@ -107,12 +107,12 @@ class StreetRenderer:
         from . import debug as _debug
         
         # split neighbor street sections for the side lane transitions
-        for sideLane in manager.transitionSideLanes:
-            sideLane.splitAffectedSection()
+        #for sideLane in manager.transitionSideLanes:
+        #    sideLane.splitAffectedSection()
         
         # render instances of the class <Bundle>
         for bundle in manager.iterBundles():
-            _debug.printBundleConten(bundle)
+            _debug.printBundleContent(bundle)
             for street in bundle.streetsHead:
                 self.initStreet(street)
         
