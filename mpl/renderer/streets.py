@@ -29,7 +29,7 @@ class StreetRenderer(Renderer):
             return  section.category in  ['footway', 'cycleway']
         
         def isMinorCategory(section):
-            return  section.category in  ['footway', 'cycleway','service']
+            return  section.category in  ['footway', 'cycleway','service','runway']
         
         def isAirwayCategory(section):
             return  section.category in  ['runway', 'taxiway']

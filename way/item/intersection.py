@@ -162,7 +162,7 @@ class Intersection(Item):
 # For minor intersections -----------------------------------------------------
     @staticmethod
     def minorCategoryRank(section):
-        if section.category in ['footway', 'cycleway']:
+        if section.category in ['footway', 'cycleway', 'runway']:
             return 1
         elif section.category == 'service':
             return 2
@@ -173,7 +173,7 @@ class Intersection(Item):
         if not section.valid: return False
         if not self.minorCategories:
             maxCatRank = max(self.minorCategoryRank(w.section) for w in self.leaveWays)
-            self.minorCategories = ['footway', 'cycleway','service'] if maxCatRank>2 else ['footway', 'cycleway']
+            self.minorCategories = ['footway', 'cycleway','runway','service'] if maxCatRank>2 else ['footway', 'cycleway']
         return section.category in self.minorCategories
 
     def isMinorIntersection(self):
