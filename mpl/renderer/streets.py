@@ -38,7 +38,7 @@ class StreetRenderer(Renderer):
             p = location
             plt.plot(p[0],p[1],'ro',markersize=5,zorder=999,markeredgecolor='red', markerfacecolor='orange')
             if self.debug:
-                plt.text(p[0],p[1],' '+str(isect.id),color='r',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+                plt.text(p[0],p[1],' '+str(isect.id),color='r',fontsize=10,zorder=960,ha='left', va='top', clip_on=True)
             if isect.connectsBundles:
                 ends = []
                 nrOfBundles = 0
@@ -52,14 +52,14 @@ class StreetRenderer(Renderer):
                 color = 'green' if nrOfBundles>1 else 'orange'
                 circle = plt.Circle(center, radius*1.1, color=color, alpha=0.6)
                 plt.gca().add_patch(circle)
-                plt.text(p[0],p[1],' '+str(isect.id),color='r',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+                plt.text(p[0],p[1],' '+str(isect.id),color='r',fontsize=10,zorder=960,ha='left', va='top', clip_on=True)
                 
 
         for location,isect in manager.minorIntersections.items():
             p = location
             plt.plot(p[0],p[1],'cv',markersize=5,zorder=999,markeredgecolor='cyan', markerfacecolor='cyan')
             if self.debug:
-                plt.text(p[0],p[1],'  '+str(isect.id),color='c',fontsize=6,zorder=130,ha='left', va='top', clip_on=True)
+                plt.text(p[0],p[1],'  '+str(isect.id),color='c',fontsize=6,zorder=960,ha='left', va='top', clip_on=True)
 
         # DEBUG: Plot streets from waymap
         # for src, dst, multKey, street in manager.waymap.edges(data='object',keys=True):
@@ -84,7 +84,7 @@ class StreetRenderer(Renderer):
                     srcVec, _ = street.endVectors()
                     vu = srcVec/srcVec.length * (1+upset)
                     p = street.src
-                    plt.text(p[0]+vu[0],p[1]+vu[1],'   S'+str(street.id),fontsize=fontsize,color=color)
+                    plt.text(p[0]+vu[0],p[1]+vu[1],'   S'+str(street.id),fontsize=fontsize,color=color,zorder=960)
                 for item in street.iterItems():
 
                     if isinstance(item,Section):
@@ -100,11 +100,12 @@ class StreetRenderer(Renderer):
                                 width = width+0.5
                             if isAirwayCategory(section):
                                 section.polyline.plot(color,width,style,False,order=950)
+                                section.polyline.plotWithArrows('black',1,0.5,'solid',False,950)
                             else:
                                 section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             if self.debug:
                                 p = section.src
-                                plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
+                                plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color,zorder=960)
 
                     if isinstance(item,Intersection):
                         if not item.isMinor:
