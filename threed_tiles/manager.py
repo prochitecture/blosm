@@ -75,54 +75,58 @@ class BaseManager:
         return numRenderedTiles, self.errors
     
     def renderTileset(self, tileset, baseUri):
-        tileset = tileset["root"]
-                
-        if self.areaOverlapsWith( tileset["boundingVolume"] ):
-            self.renderChildren(tileset["children"], baseUri)
-            
+        self.renderElement(tileset["root"], baseUri)
+    
+    def renderElement(self, element, baseUri):
+        # Render a tile or <tileset["root"]>
+        if self.areaOverlapsWith( element["boundingVolume"] ):
+            geometricError = element["geometricError"]
+            #if self.geometricErrorMin < geometricError <= self.geometricErrorMax:
+            if geometricError <= self.geometricError:
+                if "content" in element:
+                    self.renderTile(element, baseUri, jsonOnly=False)
+                else:
+                    children = element.get("children")
+                    if children:
+                        self.renderChildren(children, baseUri)
+            else:
+                children = element.get("children")
+                if children:
+                    self.renderChildren(children, baseUri)
+                elif "content" in element:
+                    self.renderTile(element, baseUri, jsonOnly=True)
+    
     def renderChildren(self, children, baseUri):
         # render children
         for tile in children:
-            if self.areaOverlapsWith( tile["boundingVolume"] ):
-                geometricError = tile["geometricError"]
-                #if self.geometricErrorMin < geometricError <= self.geometricErrorMax:
-                if geometricError <= self.geometricError:
-                    if "content" in tile:
-                        self.renderTile(tile, baseUri, jsonOnly=False)
-                    else:
-                        _children = tile.get("children")
-                        if _children:
-                            self.renderChildren(_children, baseUri)
-                else:
-                    _children = tile.get("children")
-                    if _children:
-                        self.renderChildren(_children, baseUri)
-                    elif "content" in tile:
-                        self.renderTile(tile, baseUri, jsonOnly=True)
+            self.renderElement(tile, baseUri)
         
     def renderTile(self, tile, baseUri, jsonOnly):
-        uriComponents = urlparse(tile["content"]["uri"])
-        
-        contentExtension = splitext(uriComponents.path)[1].lower()
-        
-        if jsonOnly and contentExtension != ".json":
-            return
-        
-        if uriComponents.query:
-            self.uriQuery = uriComponents.query
-        
-        uri, baseUri = self.getUri(uriComponents, baseUri)
-        
-        try:
-            if contentExtension == ".json":
-                tileset = self.getJsonFile(uri, uriComponents.path, self.cacheJsonFiles)
-                self.renderTileset(tileset, baseUri)
-            elif contentExtension == ".glb":
-                self.renderer.renderGlb(self, uri, uriComponents.path, self.cache3dFiles)
-            elif contentExtension == ".b3dm":
-                self.renderer.renderB3dm(self, uri, uriComponents.path, self.cache3dFiles)
-        except Exception as e:
-            self.processError(e, uri)
+        content = tile["content"]
+        boundingVolume = content.get("boundingVolume")
+        if not boundingVolume or self.areaOverlapsWith(boundingVolume):
+            uriComponents = urlparse(content["uri"])
+            
+            contentExtension = splitext(uriComponents.path)[1].lower()
+            
+            if jsonOnly and contentExtension != ".json":
+                return
+            
+            if uriComponents.query:
+                self.uriQuery = uriComponents.query
+            
+            uri, baseUri = self.getUri(uriComponents, baseUri)
+            
+            try:
+                if contentExtension == ".json":
+                    tileset = self.getJsonFile(uri, uriComponents.path, self.cacheJsonFiles)
+                    self.renderTileset(tileset, baseUri)
+                elif contentExtension == ".glb":
+                    self.renderer.renderGlb(self, uri, uriComponents.path, self.cache3dFiles)
+                elif contentExtension == ".b3dm":
+                    self.renderer.renderB3dm(self, uri, uriComponents.path, self.cache3dFiles)
+            except Exception as e:
+                self.processError(e, uri)
     
     def getUri(self, uriComponents, baseUri):
         if uriComponents.netloc:
