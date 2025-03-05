@@ -698,31 +698,31 @@ class StreetGenerator():
         for streetGroup in self.parallelStreets:
             streetGroups.append(StreetGroup(streetGroup))
 
+        # Find intersections between streets of different groups.
+        # The dictionary key is the location of the intersection
+        # and its lists contains the indices of the groups that
+        # intersect there.
+        groupIntersections = defaultdict(list)
+        for streetGroup in streetGroups:
+            for street in streetGroup:
+                for p in [street.src, street.dst]:
+                    groupIntersections[p].append(streetGroup.id)
+
         for streetGroup in streetGroups:
             # see https://github.com/prochitecture/blosm/issues/104#issuecomment-2322836476
             # Major intersections in bundles, with only one side street, are merged into a long street,
             # similar to minor intersections.
-            mergePseudoMinors(self, streetGroup)
+            mergePseudoMinors(self, streetGroup, groupIntersections)
 
-
-        # Find intersections between streets of different groups.
-        # The dictionary key is the location of the intersection
-        # and its  lists contain the indices of the groups that
-        # intersect there.
-        groupIntersections = defaultdict(list)
-        for gIndex,streetGroup in enumerate(streetGroups):
-            for street in streetGroup:
-                for p in [street.src, street.dst]:
-                    groupIntersections[p].append(gIndex)
 
         newGroups = []
         delGroups = []
-        for gIndex,streetGroup in enumerate(streetGroups):
+        for streetGroup in streetGroups:
             # Sometimes, createParallelStreets() is not stopped by intersections with
             # other bundles and delivers streets, that pass these intersections. In
             # such a situation, its  proposed group has to be split into two groups, while
             # the splitting streets at the intersection have to be removed.
-            wasSplit, splittedGroups, splittingStreets = removeSplittingStreets(self,gIndex,streetGroup,groupIntersections)
+            wasSplit, splittedGroups, splittingStreets = removeSplittingStreets(self,streetGroup.id,streetGroup,groupIntersections)
             self.allSplittingStreets.extend(splittingStreets)
             if debugBundle:
                 if wasSplit:

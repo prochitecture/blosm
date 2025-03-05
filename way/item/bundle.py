@@ -7,12 +7,19 @@ from way.item.street import Street
 from way.item.section import Section
 from way.item.intersection import Intersection
 from way.item.connectors import IntConnector
+from lib.CompGeom.chains import find_paths
 
 # helper functions -----------------------------------------------
 def cyclePairs(iterable):
     prevs, nexts = tee(iterable)
     prevs = islice(cycle(prevs), len(iterable) - 1, None)
     return zip(prevs,nexts)
+
+def pairs(iterable):
+    # iterable -> (p0,p1), (p1,p2), (p2, p3), ...
+    p1, p2 = tee(iterable)
+    next(p2, None)
+    return zip(p1,p2)
 
 def byPairs(iterable):
     "s -> (s0, s1), (s2, s3), (s4, s5), ..."
@@ -131,9 +138,18 @@ class StreetGroup():
                 if isinstance(item, Section):
                     item.polyline.plotWithArrows(color,width,0.5,'solid',False,950)
                     allVertices.extend(item.centerline)
+                if isinstance(item, Intersection):
+                    p = item.location
+                    if item.isMinor:
+                        plt.plot(p[0],p[1],'bv',markersize=5,zorder=999,markeredgecolor='blue', markerfacecolor='blue')
+                        plt.text(p[0],p[1],'  '+str(item.id),color='b',fontsize=8,zorder=960,ha='left', va='top', clip_on=True)
+                    else:
+                        plt.plot(p[0],p[1],'ro',markersize=5,zorder=999,markeredgecolor='red', markerfacecolor='orange')
+                        plt.text(p[0],p[1],' '+str(item.id),color='r',fontsize=10,zorder=960,ha='left', va='top', clip_on=True)
+
             if len(allVertices):
                 c = sum(allVertices,Vector((0,0))) / len(allVertices)
-                plt.text(c[0],c[1],'S '+str(street.id),color='k',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+                plt.text(c[0],c[1],'S '+str(street.id),color='magenta',fontsize=12,zorder=130,ha='left', va='top', clip_on=True)
         if doEnd:
             plotEnd()
 
@@ -185,161 +201,99 @@ def locationsInGroup(streetGroup):
     return streetEnds, intersections, hairpins
 
 # see https://github.com/prochitecture/blosm/issues/104#issuecomment-2322836476
-# Major intersections the street group of a bundle, with only one side street,
-# are merged into a long street, similar to minor intersections.
-def mergePseudoMinors(streetGenerator, streetGroup):
+# Concatenates streets of a group of parallel streets into longer streets using
+# minor intersections where possible. A valid patlong street consists of streets
+# where each intersection is visited exactly twice, once as an source (src) and
+# once as a destination (dst). Long streets stop at branching intersections
+# (intersections with more than one incoming or outgoing street belonging to the
+# streetGroup), at intersections in <groupIntersections>, that are common to other
+# street groups, or at endpoints.
+# 
+# Major intersections along a long street are converted to minor intersections.
+# 
+def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
+    # Prepare a list of streets belonging to the street group as edges
+    # of a graph, which are tuples of the form (src, dst, street).
+    streets = []
+    for street in streetGroup:
+        streets.append( (street.src,street.dst,street) )
 
-    def mergableIntersections(street):
-        # Look for major intersections that are at the ends of streets that can be merged.
-        # The conditions are:
-        #   - Only 2 streets of the bundle candidate end here, or all three
-        #     streets end here.
-        #   - Only one external street allowed (intersection order must be 3).
-        #   - The streets of the bundle candidate must not build a hairpin bend.
-        arrivingSrc = None
-        leavingSrc = None
-        arrivingDst = None
-        leavingDst = None
 
-        srcIsect = intersections[street.src]
-        if srcIsect:
-            # Third street does not belong to group
-            if len(streetEnds[street.src])==2 and srcIsect.order==3:
-                street0 = streetEnds[srcIsect.location][0]
-                street1 = streetEnds[srcIsect.location][1]
-                arrivingSrc, leavingSrc = (street0 if street0.dst == street.src else street1 if street1.dst == street.src else None, street)
-                srcIsect = srcIsect if arrivingSrc and not isHairpinBend(arrivingSrc, leavingSrc) else None
-            # # Three streets, all in the group. Let the angles decide.
-            # elif len(streetEnds[street.src])==3 and srcIsect.order==3:
-            #     vectors = []
-            #     for i,strt in enumerate(streetEnds[srcIsect.location]):
-            #         srcVec, dstVec = strt.endVectors()
-            #         vec = srcVec/srcVec.length if strt.src == srcIsect.location else -dstVec/dstVec.length
-            #         vectors.append(vec)
-            #     diffs = [((a-b).length, ia, ib+ia+1, atan2(a[1],a[0])-atan2(b[1],b[0])) for ia, a in enumerate(vectors) for ib,b in enumerate(vectors[ia + 1:])]
-            #     _, ia, ib, d = min(diffs, key = lambda x: x[0])
-            #     street0 = streetEnds[srcIsect.location][ia]
-            #     street1 = streetEnds[srcIsect.location][ib]
-            #     arrivingSrc, leavingSrc = (street0 if street0.dst == street.src else street1 if street1.dst == street.src else None, street)
-            #     print(ia,ib, street0.id, street1.id)
-            #     print(diffs)
-            #     from debug import plt, plotStreetGroup,plotEnd
-            #     plotStreetGroup(streetEnds[srcIsect.location],'blue',False)
-            #     plt.title(str(street.id))
-            #     plotStreetGroup([arrivingSrc, leavingSrc],'red',False)
-            #     srcIsect = srcIsect if arrivingSrc and not isHairpinBend(arrivingSrc, leavingSrc) else None
-            else:
-                srcIsect = None
+    # Propose initial chains of streets to be concatenated to long streets
+    initial_chains = find_paths(streets)
 
-        dstIsect = intersections[street.dst]
-        if dstIsect:
-            # Third street does not belong to group
-            if len(streetEnds[street.dst])==2 and dstIsect.order==3:
-                street0 = streetEnds[dstIsect.location][0]
-                street1 = streetEnds[dstIsect.location][1]
-                arrivingDst, leavingDst = (street, street0 if street.dst == street0.src else street1 if street.dst == street1.src else None)
-                dstIsect = dstIsect if leavingDst and not isHairpinBend(arrivingDst, leavingDst) else None
-            # Three streets, all in the group. Let the angles decide.
-            # elif len(streetEnds[street.dst])==3 and dstIsect.order==3:
-            #     vectors = []
-            #     for i,strt in enumerate(streetEnds[dstIsect.location]):
-            #         srcVec, dstVec = strt.endVectors()
-            #         vectors.append( srcVec/srcVec.length if strt.src == dstIsect.location else -dstVec/dstVec.length )
-            #     diffs = [((a-b).length, ia, ib+ia+1, atan2(a[1],a[0])-atan2(b[1],b[0])) for ia, a in enumerate(vectors) for ib,b in enumerate(vectors[ia + 1:])]
-            #     _, ia, ib, d = min(diffs, key = lambda x: x[0])
-            #     street0 = streetEnds[dstIsect.location][ia]
-            #     street1 = streetEnds[dstIsect.location][ib]
-            #     arrivingDst, leavingDst = (street, street0 if street.dst == street0.src else street1 if street.dst == street1.src else None)
-            #     print(ia,ib, street0.id, street1.id)
-            #     print(diffs)
-            #     from debug import plt, plotStreetGroup,plotEnd
-            #     plotStreetGroup(streetEnds[dstIsect.location],'blue',False)
-            #     plt.title(str(street.id))
-            #     plotStreetGroup([arrivingDst, leavingDst],'red',False)
-            #     dstIsect = dstIsect if leavingDst and not isHairpinBend(arrivingDst, leavingDst) else None
-            else:
-                dstIsect = None
 
-        exits = {'arrivingSrc': arrivingSrc, 'leavingSrc': leavingSrc, 'arrivingDst':arrivingDst, 'leavingDst':leavingDst }
-        return srcIsect, dstIsect, exits
-    
-    streetEnds, intersections, _ = locationsInGroup(streetGroup)
+    # Use only chains with or than one street. Split these chains at hairpins
+    # and at intersections with other street groups, stored in <groupIntersections>.
+    # 
+    # Hairpinss arrive at ends of streets in street groups, if two streets create
+    # a peak with a small angle, like this:
+    #           ----------<----------
+    #          /
+    #         o  <-- Hairpin
+    #          \
+    #           ---------->---------
+    chains = []
+    for initial_chain in initial_chains:
+        chain = []
+        if len(initial_chain) > 1:
+            for i, (edge0,edge1) in enumerate(pairs(initial_chain)):
+                chain.append(edge0)
+                intersectsWithOtherGroup = set(groupIntersections[edge0[1]]) - set([streetGroup.id])
+                if isHairpinBend(edge0[2], edge1[2]) or intersectsWithOtherGroup :
+                    chains.append(chain)
+                    chain = []
+            chain.append(edge1)
+            chains.append(chain)
 
+
+    #  Streets in chains are now concatenated. Eventual major intersections between these streete
+    # are converted to minor ones.
     replacedStreets = set() # Streets that have been replaced by a longer street.
     modifiedIsects = set()  # Major intersections, that have been transformed to pseudo minor ones.
     newLongStreets = []     # Merged long streets.
-    for street in streetGroup:
-        if street in replacedStreets:
-            continue
-        srcIsectIni, dstIsectIni, exitsIni = mergableIntersections(street)
-
-        if srcIsectIni or dstIsectIni:
-            # Create a new Street
-            longStreet = Street(street.src,street.dst)
-            longStreet.insertStreetEnd(street)
-            longStreet.pred = street.pred
-            replacedStreets.add(street)
-
-            if dstIsectIni: # extend the street at its end
-                dstIsectIni.street = longStreet
-                arriving, leaving = exitsIni['arrivingDst'], exitsIni['leavingDst']
-                makePseudoMinor(streetGenerator, dstIsectIni, arriving, leaving)
-                modifiedIsects.add(dstIsectIni)
-                longStreet.insertEnd(dstIsectIni)
-                dstIsectCurr = dstIsectIni
-                while True:
-                    nextStreet = leaving
-                    if nextStreet in replacedStreets:
-                        break
-                    longStreet.insertStreetEnd(nextStreet)
-                    replacedStreets.add(nextStreet)
-                    _, dstIsectCurr, currExits = mergableIntersections(nextStreet)
-                    if not dstIsectCurr:
-                        if nextStreet.succ is not None:
-                            if isinstance(nextStreet.succ,IntConnector):
-                                nextStreet.succ.item = longStreet
-                        break
-                    arriving, leaving = currExits['arrivingDst'], currExits['leavingDst']
-                    makePseudoMinor(streetGenerator, dstIsectCurr, arriving, leaving)
-                    modifiedIsects.add(dstIsectCurr)
-                    dstIsectCurr.street = longStreet
-                    longStreet.insertEnd(dstIsectCurr)
-            else:
-                if street.succ is not None:
-                    if isinstance(street.succ,IntConnector):
-                        street.succ.item = longStreet
-
-            if srcIsectIni: # extend the street at its front
-                srcIsectIni.street = longStreet
-                arriving, leaving = exitsIni['arrivingSrc'], exitsIni['leavingSrc']
-                makePseudoMinor(streetGenerator, srcIsectIni, arriving, leaving)
-                modifiedIsects.add(srcIsectIni)
-                longStreet.insertFront(srcIsectIni)
-                srcIsectCurr = srcIsectIni
-                while True:
-                    if arriving in replacedStreets:
-                        break
-                    longStreet.insertStreetFront(arriving)
+    for chain in chains:
+        if len(chain) > 1:
+            # Create a long street for the concatenation
+            longStreet = Street(None,None)
+            for i, (edge0,edge1) in enumerate(pairs(chain)):
+                # Extract pairs of arriving and leaving streets from chain
+                arriving = edge0[2]
+                leaving = edge1[2]
+                
+                # If the arriving street has not yet been processed
+                if arriving not in replacedStreets:
+                    # Insert it at the end of the long street
+                    longStreet.insertStreetEnd(arriving)
+                    longStreet.pred = arriving.pred
                     replacedStreets.add(arriving)
-                    srcIsectCurr, _, currExits = mergableIntersections(arriving)
-                    if not srcIsectCurr:
-                        if arriving.pred is not None:
-                            if isinstance(arriving.pred,IntConnector):
-                                arriving.pred.item = longStreet
-                        break
-                    arriving, leaving = currExits['arrivingSrc'], currExits['leavingSrc']
-                    makePseudoMinor(streetGenerator, srcIsectCurr, arriving, leaving)
-                    modifiedIsects.add(srcIsectCurr)
-                    srcIsectCurr.street = longStreet
-                    longStreet.insertFront(srcIsectCurr)
-            else:
-                if street.pred is not None:
-                    if isinstance(street.pred,IntConnector):
-                        street.pred.item = longStreet
 
+                    # If there is an intersection at the end of the arriving street,
+                    # make it minor if it is major and insert it at the end of the
+                    # long street.
+                    if arriving.succ:
+                        intersection = arriving.succ.intersection
+                        if not intersection.isMinor:
+                            makePseudoMinor(streetGenerator, intersection, arriving, leaving)
+
+                        # Adapt this intersection and insert it at the end of the long street.                             
+                        modifiedIsects.add(intersection)
+                        intersection.street = longStreet
+                        longStreet.insertEnd(intersection)
+
+                        # If the last pair of streets is reached, the leaving street is inserted.
+                        if i >= len(chain) - 2:
+                            longStreet.insertStreetEnd(leaving)
+                            longStreet.pred = leaving.pred
+                            replacedStreets.add(leaving)
+                            break
+                    else:
+                        break
+
+            # Add this long street to the list of long streets for bookkeeping.
             newLongStreets.append(longStreet)
 
-    # Some bookkeeping
+    # Some bookkeeping, adapt the street group in <streetGroup>.
     for street in replacedStreets:
         del streetGenerator.streets[street.id]
         streetGroup.remove(street)
