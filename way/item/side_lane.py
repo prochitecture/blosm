@@ -113,3 +113,6 @@ class SideLane(Item):
     
     def getClass(self):
         return (self.pred if self.totalLanesIncreased else self.succ).getStyleBlockAttr("cl")
+
+    def debugInfo(self):
+        return "Side({0})".format(self.id)

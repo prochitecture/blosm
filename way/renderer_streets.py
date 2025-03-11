@@ -113,14 +113,16 @@ class StreetRenderer:
         # render instances of the class <Bundle>
         for bundle in manager.iterBundles():
             _debug.printBundleContent(bundle)
-            for street in bundle.streetsHead:
-                self.initStreet(street)
+            #for street in bundle.streetsHead:
+            #    self.initStreet(street)
         
         # render instances of the class <Street>
         for street in manager.iterStreets():
             _debug.printStreetContent(street)
-            self.initStreet(street)
-
+            #self.initStreet(street)
+        
+        return
+        
         # render instances of class <Intersection>
         intersectionRenderer = self.itemRenderers["Intersection"]
         for intersection in manager.majorIntersections.values():

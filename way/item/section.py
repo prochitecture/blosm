@@ -148,3 +148,6 @@ class Section(Item):
     
     def getName(self):
         return self.tags.get("name")
+    
+    def debugInfo(self):
+        return "S({0})".format(self.id)

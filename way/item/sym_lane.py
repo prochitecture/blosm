@@ -77,4 +77,6 @@ class SymLane(Item):
         signOfIn = 1 if fwd1 else -1
         signOfOut = 1 if fwd2 else -1
         self.directions = (signOfIn, signOfOut)
-
+    
+    def debugInfo(self):
+        return "Side({0})".format(self.id)

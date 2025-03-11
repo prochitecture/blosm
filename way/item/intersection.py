@@ -266,3 +266,12 @@ class Intersection(Item):
         while conn_item is not None:
             yield conn_item
             conn_item = conn_item.succ
+    
+    def debugInfo(self):
+        left = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in self.iterate_from(self.leftHead)] )
+        if left:
+            left = "L{{{0}}}".format(left)
+        right = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in self.iterate_from(self.rightHead)] )
+        if right:
+            right = "R{{{0}}}".format(right)
+        return "I({0}){1}{2}".format(self.id, left, right)

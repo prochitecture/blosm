@@ -161,3 +161,17 @@ class Street(Item):
                 else:
                     t = item.polyline.d2t(item.polyline.length()-10)
                     item.polyline.trimmed(t,len(item.polyline)).plotWithArrows(color,width)
+    
+    def debugInfo(self):
+        tags = self.head.tags
+        hw, rw, aw = tags.get("highway"), tags.get("railway"), tags.get("aeroway")
+        info = ''
+        
+        if rw and hw:
+            info = "{0} {1}".format(hw, rw)
+        elif aw and hw:
+            info = "{0} {1}".format(aw, hw)
+        else:
+            info = hw or rw or aw
+        
+        return "{0}({1}): ".format(self.id, info)

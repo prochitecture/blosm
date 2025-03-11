@@ -4,14 +4,8 @@ def printStreetContent(street, processBundle=False):
         return
     
     print(
-        "{0}:".format(street.id) +\
-        " - ".join(
-            (
-                "(Int)" if item.__class__.__name__ == "Intersection" else\
-                "{0}({1})({2})".format(item.__class__.__name__, item.id, "aeroway" if "aeroway" in item.tags else "highway")
-            )\
-            for item in street.iterItems()
-        )
+        street.debugInfo() +\
+        " - ".join( item.debugInfo() for item in street.iterItems() )
     )
 
 
