@@ -10,7 +10,7 @@ from defs.way_cluster_params import minTemplateLength, minNeighborLength, search
 
 from way.item import Intersection, IntConnector, Section, Street, SideLane, SymLane
 from way.item.bundle import Bundle, StreetGroup, mergePseudoMinors, removeSplittingStreets, orderHeadTail, \
-                                    findInnerStreets, canBeMerged, mergeBundles, intersectBundles, endBundleIntersection
+                                    findInnerStreets, canBeMerged, joinBundles, mergeBundles,intersectBundles, endBundleIntersection
 from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
 from way.way_properties import lanePattern
@@ -23,6 +23,7 @@ from lib.CompGeom.GraphBasedAlgos import DisjointSets
 from lib.CompGeom.PolyLine import PolyLine
 from lib.CompGeom.LinePolygonClipper import LinePolygonClipper
 from lib.CompGeom.dbscan import dbClusterScan
+from lib.CompGeom.chains import find_all_lines
 
 
 # helper functions -----------------------------------------------
@@ -141,9 +142,9 @@ class StreetGenerator():
         # Constructs the Bundles and includes their inner streets
         self.createBundles()
 
-        # If two bundles meet and there are no inner streets at the meeting intersection, they
-        # can be merged into one bundle.
-        self.mergeBundles()
+        # If two bundles meet and there are no major inner streets at the meeting
+        # intersection, they can be merged into one bundle.
+        self.joinBundles()
 
         # Finally, the intersections of bundles are constructed.
         self.createBundleIntersections()
@@ -659,6 +660,10 @@ class StreetGenerator():
                 color = next(colorIter)
                 allVerts = []
                 for street in streets:
+                    srcVec, _ = street.endVectors()
+                    vu = srcVec/srcVec.length * 3
+                    p = street.src
+                    plt.text(p[0]+vu[0],p[1]+vu[1],'   S'+str(street.id),fontsize=10,color=color,zorder=960)
                     width = 2
                     if inBundles:
                         color = "red"
@@ -757,6 +762,7 @@ class StreetGenerator():
                     # plt.text(p[0],p[1],'  '+str(item['i']),fontsize=12)
                     plt.plot(p[0],p[1],'coral',marker='o',markersize=14,zorder=998)
                     plt.text(p[0],p[1],'H'+str(indx),fontsize=10,zorder=999,horizontalalignment='center',verticalalignment='center')
+                    plt.text(p[0]+2,p[1]-2,str(item['street'].id))
 
                 for indx in range(len(tail)):
                     item = tail[indx]
@@ -764,6 +770,7 @@ class StreetGenerator():
                     # plt.text(p[0],p[1],'  '+str(item['i']),fontsize=12)
                     plt.plot(p[0],p[1],'skyblue',marker='o',markersize=14,zorder=998)
                     plt.text(p[0],p[1],'T'+str(indx),fontsize=10,zorder=999,horizontalalignment='center',verticalalignment='center')
+                    plt.text(p[0]+2,p[1]-2,str(item['street'].id))
 
                 plt.title('Heads (H) and tails (T) in streetGroup %d'%gIndex)
                 plotEnd()
@@ -796,18 +803,143 @@ class StreetGenerator():
                 street.bundle = bundle
                 bundle.streetsHead.append(street)
                 bundle.headLocs.append(item['firstVert'])
-                if street.id in self.streets:
-                    del self.streets[street.id]
             for item in tail:
                 street = item['street']
                 street.bundle = bundle
                 bundle.streetsTail.append(street)
                 bundle.tailLocs.append(item['firstVert'])
-                if street.id in self.streets:
-                    del self.streets[street.id]
             self.bundles[bundle.id] = bundle
             for street in innerStreets:
                 street.bundle = bundle
+
+            for street in streetGroup:
+                street.bundle = bundle
+
+
+    # If two bundles meet and there are no inner streets at the meeting intersection, they
+    # can be merged into one bundle.
+    def joinBundles(self):
+
+        # An edge is a tuple  of the form (headKey, tailKey, bundle), where headKey is the set of locations
+        # in self.headLocs and tailKey is the set of locations in self.tailLocs of a the bundle.
+        # directConnected() checks, if two bundles, given as a sequence egde0, edge1 are connected only by
+        # there key locations and connect only streets of the bundles.
+        def directConnected(edge0,edge1):
+            mergeKey0, bundle0 = edge0[0], edge0[2]
+            bundleEndType0 = keyDict[(mergeKey0, bundle0)]
+            mergeKey1, bundle1 = edge1[0], edge1[2]
+            bundleStartType1 = keyDict[(mergeKey1, bundle1)]
+            allBundleStreets = []
+            allBundleStreets.extend(bundle0.streetsTail if bundleEndType0=='head' else bundle0.streetsHead)
+            allBundleStreets.extend(bundle1.streetsHead if bundleStartType1=='head' else bundle1.streetsTail)
+
+            # Collect the intersections at the connecting locations. All of them must be major intersections
+            intersections = set(self.majorIntersections.get(loc,None) for loc in (bundle0.tailLocs if bundleEndType0=='head' else bundle0.headLocs) )
+            if not all(intersections):
+                return False
+
+            # The streets of the intersections must be streets of the bundles.
+            for intersection in  intersections:
+                if intersection:
+                    for conn in intersection:
+                        if conn.item not in allBundleStreets:
+                            return False                      
+            return True
+
+        # Create a list of all bundles as edges of a graph. An edge is a tuple  of the form
+        # (headKey, tailKey, bundle), where headKey is the set of locations in self.headLocs
+        # and tailKey is the set of locations in self.tailLocs of a the bundle. headKey and
+        # tailKey are the nodes of the graph. The dictionary keyDict relates the combination
+        # of the nodes and the bundle to the end type of the bundle.
+        edgeList = []
+        keyDict = dict()
+        for id,bundle in self.bundles.items():
+            headKey = tuple( sorted(set(bundle.headLocs)) )
+            tailKey = tuple( sorted(set(bundle.tailLocs)) )
+            keyDict[(headKey,bundle)] = 'head'
+            keyDict[(tailKey,bundle)] = 'tail'
+            edgeList.append( (headKey, tailKey, bundle) )
+
+        # Decomposes the edges into maximally long, connected paths. Each edge may only appear
+        # in a single path. Preference is given to starting at nodes with only one connection.
+        # See description of find_all_lines in lib/CompGeom/chains.py.
+        paths = find_all_lines(edgeList)
+
+        # Only those edge pairs may be joined, that apply a direct connection (see description
+        # of directConnected() above). The result is found in <cleanedPaths>.
+        cleanedPaths = []    
+        for path in paths:
+            tempPath = []            
+            for i, (edge0, edge1) in enumerate(pairs(path)):
+                if not tempPath:
+                    tempPath.append(edge0)  # Start a new path             
+                if directConnected(edge0,edge1):
+                    tempPath.append(edge1)
+                else:
+                    if len(tempPath) > 1:
+                        cleanedPaths.append(tempPath)  # Save valid path
+                    tempPath = []  # Reset path
+            
+            if tempPath and len(tempPath) > 1:
+                cleanedPaths.append(tempPath)  # Save remaining path
+ 
+        paths = cleanedPaths
+
+        # If there are paths, their edges may be merged into a new bundle.
+        for path in paths:
+            newBundle = Bundle()
+
+            # Fill this new bundle with the values of the first bundle in <path>.
+            # Depending on the direction of ths edge, the bundle has to be reversed.
+            firstBundle = path[0][2]
+            bundleEndType = keyDict[(path[0][1], firstBundle)]
+            lastKey = path[0][1]
+            if bundleEndType == 'tail':
+                newBundle._pred = firstBundle._pred
+                newBundle._succ = firstBundle._succ
+                newBundle.streetsHead = firstBundle.streetsHead
+                newBundle.streetsTail = firstBundle.streetsTail
+                newBundle.headLocs = firstBundle.headLocs
+                newBundle.tailLocs = firstBundle.tailLocs
+            else:
+                newBundle._pred = firstBundle._succ
+                newBundle._succ = firstBundle._pred
+                newBundle.streetsHead = firstBundle.streetsTail
+                newBundle.streetsTail = firstBundle.streetsHead
+                newBundle.headLocs = firstBundle.tailLocs
+                newBundle.tailLocs = firstBundle.headLocs
+
+            # Link all streets of <firstBundle> to the new bundle
+            for id,street in self.streets.items():
+                if street.bundle == firstBundle:
+                    street.bundle = newBundle
+
+            # Now, we start to join the remaining bundles to the new bundle.
+            for edge in path[1:]:
+                mergeKey = edge[0]
+                bundle = edge[2]
+                bundleEndType = keyDict[(mergeKey, bundle)]
+
+                newBundle = joinBundles(self, newBundle, bundle, bundleEndType=='head')
+
+            for edge in path:
+                bundleID = edge[2].id
+                if bundleID in self.bundles:
+                    del self.bundles[bundleID]
+
+            self.bundles[newBundle.id] = newBundle
+
+        self.mergeBundles()
+
+                # Link streets of all bundles i path to the new bundle
+                # remove bundles in path
+                # Add newBundle
+
+
+
+
+
+
 
     # If two bundles meet and there are no inner streets at the meeting intersection, they
     # can be merged into one bundle.

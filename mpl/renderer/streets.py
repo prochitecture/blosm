@@ -29,7 +29,7 @@ class StreetRenderer(Renderer):
             return  section.category in  ['footway', 'cycleway']
         
         def isMinorCategory(section):
-            return  section.category in  ['footway', 'cycleway','service','runway']
+            return  section.category in  ['footway', 'cycleway','service']
         
         def isAirwayCategory(section):
             return  section.category in  ['runway', 'taxiway']
@@ -218,43 +218,25 @@ class StreetRenderer(Renderer):
                         if self.debug:
                             plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
+            for street in manager.iterStreets():
+                if street.bundle and street.bundle == bundle:
+                    for item in street.iterItems():
+                        if isinstance(item,Section):
+                            section = item
+                            if section.valid:
+                                color = 'gray' if isSmallestCategory(section) else 'g' if isMinorCategory(section) else 'g'
+                                width = 1 if isSmallestCategory(section) else 1.1 if isMinorCategory(section) else 1.5
+                                style = 'dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid'
+                                upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
+                                section.polyline.plotWithArrows(color,width,0.5,style,False,950)
+                                vertices.extend(section.centerline)
+                                p = section.src
+                                plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
+                        if isinstance(item,SideLane):
+                            p = item.location
+                            plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                            if self.debug:
+                                plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
             c = sum(vertices,Vector((0,0)))/len(vertices)
-            plt.text(c[0],c[1]+upset,'B'+str(bundle.id),fontsize=18,color='red',ha='center', va='center')
-            
-
-
-
-def plotPolygon(poly,vertsOrder,lineColor='k',fillColor='k',width=1.,fill=False,alpha = 0.2,order=100):
-    x = [n[0] for n in poly] + [poly[0][0]]
-    y = [n[1] for n in poly] + [poly[0][1]]
-    if fill:
-        plt.fill(x[:-1],y[:-1],color=fillColor,alpha=alpha,zorder = order)
-    plt.plot(x,y,lineColor,linewidth=width,zorder=order)
-    if vertsOrder:
-        for i,(xx,yy) in enumerate(zip(x[:-1],y[:-1])):
-            plt.text(xx,yy,str(i),fontsize=12, clip_on=True)
-
-def plotWay(way,vertsOrder,lineColor='k',width=1.,order=100):
-    x = [n[0] for n in way]
-    y = [n[1] for n in way]
-    plt.plot(x,y,lineColor,linewidth=width,zorder=order)
-    if vertsOrder:
-        for i,(xx,yy) in enumerate(zip(x,y)):
-            plt.text(xx,yy,str(i),fontsize=12, clip_on=True)
-
-def plotSideLaneWay(smallWay,wideWay,color):
-    from lib.CompGeom.PolyLine import PolyLine
-    smallLine = PolyLine(smallWay.centerline)
-    wideLine = PolyLine(wideWay.centerline)
-    smallLine.plotWithArrows('g',2)
-    wideLine.plotWithArrows('r',2)
-
-    wideLine = wideLine.parallelOffset(-wideWay.offset)
-    poly = wideLine.buffer(wideWay.width/2.,wideWay.width/2.)
-    plotPolygon(poly,False,color,color,1.,True,0.3,120)
-    poly = smallLine.buffer(smallWay.width/2.,smallWay.width/2.)
-    plotPolygon(poly,False,color,color,1.,True,0.3,120)
-
-def plotEnd():
-    plt.gca().axis('equal')
-    plt.show()
+            plt.text(c[0],c[1]+upset,'B'+str(bundle.id),fontsize=18,color='red',ha='center', va='center',zorder=999)

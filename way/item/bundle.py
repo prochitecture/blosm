@@ -1,6 +1,7 @@
 from collections import defaultdict
 from itertools import tee, islice, cycle
 from mathutils import Vector
+from statistics import median
 
 from .item import Item
 from way.item.street import Street
@@ -69,6 +70,82 @@ class Bundle(Item):
     @succ.setter
     def succ(self,val):
         self._succ = val
+
+    def plot(self, streetGenerator, doEnd = True):
+        from debug import plt, plotEnd
+        from way.item import Section, SideLane, SymLane
+        for iH,street in enumerate(self.streetsHead):
+            p = street.head.polyline[0]
+            plt.text(p[0],p[1]+1.5,'   S'+str(street.id)+' H '+str(iH),fontsize=10,color='green',ha='right', va='bottom')
+            for item in street.iterItems():
+                if isinstance(item,Section):
+                    vertices = []
+                    section = item
+                    if section.valid:
+                        section.polyline.plotWithArrows('k',1,0.5,'solid',False,950)
+                        vertices.extend(section.centerline)
+                        p = section.src
+                        # plt.text(p[0],p[1]+1.3,' sect'+str(section.id),fontsize=10,color='k')
+                if isinstance(item,SideLane):
+                    p = item.location
+                    plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                    if self.debug:
+                        plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+                if isinstance(item,SymLane):
+                    p = item.location
+                    plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                    if self.debug:
+                        plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+        for iT,street in enumerate(self.streetsTail):
+            if street in self.streetsHead:
+                continue# already drawn
+            p = street.head.polyline[0]
+            plt.text(p[0],p[1]+1.5,'   S'+str(street.id)+' T '+str(iT),fontsize=10,color='green',ha='right', va='bottom')
+            for item in street.iterItems():
+                if isinstance(item,Section):
+                    section = item
+                    if section.valid:
+                        section.polyline.plotWithArrows('k',1,0.5,'solid',False,950)
+                        vertices.extend(section.centerline)
+                        p = section.src
+                        # plt.text(p[0],p[1]+1.3,' sect'+str(section.id),fontsize=10,color='k')
+
+                if isinstance(item,SideLane):
+                    p = item.location
+                    plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                    if self.debug:
+                        plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+                if isinstance(item,SymLane):
+                    p = item.location
+                    plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                    if self.debug:
+                        plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+        for iH,loc in enumerate(self.headLocs):
+            plt.plot(loc[0],loc[1],'ro')
+            plt.text(loc[0]+1,loc[1]-1, str(iH)+'H')
+        for iT,loc in enumerate(self.tailLocs):
+            plt.plot(loc[0],loc[1],'ro')
+            plt.text(loc[0]+1,loc[1]-1, str(iT)+'T')
+
+        for id,street in streetGenerator.streets.items():
+            if street.bundle and street.bundle == self:
+                for item in street.iterItems():
+                    if street not in self.streetsHead and street not in self.streetsTail:
+                        if isinstance(item,Section):
+                            section = item
+                            if section.valid:
+                                section.polyline.plotWithArrows('r',1,0.5,'solid',False,950)
+                                vertices.extend(section.centerline)
+                                p = section.src
+                                plt.text(p[0],p[1]+1.3,' sect'+str(section.id),fontsize=10,color='r')
+ 
+        if doEnd:
+            plotEnd()
+
 
 
 def makePseudoMinor(streetGenerator, intersection, arriving, leaving):
@@ -346,24 +423,24 @@ def removeSplittingStreets(streetGenerator,gIndex, streetGroup, groupIntersectio
             srcGroup.extend([s for s in streetGroup if s not in splittingStreets and h in [s.src, s.dst]])
             dstGroup.extend([s for s in streetGroup if s not in splittingStreets and t in [s.src, s.dst]])
 
-    # Sometimes (often at the scene border), short tails remain between the
-    # last intersection and the border. These ends are removed from the group.
-    for group in ([srcGroup, dstGroup] if wasSplit else [streetGroup]):
-        # Check if intermediate intersections exist
-        streetEnds, _, hairpins = locationsInGroup(group)
-        hasIntermediates = any(len(end)>1 for end in streetEnds.values())
+    # # Sometimes (often at the scene border), short tails remain between the
+    # # last intersection and the border. These ends are removed from the group.
+    # for group in ([srcGroup, dstGroup] if wasSplit else [streetGroup]):
+    #     # Check if intermediate intersections exist
+    #     streetEnds, _, hairpins = locationsInGroup(group)
+    #     hasIntermediates = any(len(end)>1 for end in streetEnds.values())
 
-        while hasIntermediates:
-            hasIntermediates = False
-            for p,streets in streetEnds.items():
-                if len(streets)==2 and not hairpins[p]:
-                    smallestStreet = min(streets, key = lambda x: x.length())
-                    if smallestStreet in group:
-                        group.remove(smallestStreet)
-                    # print(smallestStreet.id, 'removed')
-                    streetEnds, _, hairpins = locationsInGroup(group)
-                    hasIntermediates = any(len(end)>1 for end in streetEnds.values())
-                    break
+    #     while hasIntermediates:
+    #         hasIntermediates = False
+    #         for p,streets in streetEnds.items():
+    #             if len(streets)==2 and not hairpins[p]:
+    #                 smallestStreet = min(streets, key = lambda x: x.length())
+    #                 if smallestStreet in group:
+    #                     group.remove(smallestStreet)
+    #                 # print('Street ', smallestStreet.id, ' of length ', smallestStreet.length(), ' removed')
+    #                 streetEnds, _, hairpins = locationsInGroup(group)
+    #                 hasIntermediates = any(len(end)>1 for end in streetEnds.values())
+    #                 break
 
     # There may be streets, that are not part of srcGroup or dstGroup and neither
     # of splittingStreets. These may become "inner" streets, marked later by an 
@@ -468,6 +545,17 @@ def removeSplittingStreets(streetGenerator,gIndex, streetGroup, groupIntersectio
 def orderHeadTail(streetGroup):
     streetEnds, _, hairpins = locationsInGroup(streetGroup)
 
+    def removeOutliers(firstEnds):
+        locations =  [e['firstVert'] for e in firstEnds]
+        medLocation = Vector(( median([x[0] for x in locations]),median([y[1] for y in locations]) ))
+        medDistances = [(loc-medLocation).length for loc in locations]
+        medDistance = median(medDistances)
+        score = [abs(distance/medDistance) for distance in medDistances]
+        inliers = [firstEnds[i] for i,s in enumerate(score) if s < 10.]
+        # outlierLocations = [locations[i] for i,s in enumerate(score) if s >= 2.]
+        outliers = [firstEnds[i] for i,s in enumerate(score) if s >= 10.]
+        return inliers, outliers
+
     # Try to find starts and ends of the streets relative to the bundle. This 
     # 'forwardOrder' determines also the direction of the bundle. See this
     # function above.
@@ -476,10 +564,49 @@ def orderHeadTail(streetGroup):
     for street in streetGroup:
         fwd = forwardOrder(street.src,street.dst)
         h, t = (street.src, street.dst) if fwd else (street.dst, street.src)
-        if len(streetEnds[h])==1 or hairpins[h]:  
-                head.append({'street':street, 'firstVert':h, 'lastVert':t})
-        if len(streetEnds[t])==1 or hairpins[t]:  
-                tail.append({'street':street, 'firstVert':t, 'lastVert':h})
+        if len(streetEnds[h])<3 or hairpins[h]:  
+                head.append({'street':street, 'firstVert':h, 'lastVert':t, 'fwd':fwd})
+        if len(streetEnds[t])<3 or hairpins[t]:  
+                tail.append({'street':street, 'firstVert':t, 'lastVert':h, 'fwd':fwd})
+    # print('head',[h['street'].id for h in head])
+    # print('tail',[h['street'].id for h in tail])
+
+    # Endpoints as future heads or tails of a bundle may be too far from their group
+    # and need to be removed as outliers.
+    if len(head) > 2:
+        newHead, outliersH = removeOutliers(head)
+
+        # If an outlier at one end is connected to a head or tail at the other end of the group,
+        # this other end and the whole street have to be removed.
+        for endH in outliersH:
+            removeInTail = []
+            for startT in tail:
+                if endH['lastVert'] == startT['firstVert']:
+                    streetGroup.group.remove(endH['street'])
+                    removeInTail.append(startT)
+            for startT in removeInTail:
+                if startT in newTail:
+                    newTail.remove(startT)
+        head = newHead
+
+    if len(tail) > 2:
+        newTail, outliersT = removeOutliers(tail)
+
+        # If an outlier at one end is connected to a head or tail at the other end of the group,
+        # this other end and the whole street have to be removed.
+        for endT in outliersT:
+            removeInHead = []
+            for startH in head:
+                if endT['lastVert'] == startH['firstVert']:
+                    streetGroup.group.remove(endT['street'])
+                    removeInHead.append(startH)
+            for startT in removeInHead:
+                if startH in newHead:
+                    newHead.remove(startT)
+        tail = newTail
+
+    # print('head',[h['street'].id for h in head])
+    # print('tail',[h['street'].id for h in tail])
 
     # The streets in head and tail have to be ordered from left to right.
     # The vector of the first segment of an arbitrary street is turned 
@@ -503,9 +630,7 @@ def orderHeadTail(streetGroup):
 
     # sort streets along perp from left to right
     sortedIndices = sorted( (i for i in range(len(head))),  key=lambda i: ( head[i]['firstVert'] - p0).dot(perp) )
-
-    reverse = False
-    head = [h for (_, h) in sorted(zip(sortedIndices, head), key=lambda x: x[0], reverse=reverse)]
+    head = [head[i] for i in sortedIndices]
 
     # Process tail (end) of the bundle
     # take an aribtrary street
@@ -524,9 +649,7 @@ def orderHeadTail(streetGroup):
 
     # sort streats along perp from left to right
     sortedIndices = sorted( (i for i in range(len(tail))),  key=lambda i: ( tail[i]['lastVert'] - p0).dot(perp) )
-                        
-    reverse = False
-    tail = [h for (_, h) in sorted(zip(sortedIndices, tail), key=lambda x: x[0], reverse=reverse)]
+    tail = [tail[i] for i in sortedIndices]
 
     return head, tail
 
@@ -654,6 +777,77 @@ def canBeMerged(streetGenerator, involvedBundles):
 
     return isMergable
 
+def joinBundles(streetGenerator, arrivingBundle, leavingBundle, forward):
+    # Join the arrivingBundle and the leavingBundle. The direction of leavingBundle is given
+    # is given by <forward>.
+
+    # The locations at the end of the arrivingBundle are the same as those
+    # at the start of the leavingBundle to be joined. Remove duplicates.
+    locations = set(arrivingBundle.tailLocs)
+
+    # Find the leaving streets of bundle1
+    nearStreets, farStreets = (leavingBundle.streetsHead, leavingBundle.streetsTail) if forward \
+                               else (leavingBundle.streetsTail, leavingBundle.streetsHead)
+
+    # Check every location for streets 
+    mergedStreets = []
+    for location in locations:
+
+        srcStreets = [s for s in arrivingBundle.streetsTail if s.src==location or s.dst==location]
+        dstStreets = [s for s in nearStreets if s.src==location or s.dst==location]
+
+        if len(srcStreets)>1 or len(dstStreets)>1:
+            # Multiple streets are at the same location. The intersection remains
+            # as it is.
+            intersection = streetGenerator.majorIntersections[location]
+            for street in srcStreets:
+                street.succ = intersection
+            for street in dstStreets:
+                street.pred = intersection
+            pass
+        else:
+            # The arriving street of the incoming bundle is continued by a leaving street
+            # of the leaving bundle. They can be merged to one longer street by concatenation
+            # of the leaving street to the end of the arrivng street.
+            arrivingStreet = srcStreets[0]
+            leavingStreet = dstStreets[0]
+            if location in streetGenerator.majorIntersections:
+                intersection = streetGenerator.majorIntersections[location]
+                makePseudoMinor(streetGenerator, intersection, arrivingStreet, leavingStreet)
+            else:
+                intersection = streetGenerator.minorIntersections[location]
+            arrivingStreet.insertEnd(intersection)
+            arrivingStreet.insertStreetEnd(leavingStreet)
+            if arrivingStreet.succ:
+                arrivingStreet.succ.item = leavingStreet
+
+            # In the case of the leaving street ending at the far end of the leaving bundle,
+            # its attribute in either <streetsHead> or <streetsTail> of the bundle has to be updated.
+            # The attributes <headLocs> or <tailLocs> remain unchanged.        
+            if leavingStreet in farStreets:
+                if forward:
+                    leavingBundle.streetsTail = [arrivingStreet if x == leavingStreet else x for x in leavingBundle.streetsTail]
+                else:
+                    leavingBundle.streetsHead = [arrivingStreet if x == leavingStreet else x for x in leavingBundle.streetsHead]
+
+            # The linkt to the bundle of leavingStreet has to be set to the concatenated
+            # bundle <arrivingBundle>.
+            leavingStreet.bundle = arrivingBundle
+
+    # the end attributes of the leaving bundle have to be copied to the the concatenated bundle,
+    # and the leaving bundle has to be removed.
+    arrivingBundle.streetsTail = farStreets
+    arrivingBundle.tailLocs = leavingBundle.tailLocs if forward else leavingBundle.headLocs
+    if leavingBundle.id in streetGenerator.bundles:
+            del streetGenerator.bundles[leavingBundle.id]
+    for id,street in streetGenerator.streets.items():
+        if street.bundle == leavingBundle:
+            street.bundle = arrivingBundle
+    # arrivingBundle.plot(streetGenerator)
+    return arrivingBundle
+ 
+
+
 def mergeBundles(streetGenerator,involvedBundles):
     # TODO: bundle attribute of inner streets
 
@@ -736,8 +930,10 @@ def mergeBundles(streetGenerator,involvedBundles):
 def intersectBundles(streetGenerator,involvedBundles):
     if len(involvedBundles) == 2:
         twoBundleIntersection(streetGenerator,involvedBundles)
-    else:
+    elif len(involvedBundles) > 2:
         multiBundleIntersection(streetGenerator,involvedBundles)
+    else:
+        return
 
 def twoBundleIntersection(streetGenerator,involvedBundles):
     bundleStreets = set()
@@ -920,7 +1116,7 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
     # Preprocessing of involved bundles. Those where head and tail 
     # are completely in this intersection need to be removed.
     # Collect valid ends.
-    allEnds = set()     # All ends of all involved bundles. Reuiqred to remove these intersections.
+    allEnds = set()     # All ends of all involved bundles. Required to remove these intersections.
     ends = set()        # The outer ends (left and right) of the bundles at this intersection.
     intersectingBundles = dict()    # Keeps bundle data for each bundle.
     bundleStreets = []  # Keeps outer streets (left and right) of the bundles.
@@ -965,6 +1161,8 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
                     ends.add(end)
             intersectingBundles[bundle] = data
 
+    if len(intersectingBundles) < 2:
+        return
     # Add street data of streets, that do not belong to the bundle, if any. Derived from
     # the intersection at the ends. Excluded are:
     # - Streets that are in the bundles
@@ -990,7 +1188,11 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
 
     # Now, the intersection streets need to be ordered counter-clockwise.
     # First by the angle of their end relative to <location>
-    sortedEnds = sorted(ends, key=lambda x: (pseudoangle(x-location)) )
+    sortedEnds = ends
+    if len(ends) > 1:
+        sortedEnds = sorted(ends, key=lambda x: (pseudoangle(x-location)) )
+
+    
 
     # The order at the ends is more complicated. It must start right of the
     # vector <locVec> from <location> to <end>. From there, the vectors of the streets
