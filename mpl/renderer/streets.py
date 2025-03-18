@@ -17,9 +17,10 @@ def cyclePair(iterable):
 
 class StreetRenderer(Renderer):
 
-    def __init__(self, debug):
+    def __init__(self, debug, printStreetContent):
         super().__init__()
         self.debug = debug
+        self.printStreetContent = printStreetContent
     
     def prepare(self):
         return
@@ -33,6 +34,15 @@ class StreetRenderer(Renderer):
         
         def isAirwayCategory(section):
             return  section.category in  ['runway', 'taxiway']
+        
+        if self.printStreetContent:
+            from way import debug as _textDebug
+            
+            for bundle in manager.iterBundles():
+                _textDebug.printBundleContent(bundle)
+
+            for street in manager.iterStreets():
+                _textDebug.printStreetContent(street)
         
         for location,isect in manager.majorIntersections.items():
             p = location
