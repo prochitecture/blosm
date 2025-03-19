@@ -251,7 +251,7 @@ class BlenderRenderer:
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
             self._gltfImporterPatched = (vnode, BlenderScene)
-        elif bv[0] == 4 and bv[1] == 3:
+        elif bv[0] == 4 and 3 <= bv[1] <= 4:
             from .gltf_patch import select_imported_objects_4_1
             import io_scene_gltf2.blender.imp.vnode as vnode
             from io_scene_gltf2.blender.imp.scene import BlenderScene
