@@ -3,12 +3,17 @@ from itertools import tee, islice, cycle
 from mathutils import Vector
 from statistics import median
 
+from defs.way_cluster_params import minNeighborLength, searchDist
+
 from .item import Item
 from way.item.street import Street
 from way.item.section import Section
 from way.item.intersection import Intersection
 from way.item.connectors import IntConnector
 from lib.CompGeom.chains import find_paths
+from lib.CompGeom.PolyLine import PolyLine
+from lib.CompGeom.LinePolygonClipper import LinePolygonClipper
+
 
 # helper functions -----------------------------------------------
 def cyclePairs(iterable):
@@ -192,6 +197,9 @@ class StreetGroup():
     def __iter__(self):
         return iter(self.group)
     
+    def __getitem__(self, key):
+        return self.group[key]
+    
     def remove(self,street):
         return self.group.remove(street)
     
@@ -200,6 +208,9 @@ class StreetGroup():
     
     def extend(self,streetList):
         return self.group.extend(streetList)
+    
+    def sort(self):
+        self.group = sorted(self.group, key=lambda x: x.length(), reverse=True)
     
     def __len__(self):
         return len(self.group)
@@ -244,6 +255,60 @@ class StreetGroup():
         if doEnd:
             plotEnd()
 
+def parallelToSample(sampleStreet, neighborStreet, clipper=None):
+
+    def categoryOfStreet(street):
+        for item in street.iterItems():
+            if isinstance(item, Section):
+                break
+        return item.category
+
+
+    def centerlineOfStreet(street):
+        # Find the centerline of the whole street.
+        centerlineVerts = []
+        for item in street.iterItems():
+            if isinstance(item, Section):
+                centerlineVerts.extend( item.centerline)
+
+        # Remove duplicates and create polyLine
+        centerlineVerts = list(dict.fromkeys(centerlineVerts))
+        centerline = PolyLine(centerlineVerts)
+        return centerline, centerlineVerts
+
+    sampleCenterline, _ = centerlineOfStreet(sampleStreet)
+    sampleCategory = categoryOfStreet(sampleStreet)
+    # Create buffer polygon around the sample street with a width according
+    # to the category of the sample street.
+    bufferWidth = searchDist[sampleCategory]
+    bufferPoly = sampleCenterline.buffer(bufferWidth,bufferWidth)
+
+    if not clipper:
+        # Create a line clipper using this polygon.
+        clipper = LinePolygonClipper(bufferPoly.verts)
+
+    neighCenterline, neighCenterlineVerts = centerlineOfStreet(neighborStreet)
+
+    # If the centerline of this neighbor is longer than a minimal length, ...
+    if neighCenterline.length() > minNeighborLength:
+        # ... then clip it with the buffer polygon
+        inLine, inLineLength, nrOfON = clipper.clipLine(neighCenterlineVerts)
+
+        if inLineLength/neighCenterline.length() < 0.1:
+            return False # discard short inside lines. At least 10% must be inside.
+
+        # To check the quality of parallelism, some kind of "slope" relative
+        # to the template's line is evaluated.
+        p1, d1 = sampleCenterline.distTo(inLine[0][0])     # distance to start of inLine
+        p2, d2 = sampleCenterline.distTo(inLine[-1][-1])   # distance to end of inLine
+        slope = abs(d1-d2)/inLineLength if inLineLength else 1.
+
+        # Conditions for acceptable inside line.
+        # plotPureNetwork(self.sectionNetwork)
+        if slope < 0.15 and min(d1,d2) <= bufferWidth and nrOfON <= 2:
+            # Accept this pair as parallel.
+            return True
+    return False
 
 # The order is given first by the x-coordinate of the location and then by the
 # y-coordinate, if the difference in x-direction is larger than in y-direction

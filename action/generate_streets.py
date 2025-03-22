@@ -10,7 +10,8 @@ from defs.way_cluster_params import minTemplateLength, minNeighborLength, search
 
 from way.item import Intersection, IntConnector, Section, Street, SideLane, SymLane
 from way.item.bundle import Bundle, StreetGroup, mergePseudoMinors, removeSplittingStreets, orderHeadTail, \
-                                    findInnerStreets, canBeMerged, joinBundles, mergeBundles,intersectBundles, endBundleIntersection
+                                    findInnerStreets, canBeMerged, joinBundles, mergeBundles,intersectBundles, \
+                                    endBundleIntersection, parallelToSample
 from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
 from way.way_properties import lanePattern
@@ -24,6 +25,8 @@ from lib.CompGeom.PolyLine import PolyLine
 from lib.CompGeom.LinePolygonClipper import LinePolygonClipper
 from lib.CompGeom.dbscan import dbClusterScan
 from lib.CompGeom.chains import find_all_lines
+from lib.CompGeom.ConvexHull2D import ConvexHull2D
+from lib.CompGeom.centerline import pointInPolygon
 
 
 # helper functions -----------------------------------------------
@@ -80,6 +83,8 @@ class StreetGenerator():
         self.internalTransitionSymLanes = dict()
         self.intersections = dict()
         self.processedNodes = set()
+
+        self.prohibitedHulls = []
 
         # Determine whether all ways are to be calculated or only those intended
         # for vehicles. If True: wayManager.getAllWays() are used, else those from
@@ -620,27 +625,8 @@ class StreetGenerator():
                     if neighborStreet == sampleStreet:
                         continue # Skip, the sample street is its own neighbor.
 
-                    _, neighCenterline, neighCenterlineVerts = attributes[neighborStreet]
-
-                    # If the centerline of this neighbor is longer than a minimal length, ...
-                    if neighCenterline.length() > minNeighborLength:
-                        # ... then clip it with the buffer polygon
-                        inLine, inLineLength, nrOfON = clipper.clipLine(neighCenterlineVerts)
-
-                        if inLineLength/neighCenterline.length() < 0.1:
-                            continue # discard short inside lines. At least 10% must be inside.
-
-                        # To check the quality of parallelism, some kind of "slope" relative
-                        # to the template's line is evaluated.
-                        p1, d1 = sampleCenterline.distTo(inLine[0][0])     # distance to start of inLine
-                        p2, d2 = sampleCenterline.distTo(inLine[-1][-1])   # distance to end of inLine
-                        slope = abs(d1-d2)/inLineLength if inLineLength else 1.
-
-                        # Conditions for acceptable inside line.
-                        # plotPureNetwork(self.sectionNetwork)
-                        if slope < 0.15 and min(d1,d2) <= bufferWidth and nrOfON <= 2:
-                            # Accept this pair as parallel.
-                            self.parallelStreets.addSegment(sampleStreet,neighborStreet)
+                    if parallelToSample(sampleStreet, neighborStreet, clipper):
+                        self.parallelStreets.addSegment(sampleStreet,neighborStreet)
 
         # DEBUG: Show clusters of parallel way-sections.
         if debugParallelStreets:
@@ -702,6 +688,74 @@ class StreetGenerator():
         streetGroups = []
         for streetGroup in self.parallelStreets:
             streetGroups.append(StreetGroup(streetGroup))
+
+#----------------------------------------------------------------------------------------------
+# This part is rarely used. A use case is the scene osm_extracts/streets/toronto_queen_west.osm
+
+        # If there is a cluster of intersections within a streetGroup, the group has to be split
+        # into multiple groups and the cluster will later become a bundle intersection.
+        newGroups = []
+        toRemoveGroups = []
+        for streetGroup in streetGroups:
+            allDistinctIntersections = set()
+            for street in streetGroup:
+                allDistinctIntersections |= set([(street.src,street), (street.dst,street)]) 
+            # Find clusters of intersections
+            clusters = dbClusterScan(list(allDistinctIntersections), dbScanDist, 2)
+
+            # If a cluster is large, eventually split the group into multiple groups
+            for cluster in clusters:
+                if len(cluster) > 15:
+                    toRemoveGroups.append(streetGroup)
+
+                    # Remove all streets that are inside the convex hull of the
+                    # intersections in the cluster
+                    clusterIntersections = [p[0].freeze() for p in cluster]
+                    hullModel = ConvexHull2D()
+                    hull = hullModel(clusterIntersections)
+                    self.prohibitedHulls.append([h.freeze() for h in hull])
+                    toRemoveStreets = [ street for street in streetGroup
+                                            if pointInPolygon(hull, street.src) in ["IN", "ON"] 
+                                            and pointInPolygon(hull, street.dst) in ["IN", "ON"] ]
+                    for street in toRemoveStreets:
+                        streetGroup.remove(street)
+
+                    # Any other streets and intersections within this hull have to be removed too
+                    for group in streetGroups:
+                        if group != streetGroup:
+                            toRemoveStreets = [ street for street in group
+                                                if pointInPolygon(hull, street.src) in ["IN", "ON"] 
+                                                and pointInPolygon(hull, street.dst) in ["IN", "ON"] ]
+                            if toRemoveStreets:
+                                toRemoveGroups.append(group)
+
+                    # Now collect all remaining streets into new groups, that remained parallel
+                    processed = set()
+                    streetGroup.sort() # Start wit long streets to get good templates
+                    while len(processed) != len(streetGroup):
+                        for i, sampleStreet in enumerate(streetGroup):
+                            if sampleStreet not in processed:
+                                processed.add(sampleStreet)
+
+                                # Create a new street group, with all streets parallel to the sample street
+                                newGroup = StreetGroup([sampleStreet])
+                                for neighborStreet in streetGroup[(i+1):]:
+                                    if parallelToSample(sampleStreet, neighborStreet):
+                                        processed.add(neighborStreet)
+                                        newGroup.append(neighborStreet)
+
+                                # Collect this group for later appending to streetGroups
+                                newGroups.append( newGroup )
+
+        # Bookkeeping for cluster of intersections within a streetGroup
+        if toRemoveGroups:
+            for group in toRemoveGroups:
+                if group in streetGroups:
+                    streetGroups.remove(group)
+
+        if newGroups:
+            streetGroups.extend(newGroups)
+#----------------------------------------------------------------------------------------------
 
         # Find intersections between streets of different groups.
         # The dictionary key is the location of the intersection
@@ -931,16 +985,6 @@ class StreetGenerator():
 
         self.mergeBundles()
 
-                # Link streets of all bundles i path to the new bundle
-                # remove bundles in path
-                # Add newBundle
-
-
-
-
-
-
-
     # If two bundles meet and there are no inner streets at the meeting intersection, they
     # can be merged into one bundle.
     def mergeBundles(self):
@@ -987,6 +1031,11 @@ class StreetGenerator():
         # streets end, the street's end type ('head' or 'tail'), the street instance
         # itself and the bundle, they belong to.
         for candidates in isectCandidates:
+            # Check if there is a prohibited area. Skip, if any.
+            cluster = [end.freeze() for end,_ in candidates]
+            if any([len(set(cluster) & set(prohibited) ) for prohibited in self.prohibitedHulls]):
+                continue
+
             involvedBundles = defaultdict(list)
             for _,cand in candidates:
                 data = {'end':cand['end'], 'type':cand['type'], 'street':cand['street'], 'bundle':cand['bundle']}
