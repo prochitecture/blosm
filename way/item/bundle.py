@@ -746,8 +746,8 @@ def findInnerStreets(streetGroup,leftHandTraffic):
                         if not item.isMinor:
                             print('!!!!!!')
                         # Inner streets leave to the left if lefthand traffic, else to the right
-                        iterator = Intersection.iterate_from(item.leftHead) if leftHandTraffic else \
-                                   Intersection.iterate_from(item.rightHead)
+                        iterator = IntConnector.iterate_from(item.leftHead) if leftHandTraffic else \
+                                   IntConnector.iterate_from(item.rightHead)
                         for intConn in iterator:
                             innerIsects[intConn.intersection] = intConn.item
 
@@ -764,11 +764,11 @@ def findInnerStreets(streetGroup,leftHandTraffic):
     additionalStreets = set()
     for item in bundleIsects:
         if item.isMinor:
-            for intConn in Intersection.iterate_from(item.leftHead):
+            for intConn in IntConnector.iterate_from(item.leftHead):
                 if intConn.item not in innerStreets:
                     innerStreets.add(intConn.item)
                     additionalStreets.add(intConn.item)
-            for intConn in Intersection.iterate_from(item.rightHead):
+            for intConn in IntConnector.iterate_from(item.rightHead):
                 if intConn.item not in innerStreets:
                     innerStreets.add(intConn.item)
                     additionalStreets.add(intConn.item)
@@ -863,12 +863,7 @@ def joinBundles(streetGenerator, arrivingBundle, leavingBundle, forward):
 
         if len(srcStreets)>1 or len(dstStreets)>1:
             # Multiple streets are at the same location. The intersection remains
-            # as it is.
-            intersection = streetGenerator.majorIntersections[location]
-            for street in srcStreets:
-                street.succ = intersection
-            for street in dstStreets:
-                street.pred = intersection
+            # as it is. Do nothing.
             pass
         else:
             # The arriving street of the incoming bundle is continued by a leaving street

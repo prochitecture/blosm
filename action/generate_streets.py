@@ -947,7 +947,6 @@ class StreetGenerator():
             # Depending on the direction of ths edge, the bundle has to be reversed.
             firstBundle = path[0][2]
             bundleEndType = keyDict[(path[0][1], firstBundle)]
-            lastKey = path[0][1]
             if bundleEndType == 'tail':
                 newBundle._pred = firstBundle._pred
                 newBundle._succ = firstBundle._succ
