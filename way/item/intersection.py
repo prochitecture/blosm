@@ -89,8 +89,8 @@ class Intersection(Item):
     @property
     def order(self):
         if self.isMinor:
-            return len([c for c in self.iterate_from(self.leftHead)]) + \
-                   len([c for c in self.iterate_from(self.leftHead)]) + 2 # leaving + arriving
+            return len([c for c in IntConnector.iterate_from(self.leftHead)]) + \
+                   len([c for c in IntConnector.iterate_from(self.leftHead)]) + 2 # leaving + arriving
         elif self.startConnector:
             return len([c for c in self])
         else:
@@ -261,17 +261,11 @@ class Intersection(Item):
             # Do not accept as minor intersection
             self.isMinor = False
 
-    @staticmethod
-    def iterate_from(conn_item):
-        while conn_item is not None:
-            yield conn_item
-            conn_item = conn_item.succ
-    
     def debugInfo(self):
-        left = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in self.iterate_from(self.leftHead)] )
+        left = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.leftHead)] )
         if left:
             left = "L{{{0}}}".format(left)
-        right = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in self.iterate_from(self.rightHead)] )
+        right = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.rightHead)] )
         if right:
             right = "R{{{0}}}".format(right)
         return "I({0}){1}{2}".format(self.id, left, right)

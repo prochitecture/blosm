@@ -128,7 +128,7 @@ class StreetRenderer(Renderer):
                             plt.text(p[0],p[1],'  M '+str(item.id),color='g',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
                         if False:#self.debug:
-                            for conn in Intersection.iterate_from(item.leftHead):
+                            for conn in IntConnector.iterate_from(item.leftHead):
                                 line = conn.item.head.polyline if conn.leaving else conn.item.tail.polyline
                                 vec = line[1]-line[0] if conn.leaving else line[-2]-line[-1]
                                 vec = vec/vec.length
@@ -137,7 +137,7 @@ class StreetRenderer(Renderer):
                                 plt.plot([p0[0],p1[0]], [p0[1],p1[1]], 'g')
                                 if self.debug:
                                     plt.text(p1[0]+2,p1[1]-2,'C '+str(conn.id),color='k',fontsize=8,zorder=130,ha='left', va='top', clip_on=True)
-                            for conn in Intersection.iterate_from(item.rightHead):
+                            for conn in IntConnector.iterate_from(item.rightHead):
                                 line = conn.item.head.polyline if conn.leaving else conn.item.tail.polyline
                                 vec = line[1]-line[0] if conn.leaving else line[-2]-line[-1]
                                 vec = vec/vec.length
