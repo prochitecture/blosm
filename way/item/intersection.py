@@ -260,6 +260,9 @@ class Intersection(Item):
             # One of the streets runs the wrong way
             # Do not accept as minor intersection
             self.isMinor = False
+    
+    def iterConnectors(self):
+        return IntConnector.iterate_from(self.startConnector)
 
     def debugInfo(self):
         left = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.leftHead)] )
