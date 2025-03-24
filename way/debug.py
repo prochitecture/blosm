@@ -55,8 +55,9 @@ def printBundleContent(bundle):
             unprocessedIntersections.remove(_id)
         
         for _id in intersections:
-            print("I({}):".format(_id))
-            for connector in intersections[_id].iterConnectors():
+            intersection = intersections[_id]
+            print("I({0}) [{1:.2f},{2:.2f}]:".format(_id, intersection.location[0], intersection.location[1]))
+            for connector in intersection.iterConnectors():
                 if connector.leaving:
                     street = connector.item
                     endStr = "None" if street.succ is None else\
