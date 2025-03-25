@@ -79,4 +79,4 @@ class SymLane(Item):
         self.directions = (signOfIn, signOfOut)
     
     def debugInfo(self):
-        return "Side({0})".format(self.id)
+        return "Sym({0})".format(self.id)

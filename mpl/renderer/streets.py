@@ -43,7 +43,7 @@ class StreetRenderer(Renderer):
 
             for street in manager.iterStreets():
                 if not street.bundle:
-                    _textDebug.printStreetContent(street)
+                    _textDebug.printStreetContent(street, includeEnds=True)
         
         for location,isect in manager.majorIntersections.items():
             p = location

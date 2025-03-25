@@ -3,8 +3,20 @@ def getStreetDebugInfo(street):
     return street.debugInfo() + " - ".join( item.debugInfo() for item in street.iterItems() )
 
 
-def printStreetContent(street):
-    print( getStreetDebugInfo(street) )
+def printStreetContent(street, includeEnds):
+    if includeEnds:
+        pred = "None" if street.pred is None else "I({})".format(street.pred.intersection.id)
+        succ = "None" if street.succ is None else "I({})".format(street.succ.intersection.id)
+        print("{0}{1}{2} -> {3} -> {4}{5}".format(
+            street.debugInfo(),
+            pred,
+            '' if street.pred is None else "[{0:.2f},{1:.2f}]".format(street.pred.intersection.location[0], street.pred.intersection.location[1]),
+            " - ".join( item.debugInfo() for item in street.iterItems() ),
+            succ,
+            '' if street.succ is None else "[{0:.2f},{1:.2f}]".format(street.succ.intersection.location[0], street.succ.intersection.location[1])
+        ))
+    else:
+        print( getStreetDebugInfo(street) )
 
 
 def printBundleContent(bundle):
@@ -27,7 +39,7 @@ def printBundleContent(bundle):
         for street in streetsHead:
             if (street.pred is None or street.pred.item is bundle) and (street.succ is None or street.succ.item is bundle):
                 # still a simple case: <street> spans the whole <bundle>
-                printStreetContent(street)
+                printStreetContent(street, includeEnds=False)
             else:
                 streets[street.id] = street
                 leaving = street.pred is None or street.pred.item is bundle

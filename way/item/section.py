@@ -150,4 +150,4 @@ class Section(Item):
         return self.tags.get("name")
     
     def debugInfo(self):
-        return "S({0})".format(self.id)
+        return "Sect({0})".format(self.id)

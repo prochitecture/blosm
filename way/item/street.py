@@ -174,4 +174,4 @@ class Street(Item):
         else:
             info = hw or rw or aw
         
-        return "{0}({1}): ".format(self.id, info)
+        return "S{0}({1}): ".format(self.id, info)
