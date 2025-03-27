@@ -616,9 +616,9 @@ def orderHeadTail(streetGroup):
         medDistances = [(loc-medLocation).length for loc in locations]
         medDistance = median(medDistances)
         score = [abs(distance/medDistance) for distance in medDistances]
-        inliers = [firstEnds[i] for i,s in enumerate(score) if s < 10.]
+        inliers = [firstEnds[i] for i,s in enumerate(score) if s < 15.]
         # outlierLocations = [locations[i] for i,s in enumerate(score) if s >= 2.]
-        outliers = [firstEnds[i] for i,s in enumerate(score) if s >= 10.]
+        outliers = [firstEnds[i] for i,s in enumerate(score) if s >= 15.]
         return inliers, outliers
 
     # Try to find starts and ends of the streets relative to the bundle. This 
@@ -638,9 +638,9 @@ def orderHeadTail(streetGroup):
 
     # Endpoints as future heads or tails of a bundle may be too far from their group
     # and need to be removed as outliers.
+    newHead, outliersH = removeOutliers(head)
+    newTail, outliersT = removeOutliers(tail)
     if len(head) > 2:
-        newHead, outliersH = removeOutliers(head)
-
         # If an outlier at one end is connected to a head or tail at the other end of the group,
         # this other end and the whole street have to be removed.
         for endH in outliersH:
@@ -655,8 +655,6 @@ def orderHeadTail(streetGroup):
         head = newHead
 
     if len(tail) > 2:
-        newTail, outliersT = removeOutliers(tail)
-
         # If an outlier at one end is connected to a head or tail at the other end of the group,
         # this other end and the whole street have to be removed.
         for endT in outliersT:

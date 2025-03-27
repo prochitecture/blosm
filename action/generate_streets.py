@@ -740,9 +740,10 @@ class StreetGenerator():
                                 # Create a new street group, with all streets parallel to the sample street
                                 newGroup = StreetGroup([sampleStreet])
                                 for neighborStreet in streetGroup[(i+1):]:
-                                    if parallelToSample(sampleStreet, neighborStreet):
-                                        processed.add(neighborStreet)
-                                        newGroup.append(neighborStreet)
+                                    if neighborStreet not in processed: 
+                                        if parallelToSample(sampleStreet, neighborStreet):
+                                            processed.add(neighborStreet)
+                                            newGroup.append(neighborStreet)
 
                                 # Collect this group for later appending to streetGroups
                                 newGroups.append( newGroup )
