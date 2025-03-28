@@ -46,6 +46,11 @@ class Mpl:
             # plt.ylim([150,220])
             # file = 'D:/BLOSM/doc/clustering_02/images/bratislava_06.png'
 
+            # toronto_queen_west
+            # plt.xlim([-270,-185])
+            # plt.ylim([155,225])
+            # file = 'D:/BLOSM/doc/clustering_02/images/bratislava_06.png'
+
             # from debug import saveAxisContent
             # saveAxisContent(file)
 

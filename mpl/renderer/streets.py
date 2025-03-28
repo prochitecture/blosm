@@ -35,6 +35,9 @@ class StreetRenderer(Renderer):
         def isAirwayCategory(section):
             return  section.category in  ['runway', 'taxiway']
         
+        def isRailwayCategory(section):
+            return  section.category in  ['tram', 'rail', 'light_rail']
+        
         if self.printStreetContent:
             from way import debug as _textDebug
             
@@ -112,6 +115,8 @@ class StreetRenderer(Renderer):
                             if isAirwayCategory(section):
                                 section.polyline.plot(color,width,style,False,order=950)
                                 section.polyline.plotWithArrows('black',1,0.5,'solid',False,950)
+                            elif isRailwayCategory(section):
+                                section.polyline.plotWithArrows('blue',1,0.5,'dotted',False,950)
                             else:
                                 section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             if self.debug:
