@@ -488,6 +488,10 @@ def removeSplittingStreets(streetGenerator,gIndex, streetGroup, groupIntersectio
             srcGroup.extend([s for s in streetGroup if s not in splittingStreets and h in [s.src, s.dst]])
             dstGroup.extend([s for s in streetGroup if s not in splittingStreets and t in [s.src, s.dst]])
 
+    # Remove any duplicates
+    srcGroup = StreetGroup(list(set(srcGroup)))
+    dstGroup = StreetGroup(list(set(dstGroup)))
+
     # # Sometimes (often at the scene border), short tails remain between the
     # # last intersection and the border. These ends are removed from the group.
     # for group in ([srcGroup, dstGroup] if wasSplit else [streetGroup]):
@@ -611,6 +615,8 @@ def orderHeadTail(streetGroup):
     streetEnds, _, hairpins = locationsInGroup(streetGroup)
 
     def removeOutliers(firstEnds):
+        if len(firstEnds) < 2:
+            return firstEnds, []
         locations =  [e['firstVert'] for e in firstEnds]
         medLocation = Vector(( median([x[0] for x in locations]),median([y[1] for y in locations]) ))
         medDistances = [(loc-medLocation).length for loc in locations]
@@ -1235,6 +1241,9 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
                     vec = street.endUnitVecAt(end)
                     intersectionStreets[end].append( (end, vec, street, None) )
 
+    if not ends:
+        return
+
     # The location of the new intersection is set at the center of gravity of the ends.
     location = sum(ends,Vector((0,0)))/len(ends)
     location.freeze()
@@ -1364,6 +1373,8 @@ def endBundleIntersection(streetGenerator, bundle):
                     endIsect = streetGenerator.majorIntersections[end]
                     # The iterator of Intersection runs counter-clockwise
                     for intSec in endIsect:
+                        if not isinstance(intSec.item,Street):
+                            continue
                         if intSec.item not in bundle.streetsHead and not intSec.item.bundle:
                             connector = IntConnector(intersection)
                             connector.item = intSec.item

@@ -20,6 +20,7 @@ def printStreetContent(street, includeEnds):
 
 
 def printBundleContent(bundle):
+    from way.item.street import Street
     # check if we got a simple case: <bundle.streetsHead> and <bundle.streetsTail> have the same Streets
     streetsHead, streetsTail = bundle.streetsHead, bundle.streetsTail
     
@@ -72,9 +73,13 @@ def printBundleContent(bundle):
             for connector in intersection.iterConnectors():
                 if connector.leaving:
                     street = connector.item
-                    endStr = "None" if street.succ is None else\
-                        ("B({})".format(street.succ.item.id) if street.succ.item is bundle else "I({})".format(street.succ.intersection.id))
-                    print("  {0} -> {1}".format( getStreetDebugInfo(street), endStr) )
+                    if isinstance(street,Street):
+                        endStr = "None" if street.succ is None else\
+                            ("B({})".format(street.succ.item.id) if street.succ.item is bundle else "I({})".format(street.succ.intersection.id))
+                        print("  {0} -> {1}".format( getStreetDebugInfo(street), endStr) )
+                    else:
+                        pass    # Print somehow bundle information
+                        test=1
     
     print("\n")
 

@@ -116,7 +116,7 @@ class StreetRenderer(Renderer):
                                 section.polyline.plot(color,width,style,False,order=950)
                                 section.polyline.plotWithArrows('black',1,0.5,'solid',False,950)
                             elif isRailwayCategory(section):
-                                section.polyline.plotWithArrows('blue',1,0.5,'dotted',False,950)
+                                section.polyline.plotWithArrows('blue',1,0.5,'dashed',False,950)
                             else:
                                 section.polyline.plotWithArrows(color,width,0.5,style,False,950)
                             if self.debug:
