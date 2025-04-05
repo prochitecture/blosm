@@ -76,6 +76,15 @@ class Bundle(Item):
     def succ(self,val):
         self._succ = val
 
+    def debugInfo(self):
+        hStreets = " ".join( [street.debugInfo()[:-2] for street in self.streetsHead] )
+        if hStreets:
+            hStreets = "H{{{0}}}".format(hStreets)
+        tStreets = " ".join( [street.debugInfo()[:-2] for street in self.streetsTail] )
+        if tStreets:
+            tStreets = "T{{{0}}}".format(tStreets)
+        return "B({0}){1}{2}".format(self.id, hStreets, tStreets)
+
     def plot(self, streetGenerator, doEnd = True):
         from debug import plt, plotEnd
         from way.item import Section, SideLane, SymLane
@@ -621,6 +630,8 @@ def orderHeadTail(streetGroup):
         medLocation = Vector(( median([x[0] for x in locations]),median([y[1] for y in locations]) ))
         medDistances = [(loc-medLocation).length for loc in locations]
         medDistance = median(medDistances)
+        if medDistance==0.0:
+            return firstEnds, []
         score = [abs(distance/medDistance) for distance in medDistances]
         inliers = [firstEnds[i] for i,s in enumerate(score) if s < 15.]
         # outlierLocations = [locations[i] for i,s in enumerate(score) if s >= 2.]
@@ -1195,6 +1206,7 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
     intersectionStreets = defaultdict(list) 
 
     # Preprocess the data, eliminate bundles that are completely within the intersection.
+    # item['type'] can be either 'head' or 'tail'
     for bundle,data in involvedBundles.items():
         types = set(item['type'] for item in data)
 
@@ -1213,7 +1225,7 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
         # This bundle leaves the intersection and will become a part of it.
         else:
             allEnds = allEnds.union( set(item['end'] for item in data) )
-            # All left and right outer ends of this bundle
+            # All locations of left and right outer ends of this bundle
             bundleOuterEnds = [bundle.headLocs[0],bundle.headLocs[-1],bundle.tailLocs[0],bundle.tailLocs[-1]]
             for item in data:
                 end = item['end']

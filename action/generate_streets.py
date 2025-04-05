@@ -1,5 +1,5 @@
 from collections import defaultdict
-from itertools import tee, islice, cycle
+from itertools import tee, permutations
 from mathutils import Vector
 import re
 
@@ -15,6 +15,7 @@ from way.item.bundle import Bundle, StreetGroup, mergePseudoMinors, removeSplitt
 from way.way_network import WayNetwork, NetSection
 from way.way_algorithms import createSectionNetwork
 from way.way_properties import lanePattern
+from way.streetRouter import streetsOnRoute
 
 from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 
@@ -85,6 +86,7 @@ class StreetGenerator():
         self.processedNodes = set()
 
         self.prohibitedHulls = []
+        self.curvedTramLines = []
 
         # Determine whether all ways are to be calculated or only those intended
         # for vehicles. If True: wayManager.getAllWays() are used, else those from
@@ -439,7 +441,7 @@ class StreetGenerator():
         for longStreet in longStreets:
             self.waymap.addEdge(longStreet)
 
-    # Construct the connectors off the intersections
+    # Construct the connectors of the intersections
     def updateIntersections(self):
         # At this stage, it is assumed, that SideLanes, SymLanes are already built
         # and that their nodes are stored in <self.processedNodes>.
@@ -576,6 +578,10 @@ class StreetGenerator():
             if isEdgy(centerline) and ds < 0.9:
                 continue
 
+            if category=='tram' and centerline.localCurvature(1) > 0.01:
+                self.curvedTramLines.append(street)
+                continue
+
             # Exclude if too short
             if centerline.length() < min(minTemplateLength,minNeighborLength):
                 continue
@@ -595,6 +601,16 @@ class StreetGenerator():
         # Finalize the index for usage.
         candidateIndex.finish()
 
+        # Sometimes, there ar gaps left between the curved tram lines.
+        # Find them and add them to the curved tram lines.
+        if self.curvedTramLines:
+            tramLineSegs = []
+            d_max = 5.0
+            for tramLine0, tramLine1 in permutations(self.curvedTramLines, 2):
+                if tramLine0 != tramLine1  and 0. < (tramLine0.dst-tramLine1.src).length < d_max:
+                    tramLineSegs += streetsOnRoute(tramLine0, tramLine1, 2.*d_max)
+            self.curvedTramLines.extend(tramLineSegs)
+
         # This is the structure we use to collect the parallel streets
         self.parallelStreets = DisjointSets()
 
@@ -603,6 +619,9 @@ class StreetGenerator():
         for sampleStreet in self.wayManager.iterStreets():
             # Use only accepted streets
             if sampleStreet in boxes:
+                if sampleStreet in self.curvedTramLines:
+                    continue
+
                 sampleCategory, sampleCenterline, _ = attributes[sampleStreet]
                 # Create buffer polygon around the sample street with a width according
                 # to the category of the sample street.
@@ -624,6 +643,8 @@ class StreetGenerator():
                     neighborStreet = index2Street[neigborIndex]
                     if neighborStreet == sampleStreet:
                         continue # Skip, the sample street is its own neighbor.
+                    if neighborStreet in self.curvedTramLines:
+                        continue
 
                     if parallelToSample(sampleStreet, neighborStreet, clipper):
                         self.parallelStreets.addSegment(sampleStreet,neighborStreet)
@@ -694,68 +715,68 @@ class StreetGenerator():
 
         # If there is a cluster of intersections within a streetGroup, the group has to be split
         # into multiple groups and the cluster will later become a bundle intersection.
-        newGroups = []
-        toRemoveGroups = []
-        for streetGroup in streetGroups:
-            allDistinctIntersections = set()
-            for street in streetGroup:
-                allDistinctIntersections |= set([(street.src,street), (street.dst,street)]) 
-            # Find clusters of intersections
-            clusters = dbClusterScan(list(allDistinctIntersections), dbScanDist, 2)
+        # newGroups = []
+        # toRemoveGroups = []
+        # for streetGroup in streetGroups:
+        #     allDistinctIntersections = set()
+        #     for street in streetGroup:
+        #         allDistinctIntersections |= set([(street.src,street), (street.dst,street)]) 
+        #     # Find clusters of intersections
+        #     clusters = dbClusterScan(list(allDistinctIntersections), dbScanDist, 2)
 
-            # If a cluster is large, eventually split the group into multiple groups
-            for cluster in clusters:
-                if len(cluster) > 15:
-                    toRemoveGroups.append(streetGroup)
+        #     # If a cluster is large, eventually split the group into multiple groups
+        #     for cluster in clusters:
+        #         if len(cluster) > 15:
+        #             toRemoveGroups.append(streetGroup)
 
-                    # Remove all streets that are inside the convex hull of the
-                    # intersections in the cluster
-                    clusterIntersections = [p[0].freeze() for p in cluster]
-                    hullModel = ConvexHull2D()
-                    hull = hullModel(clusterIntersections)
-                    self.prohibitedHulls.append([h.freeze() for h in hull])
-                    toRemoveStreets = [ street for street in streetGroup
-                                            if pointInPolygon(hull, street.src) in ["IN", "ON"] 
-                                            and pointInPolygon(hull, street.dst) in ["IN", "ON"] ]
-                    for street in toRemoveStreets:
-                        streetGroup.remove(street)
+        #             # Remove all streets that are inside the convex hull of the
+        #             # intersections in the cluster
+        #             clusterIntersections = [p[0].freeze() for p in cluster]
+        #             hullModel = ConvexHull2D()
+        #             hull = hullModel(clusterIntersections)
+        #             self.prohibitedHulls.append([h.freeze() for h in hull])
+        #             toRemoveStreets = [ street for street in streetGroup
+        #                                     if pointInPolygon(hull, street.src) in ["IN", "ON"] 
+        #                                     and pointInPolygon(hull, street.dst) in ["IN", "ON"] ]
+        #             for street in toRemoveStreets:
+        #                 streetGroup.remove(street)
 
-                    # Any other streets and intersections within this hull have to be removed too
-                    for group in streetGroups:
-                        if group != streetGroup:
-                            toRemoveStreets = [ street for street in group
-                                                if pointInPolygon(hull, street.src) in ["IN", "ON"] 
-                                                and pointInPolygon(hull, street.dst) in ["IN", "ON"] ]
-                            if toRemoveStreets:
-                                toRemoveGroups.append(group)
+        #             # Any other streets and intersections within this hull have to be removed too
+        #             for group in streetGroups:
+        #                 if group != streetGroup:
+        #                     toRemoveStreets = [ street for street in group
+        #                                         if pointInPolygon(hull, street.src) in ["IN", "ON"] 
+        #                                         and pointInPolygon(hull, street.dst) in ["IN", "ON"] ]
+        #                     if toRemoveStreets:
+        #                         toRemoveGroups.append(group)
 
-                    # Now collect all remaining streets into new groups, that remained parallel
-                    processed = set()
-                    streetGroup.sort() # Start wit long streets to get good templates
-                    while len(processed) != len(streetGroup):
-                        for i, sampleStreet in enumerate(streetGroup):
-                            if sampleStreet not in processed:
-                                processed.add(sampleStreet)
+        #             # Now collect all remaining streets into new groups, that remained parallel
+        #             processed = set()
+        #             streetGroup.sort() # Start wit long streets to get good templates
+        #             while len(processed) != len(streetGroup):
+        #                 for i, sampleStreet in enumerate(streetGroup):
+        #                     if sampleStreet not in processed:
+        #                         processed.add(sampleStreet)
 
-                                # Create a new street group, with all streets parallel to the sample street
-                                newGroup = StreetGroup([sampleStreet])
-                                for neighborStreet in streetGroup[(i+1):]:
-                                    if neighborStreet not in processed: 
-                                        if parallelToSample(sampleStreet, neighborStreet):
-                                            processed.add(neighborStreet)
-                                            newGroup.append(neighborStreet)
+        #                         # Create a new street group, with all streets parallel to the sample street
+        #                         newGroup = StreetGroup([sampleStreet])
+        #                         for neighborStreet in streetGroup[(i+1):]:
+        #                             if neighborStreet not in processed: 
+        #                                 if parallelToSample(sampleStreet, neighborStreet):
+        #                                     processed.add(neighborStreet)
+        #                                     newGroup.append(neighborStreet)
 
-                                # Collect this group for later appending to streetGroups
-                                newGroups.append( newGroup )
+        #                         # Collect this group for later appending to streetGroups
+        #                         newGroups.append( newGroup )
 
-        # Bookkeeping for cluster of intersections within a streetGroup
-        if toRemoveGroups:
-            for group in toRemoveGroups:
-                if group in streetGroups:
-                    streetGroups.remove(group)
+        # # Bookkeeping for cluster of intersections within a streetGroup
+        # if toRemoveGroups:
+        #     for group in toRemoveGroups:
+        #         if group in streetGroups:
+        #             streetGroups.remove(group)
 
-        if newGroups:
-            streetGroups.extend(newGroups)
+        # if newGroups:
+        #     streetGroups.extend(newGroups)
 #----------------------------------------------------------------------------------------------
 
         # Find intersections between streets of different groups.
@@ -835,14 +856,15 @@ class StreetGenerator():
             if debugBundle:
 
                 for street in innerStreets:
-                    allVertices = []
-                    for item in street.iterItems():
-                        if isinstance(item, Section):
-                            item.polyline.plot('red',2,'solid',False,999)
-                            allVertices.extend(item.centerline)
-                    if len(allVertices):
-                        c = sum(allVertices,Vector((0,0))) / len(allVertices)
-                        plt.text(c[0],c[1],'S '+str(street.id),color='k',fontsize=8,zorder=130,ha='left', va='top', clip_on=True)
+                    if street not in streetGroup.group and street not in self.curvedTramLines:
+                        allVertices = []
+                        for item in street.iterItems():
+                            if isinstance(item, Section):
+                                item.polyline.plot('red',2,'solid',False,999)
+                                allVertices.extend(item.centerline)
+                        if len(allVertices):
+                            c = sum(allVertices,Vector((0,0))) / len(allVertices)
+                            plt.text(c[0],c[1],'S '+str(street.id),color='k',fontsize=8,zorder=130,ha='left', va='top', clip_on=True)
 
                 if innerStreets:
                     plotQualifiedNetwork(self.sectionNetwork)
@@ -865,7 +887,8 @@ class StreetGenerator():
                 bundle.tailLocs.append(item['firstVert'])
             self.bundles[bundle.id] = bundle
             for street in innerStreets:
-                street.bundle = bundle
+                if street not in streetGroup.group and street not in self.curvedTramLines:
+                    street.bundle = bundle
 
             for street in streetGroup:
                 street.bundle = bundle

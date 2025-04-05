@@ -265,10 +265,17 @@ class Intersection(Item):
         return IntConnector.iterate_from(self.startConnector)
 
     def debugInfo(self):
-        left = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.leftHead)] )
-        if left:
-            left = "L{{{0}}}".format(left)
-        right = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.rightHead)] )
-        if right:
-            right = "R{{{0}}}".format(right)
-        return "I({0}){1}{2}".format(self.id, left, right)
+        if self.isMinor:
+            left = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.leftHead)] )
+            if left:
+                left = "L{{{0}}}".format(left)
+            right = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in IntConnector.iterate_from(self.rightHead)] )
+            if right:
+                right = "R{{{0}}}".format(right)
+            return "I({0}){1}{2}".format(self.id, left, right)
+        else:
+            conns = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in self.iterConnectors()] )
+            if conns:
+                conns = "C{{{0}}}".format(conns)
+            return "I({0}){1}".format(self.id, conns)
+

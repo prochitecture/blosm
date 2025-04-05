@@ -256,3 +256,10 @@ class StreetRenderer(Renderer):
 
             c = sum(vertices,Vector((0,0)))/len(vertices)
             plt.text(c[0],c[1]+upset,'B'+str(bundle.id),fontsize=18,color='red',ha='center', va='center',zorder=999)
+
+        # for bundle in manager.iterBundles():
+        #     for p in bundle.headLocs:
+        #         plt.plot(p[0],p[1],'bo',markersize=6,zorder=999,markeredgecolor='blue', markerfacecolor='red')
+        #     for p in bundle.tailLocs:
+        #         plt.plot(p[0],p[1],'bo',markersize=6,zorder=999,markeredgecolor='blue', markerfacecolor='red')
+

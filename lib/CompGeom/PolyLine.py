@@ -457,6 +457,55 @@ class PolyLine():
             if abs(v1.cross(v2)) > maxSin:
                 corners.append(i+1)
         return corners
+    
+    def localCurvature(self, step):
+        if len(self.verts) < 3:
+            return 0.0
+        from debug import plt, plotEnd
+        s = list( accumulate([0]+[(v2-v1).length for v1,v2 in pairs(self.verts[self.view])]) )
+        x = [v[0] for v in self.verts[self.view]]
+        y = [v[1] for v in self.verts[self.view]]
+
+        px = np.poly1d( np.polyfit(s, x, 2) )
+        py = np.poly1d( np.polyfit(s, y, 2) )
+
+        t = np.linspace(0, self.length(), max(int(self.length()/step),4))
+
+        # # Other mehtod using the formula: curvature = |d2y/dx2| / (1 + (dy/dx)^2)^(3/2)
+        xx = px(t)
+        yy = py(t)
+        coeffs = np.polyfit(xx, yy, 2)
+        dy_dx = np.polyval(np.polyder(coeffs), xx)
+        d2y_dx2 = np.polyval(np.polyder(coeffs, 2), xx)
+        curvature = np.abs(d2y_dx2) / np.power(1 + np.power(dy_dx, 2), 1.5)
+
+        # # from https://stackoverflow.com/questions/28269379/curve-curvature-in-numpy
+        # dx_dt = np.gradient(px(t))
+        # dy_dt = np.gradient(py(t))
+        # velocity = np.array([ [dx_dt[i], dy_dt[i]] for i in range(dx_dt.size)])
+        # ds_dt = np.sqrt(dx_dt * dx_dt + dy_dt * dy_dt) 
+        # tangent = np.array([1/ds_dt]).transpose() * velocity
+
+        # tangent_x = tangent[:, 0]
+        # tangent_y = tangent[:, 1]
+        # deriv_tangent_x = np.gradient(tangent_x)
+        # deriv_tangent_y = np.gradient(tangent_y)
+
+        # dT_dt = np.array([ [deriv_tangent_x[i], deriv_tangent_y[i]] for i in range(deriv_tangent_x.size)])
+        # length_dT_dt = np.sqrt(deriv_tangent_x * deriv_tangent_x + deriv_tangent_y * deriv_tangent_y)
+        # normal = np.array([1/length_dT_dt]).transpose() * dT_dt        
+
+        # d2s_dt2 = np.gradient(ds_dt)
+        # d2x_dt2 = np.gradient(dx_dt)
+        # d2y_dt2 = np.gradient(dy_dt)
+
+        # curvature = np.abs(d2x_dt2 * dy_dt - dx_dt * d2y_dt2) / (dx_dt * dx_dt + dy_dt * dy_dt)**1.5
+
+        # t_component = np.array([d2s_dt2]).transpose()                       # tangential component
+        # n_component = np.array([curvature * ds_dt * ds_dt] * 2).transpose()     # normal component
+        # acceleration = t_component * tangent + n_component * normal
+        
+        return np.mean(curvature[1:-1])
 
     def plot(self,color,width=1,linestyle='solid',showOrder=False,order=999):
         import matplotlib.pyplot as plt        
