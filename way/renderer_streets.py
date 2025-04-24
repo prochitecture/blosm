@@ -52,7 +52,7 @@ class StreetRenderer:
                 self.terrainObj = terrain
     
     def prepare(self):
-        self.collectionCenterlines = createCollection("Street centerlines", Renderer.collection)
+        self.collectionPolylines = createCollection("Street Polylines", Renderer.collection)
         self.collectionIntersections = createCollection("Intersections", Renderer.collection)
         self.collection3dStreets = createCollection("Streets in 3D", Renderer.collection)
         
@@ -61,14 +61,14 @@ class StreetRenderer:
             itemRenderer.prepare()
         
         nodeGroupNames = set((
-            "Blosm Init Centerline",
-            "Blosm Init Centerline for 3D",
-            "blosm_terrain_area",
-            "blosm_terrain_street_full"
+            "Blosm Init Polyline",
+            #"Blosm Init Centerline for 3D",
+            #"blosm_terrain_area",
+            #"blosm_terrain_street_full"
             #"blosm_terrain_street_centerline"
         ))
-        for itemRenderer in self.itemRenderers.values():
-            itemRenderer.requestNodeGroups(nodeGroupNames)
+        #for itemRenderer in self.itemRenderers.values():
+        #    itemRenderer.requestNodeGroups(nodeGroupNames)
         
         nodeGroups = dict(
             (nodeGroupName, bpy.data.node_groups[nodeGroupName]) for nodeGroupName in nodeGroupNames if nodeGroupName in bpy.data.node_groups
@@ -84,13 +84,13 @@ class StreetRenderer:
             (nodeGroup.name, nodeGroup) for nodeGroup in nodeGroupsToLoad
         )
         
-        self.gnInitCenterline = nodeGroups["Blosm Init Centerline"]
-        self.gnInitCenterline3d = nodeGroups["Blosm Init Centerline for 3D"]
-        self.gnTerrainStreetFull = nodeGroups["blosm_terrain_street_full"]
+        self.gnInitPolyline = nodeGroups["Blosm Init Polyline"]
+        #self.gnInitPolyline3d = nodeGroups["Blosm Init Centerline for 3D"]
+        #self.gnTerrainStreetFull = nodeGroups["blosm_terrain_street_full"]
         #self.gnTerrainStreetCenterline = nodeGroups["blosm_terrain_street_centerline"]
         
-        for itemRenderer in self.itemRenderers.values():
-            itemRenderer.setNodeGroups(nodeGroups)
+        #for itemRenderer in self.itemRenderers.values():
+        #    itemRenderer.setNodeGroups(nodeGroups)
         
         self.initTerrain()
         
@@ -104,7 +104,6 @@ class StreetRenderer:
         gnMeshToCurve = "blosm_mesh_to_curve"
     
     def render(self, manager, data):
-        from . import debug as _debug
         
         # split neighbor street sections for the side lane transitions
         #for sideLane in manager.transitionSideLanes:
@@ -112,14 +111,13 @@ class StreetRenderer:
         
         # render instances of the class <Bundle>
         for bundle in manager.iterBundles():
-            _debug.printBundleContent(bundle)
-            #for street in bundle.streetsHead:
-            #    self.initStreet(street)
+            for street in bundle.streetsHead:
+                self.initStreet(street)
         
         # render instances of the class <Street>
         for street in manager.iterStreets():
-            _debug.printStreetContent(street)
-            #self.initStreet(street)
+            if not street.bundle:
+                self.initStreet(street)
         
         return
         
@@ -154,7 +152,7 @@ class StreetRenderer:
         
         # Create a Blender object and BMesh for the <street> centeline. An instance of <Street> contains
         # at least one instance of <Section>, so <street.obj> and <street.bm> will be needed anyway.
-        street.obj = self.getStreetCenterlineObj(street, _location)
+        street.obj = self.getStreetPolylineObj(street, _location)
         street.bm = getBmesh(street.obj)
         
         #if self.terrainObj:
@@ -169,12 +167,12 @@ class StreetRenderer:
         # (1) the first pass
         #
         if street.head is street.tail:
-            self.initItemCenterline1(street.head, True)
+            self.initItemPolyline1(street.head, True)
         else:
             # the first BMesh vertex for the current street section
             street.bmVert = None
             for item in street.iterItems():
-                self.initItemCenterline1(item, False)
+                self.initItemPolyline1(item, False)
         
         setBmesh(street.obj, street.bm)
         
@@ -182,24 +180,24 @@ class StreetRenderer:
         # (2) the second pass
         #
         if street.head is street.tail:
-            self.initItemCenterline2(street.head, 0)
+            self.initItemPolyline2(street.head, 0)
         else:
             itemIndex = 1
             for item in street.iterItems():
-                self.initItemCenterline2(item, itemIndex)
+                self.initItemPolyline2(item, itemIndex)
                 itemIndex += 1
         
-        addGeometryNodesModifier(street.obj, self.gnInitCenterline, "Init Centerline")
+        addGeometryNodesModifier(street.obj, self.gnInitPolyline, "Init Polyline")
     
-    def initItemCenterline1(self, item, singleItem):
+    def initItemPolyline1(self, item, singleItem):
         itemRenderer = self.itemRenderers.get(item.__class__.__name__)
         if itemRenderer:
-            itemRenderer.initItemCenterline1(item, singleItem)
+            itemRenderer.initItemPolyline1(item, singleItem)
 
-    def initItemCenterline2(self, item, itemIndex):
+    def initItemPolyline2(self, item, itemIndex):
         itemRenderer = self.itemRenderers.get(item.__class__.__name__)
         if itemRenderer:
-            itemRenderer.initItemCenterline2(item, itemIndex)
+            itemRenderer.initItemPolyline2(item, itemIndex)
     
     def finalizeItem(self, item, itemIndex):
         itemRenderer = self.itemRenderers.get(item.__class__.__name__)
@@ -587,11 +585,11 @@ class StreetRenderer:
             
         return material
     
-    def getStreetCenterlineObj(self, street, location):
+    def getStreetPolylineObj(self, street, location):
         obj = createMeshObject(
             "Polyline " + (street.getName() or "Street"),
             location = location,
-            collection = self.collectionCenterlines
+            collection = self.collectionPolylines
         )
         # create an attribute for the index of the street section
         obj.data.attributes.new("section_index", 'INT', 'EDGE')
@@ -603,7 +601,7 @@ class StreetRenderer:
             location = location,
             collection = self.collection3dStreets
         )
-        m = addGeometryNodesModifier(obj, self.gnInitCenterline3d)
+        m = addGeometryNodesModifier(obj, self.gnInitPolyline3d)
         m["Socket_3"] = street.obj
         # setting offset for points where two street sections share a position of their end points
         m["Socket_2"] = 4.

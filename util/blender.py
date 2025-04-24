@@ -312,7 +312,7 @@ def loadImage(fileName, directory):
 def useAttributeForGnInput(modifier, inputId, attributeName):
     # Set "_use_attribute" to 1 to use geometry attributes instead of
     # using manually entered input values
-    modifier[inputId + "_use_attribute"] = 1
+    modifier[inputId + "_use_attribute"] = True
     # set "_attribute_name" to the related mesh attribute of the Blender object
     modifier[inputId + "_attribute_name"] = attributeName
 

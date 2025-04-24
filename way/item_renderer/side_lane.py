@@ -37,3 +37,9 @@ class SideLane(Section):
         m["Input_10"] = section.totalLanesIncreased
         
         super().finalizeItem(section, itemIndex)
+    
+    def initItemPolyline1(self, section, singleItem):
+        return
+    
+    def initItemPolyline2(self, section, singleItem):
+        return

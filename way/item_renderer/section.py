@@ -5,7 +5,7 @@ from ..asset_store import AssetType, AssetPart
 
 class Section(ItemRenderer):
     
-    def initItemCenterline1(self, section, singleItem):
+    def initItemPolyline1(self, section, singleItem):
         street = section.street
         if singleItem:
             # create a polyline mesh
@@ -14,7 +14,7 @@ class Section(ItemRenderer):
             # create a polyline mesh and set a BMesh vertex for the next section
             street.bmVert = createPolylineMesh(None, street.bm, section.centerline, street.bmVert)
     
-    def initItemCenterline2(self, section, itemIndex):
+    def initItemPolyline2(self, section, itemIndex):
         #
         # set the index of the street section
         #
