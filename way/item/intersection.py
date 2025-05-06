@@ -79,8 +79,30 @@ class Intersection(Item):
         self.leaving = None     # leaving major street
         self.arriving = None    # arriving major street
 
-        self._pred = None       # will be set when linked into a Street
-        self._succ = None       # will be set when linked into a Street
+        self._pred = None       # will be set for minor intersection
+        self._succ = None       # will be set for minor intersection
+
+    @property
+    def pred(self):
+        if self.isMinor:
+            return self.arriving.tail
+        else:
+            return self._pred
+
+    @property
+    def succ(self):
+        if self.isMinor:
+            return self.leaving.head
+        else:
+            return self._succ
+    
+    @pred.setter
+    def pred(self,val):
+        self._pred = val
+
+    @succ.setter
+    def succ(self,val):
+        self._succ = val
 
     @property
     def location(self):
@@ -274,7 +296,7 @@ class Intersection(Item):
                 right = "R{{{0}}}".format(right)
             return "I({0}){1}{2}".format(self.id, left, right)
         else:
-            conns = " ".join( [intersectionConnector.item.debugInfo()[:-2] for intersectionConnector in self.iterConnectors()] )
+            conns = " ".join( [intersectionConnector.item.debugInfo() for intersectionConnector in self.iterConnectors()] )
             if conns:
                 conns = "C{{{0}}}".format(conns)
             return "I({0}){1}".format(self.id, conns)
