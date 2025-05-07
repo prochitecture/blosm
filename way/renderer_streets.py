@@ -53,6 +53,7 @@ class StreetRenderer:
     
     def prepare(self):
         self.collectionPolylines = createCollection("Street Polylines", Renderer.collection)
+        self.collectionCorners = createCollection("Street Corners", Renderer.collection)
         self.collectionIntersections = createCollection("Intersections", Renderer.collection)
         self.collection3dStreets = createCollection("Streets in 3D", Renderer.collection)
         
@@ -67,8 +68,8 @@ class StreetRenderer:
             #"blosm_terrain_street_full"
             #"blosm_terrain_street_centerline"
         ))
-        #for itemRenderer in self.itemRenderers.values():
-        #    itemRenderer.requestNodeGroups(nodeGroupNames)
+        for itemRenderer in self.itemRenderers.values():
+            itemRenderer.requestNodeGroups(nodeGroupNames)
         
         nodeGroups = dict(
             (nodeGroupName, bpy.data.node_groups[nodeGroupName]) for nodeGroupName in nodeGroupNames if nodeGroupName in bpy.data.node_groups
@@ -89,8 +90,8 @@ class StreetRenderer:
         #self.gnTerrainStreetFull = nodeGroups["blosm_terrain_street_full"]
         #self.gnTerrainStreetCenterline = nodeGroups["blosm_terrain_street_centerline"]
         
-        #for itemRenderer in self.itemRenderers.values():
-        #    itemRenderer.setNodeGroups(nodeGroups)
+        for itemRenderer in self.itemRenderers.values():
+            itemRenderer.setNodeGroups(nodeGroups)
         
         self.initTerrain()
         
@@ -110,21 +111,45 @@ class StreetRenderer:
         #    sideLane.splitAffectedSection()
         
         # render instances of the class <Bundle>
-        for bundle in manager.iterBundles():
-            for street in bundle.streetsHead:
-                self.initStreet(street)
+        #for bundle in manager.iterBundles():
+        #    for street in bundle.streetsHead:
+        #        self.initStreet(street)
         
         # render instances of the class <Street>
         for street in manager.iterStreets():
-            if not street.bundle:
                 self.initStreet(street)
         
-        return
+        from .item.section import Section
+        for sideLane in manager.transitionSideLanes:
+            section = sideLane.succ
+            width, offset = section.width, section.offset
+            while section:
+                section = section.succ
+                if isinstance(section, Section):
+                    section.width = width
+                    section.offset = offset
+                elif section:
+                    section = None
+
+        for sideLane in manager.transitionSymLanes:
+            section = sideLane.succ
+            width = section.width
+            while section:
+                section = section.succ
+                if isinstance(section, Section):
+                    section.width = width
+                elif section:
+                    section = None
+                    
+                
         
         # render instances of class <Intersection>
         intersectionRenderer = self.itemRenderers["Intersection"]
         for intersection in manager.majorIntersections.values():
-            intersectionRenderer.renderItem(intersection)
+            if intersection.order > 2:
+                intersectionRenderer.renderItem(intersection)
+        
+        return
         
         #
         # Finalize items: apply modifiers
@@ -187,6 +212,7 @@ class StreetRenderer:
                 self.initItemPolyline2(item, itemIndex)
                 itemIndex += 1
         
+        addGeometryNodesModifier(street.obj, self.gnInitPolyline, "Init Polyline")
         addGeometryNodesModifier(street.obj, self.gnInitPolyline, "Init Polyline")
     
     def initItemPolyline1(self, item, singleItem):
@@ -593,6 +619,8 @@ class StreetRenderer:
         )
         # create an attribute for the index of the street section
         obj.data.attributes.new("section_index", 'INT', 'EDGE')
+        obj.data.attributes.new("width", 'FLOAT', 'EDGE')
+        obj.data.attributes.new("offset", 'FLOAT', 'EDGE')
         return obj
     
     def get3dStreetObj(self, street, location):

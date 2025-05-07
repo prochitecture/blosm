@@ -42,6 +42,33 @@ class Intersection(ItemRenderer):
     
     def renderItem(self, intersection):
         order = intersection.order
+        
+        # a preceeding item
+        _connector = intersection.startConnector.pred
+        for i, connector in enumerate(intersection):
+            item = connector.item
+            defObj = createMeshObject(
+                "Def Round Street Corner",
+                collection = self.r.collectionCorners
+            )
+            defObj.hide_render = True
+            m = addGeometryNodesModifier(defObj, self.gnDefRoundStreetCorner, "Def Round Street Corner")
+            
+            if _connector.item.__class__.__name__ in self.renderers:
+                self.renderers[_connector.item.__class__.__name__].setPolyline1ParamsForCorner(m, _connector)
+            if connector.item.__class__.__name__ in self.renderers:
+                self.renderers[connector.item.__class__.__name__].setPolyline2ParamsForCorner(m, connector)
+            _connector = connector
+        
+        return
+        
+        intersection.obj = createMeshObject(
+            "Street Intersection",
+            collection = self.r.collectionCorners
+        )
+        
+        
+        
         if order != 4:
             return
         intersection.obj = createMeshObject(
@@ -75,18 +102,20 @@ class Intersection(ItemRenderer):
         return
     
     def requestNodeGroups(self, nodeGroupNames):
-        nodeGroupNames.add("Blosm Intersection Order 4")
-        nodeGroupNames.add("Blosm Polygon UV Material")
-        nodeGroupNames.add("blosm_terrain_area")
+        nodeGroupNames.add("Blosm Def Round Street Corner")
+        #nodeGroupNames.add("Blosm Intersection Order 4")
+        #nodeGroupNames.add("Blosm Polygon UV Material")
+        #nodeGroupNames.add("blosm_terrain_area")
         
     def setNodeGroups(self, nodeGroups):
-        self.gnIntersection = (
-            None, None, None,
-            None, # intersection of 3 streets
-            nodeGroups["Blosm Intersection Order 4"] # intersection of 4 streets
-        )
-        self.gnPolygon = nodeGroups["Blosm Polygon UV Material"]
-        self.gnTerrainArea = nodeGroups["blosm_terrain_area"]
+        self.gnDefRoundStreetCorner = nodeGroups["Blosm Def Round Street Corner"]
+        #self.gnIntersection = (
+        #    None, None, None,
+        #    None, # intersection of 3 streets
+        #    nodeGroups["Blosm Intersection Order 4"] # intersection of 4 streets
+        #)
+        #self.gnPolygon = nodeGroups["Blosm Polygon UV Material"]
+        #self.gnTerrainArea = nodeGroups["blosm_terrain_area"]
     
     def initItemPolyline1(self, section, singleItem):
         return

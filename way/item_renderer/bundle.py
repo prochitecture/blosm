@@ -13,6 +13,12 @@ class Bundle(ItemRenderer):
     
     def setNodeGroups(self, nodeGroups):
         return
+
+    def setPolyline1ParamsForCorner(self, modifier, connector):
+        return
+
+    def setPolyline2ParamsForCorner(self, modifier, connector):
+        return
     
     def renderNeighborIntersection(self, intersection, connector, index, modifier):
         bundle = connector.item

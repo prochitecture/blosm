@@ -23,6 +23,8 @@ class Section(ItemRenderer):
         numEdges = len(section.centerline) - 1
         for pointIndex in range(street.edgeIndexOffset, street.edgeIndexOffset + numEdges):
             obj.data.attributes['section_index'].data[pointIndex].value = itemIndex
+            obj.data.attributes['width'].data[pointIndex].value = section.width
+            obj.data.attributes['offset'].data[pointIndex].value = section.offset
         
         street.edgeIndexOffset += numEdges
     
@@ -40,10 +42,12 @@ class Section(ItemRenderer):
             m["Input_9"] = itemIndex
     
     def requestNodeGroups(self, nodeGroupNames):
-        nodeGroupNames.add("Blosm Street Section")
+        #nodeGroupNames.add("Blosm Street Section")
+        return
     
     def setNodeGroups(self, nodeGroups):
-        self.gnSection = nodeGroups["Blosm Street Section"]
+        #self.gnSection = nodeGroups["Blosm Street Section"]
+        return
     
     def setOffsetWeights(self, section):
         # This method is not used anymore. Offset weights (a reversed sine of half angle between the edges) are set in the Geometry Nodes.

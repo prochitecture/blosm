@@ -6,12 +6,14 @@ from ..asset_store import AssetType, AssetPart
 class SideLane(Section):
     
     def requestNodeGroups(self, nodeGroupNames):
-        super().requestNodeGroups(nodeGroupNames)
-        nodeGroupNames.add("blosm_side_lane_transition")
+        #super().requestNodeGroups(nodeGroupNames)
+        #nodeGroupNames.add("blosm_side_lane_transition")
+        return
     
     def setNodeGroups(self, nodeGroups):
-        super().setNodeGroups(nodeGroups)
-        self.gnSideLaneTransition = nodeGroups["blosm_side_lane_transition"]
+        #super().setNodeGroups(nodeGroups)
+        #self.gnSideLaneTransition = nodeGroups["blosm_side_lane_transition"]
+        return
     
     def finalizeItem(self, section, itemIndex):
         sectionNarrower, sectionWider = (section.pred, section.succ) if section.totalLanesIncreased else (section.succ, section.pred)

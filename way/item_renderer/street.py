@@ -14,6 +14,14 @@ class Street(ItemRenderer):
     def setNodeGroups(self, nodeGroups):
         return
     
+    def setPolyline1ParamsForCorner(self, modifier, connector):
+        modifier["Socket_3"] = connector.item.obj
+        modifier["Socket_4"] = connector.leaving
+
+    def setPolyline2ParamsForCorner(self, modifier, connector):
+        modifier["Socket_6"] = connector.item.obj
+        modifier["Socket_7"] = connector.leaving
+    
     def renderNeighborIntersection(self, intersection, connector, index, modifier):
         street = connector.item
         order = intersection.order
