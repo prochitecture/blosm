@@ -374,7 +374,7 @@ def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
     initial_chains = find_paths(streets)
 
 
-    # Use only chains with or than one street. Split these chains at hairpins
+    # Use only chains with more than one street. Split these chains at hairpins
     # and at intersections with other street groups, stored in <groupIntersections>.
     # 
     # Hairpinss arrive at ends of streets in street groups, if two streets create
@@ -450,6 +450,9 @@ def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
         streetGroup.remove(street)
 
     for longStreet in newLongStreets:
+        # adjust connectors of adjacent major intersections
+        longStreet.pred.item = longStreet
+        longStreet.succ.item = longStreet
         streetGenerator.streets[longStreet.id] = longStreet
         streetGroup.append(longStreet)
 
@@ -975,6 +978,15 @@ def mergeBundles(streetGenerator,involvedBundles):
     if longStreet.succ:
         longStreet.succ.item = longStreet
     mergedStreets.append(longStreet)
+
+    if arriving0.id in streetGenerator.streets:
+        del streetGenerator.streets[arriving0.id]
+    if arriving1.id in streetGenerator.streets:
+        del streetGenerator.streets[arriving1.id]
+    if leaving0.id in streetGenerator.streets:
+        del streetGenerator.streets[leaving0.id]
+    if leaving1.id in streetGenerator.streets:
+        del streetGenerator.streets[leaving1.id]
 
     head, tail = orderHeadTail(mergedStreets)
 
