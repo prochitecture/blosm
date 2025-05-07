@@ -120,6 +120,8 @@ class StreetRenderer:
                 self.initStreet(street)
         
         from .item.section import Section
+        from .item.intersection import Intersection
+        
         for sideLane in manager.transitionSideLanes:
             section = sideLane.succ
             width, offset = section.width, section.offset
@@ -128,7 +130,7 @@ class StreetRenderer:
                 if isinstance(section, Section):
                     section.width = width
                     section.offset = offset
-                elif section:
+                elif section and not (isinstance(section, Section) and section.isMinor):
                     section = None
 
         for sideLane in manager.transitionSymLanes:
@@ -138,7 +140,7 @@ class StreetRenderer:
                 section = section.succ
                 if isinstance(section, Section):
                     section.width = width
-                elif section:
+                elif section and not (isinstance(section, Section) and section.isMinor):
                     section = None
                     
                 
