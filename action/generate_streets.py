@@ -52,11 +52,12 @@ def _pseudoangle(d):
 
 class StreetGenerator():
 
-    def __init__(self, styleStore, getStyle, leftHandTraffic=True,
+    def __init__(self, styleStore, getStyle, doPixelCorrection=True, leftHandTraffic=True,
             debugCircularStreets = False, debugParallelStreets = False, debugBundle=False, plotStreetID=None
         ):
         self.styleStore = styleStore
         self.getStyle = getStyle
+        self.doPixelCorrection = doPixelCorrection
         self.leftHandTraffic = leftHandTraffic
         
         #
@@ -155,6 +156,10 @@ class StreetGenerator():
 
         # Finally, the intersections of bundles are constructed.
         self.createBundleIntersections()
+
+        # Post-processing:
+        # - Propagate the width and offset from a Section following SideLane or SymLane
+        self.postProcessing()
 
 
     # Find the way segments, that intersect each other.
@@ -353,7 +358,7 @@ class StreetGenerator():
                     # If there are turns, it's a SideLane, else it's a SymLane
                     # Create it and insert it into the corresponding list.
                     if srcIsectInit['hasTurns']:
-                        newLane = SideLane(srcIsectInit['isect'].location, srcIsectInit['arriving'].head, srcIsectInit['leaving'].head)
+                        newLane = SideLane(self.doPixelCorrection, srcIsectInit['isect'].location, srcIsectInit['arriving'].head, srcIsectInit['leaving'].head)
                         self.transitionSideLanes.append(newLane)
                     else:
                         newLane = SymLane(srcIsectInit['isect'].location, srcIsectInit['arriving'].head, srcIsectInit['leaving'].head)
@@ -385,7 +390,7 @@ class StreetGenerator():
                     # If there are turns, it's a SideLane, else it's a SymLane
                     # Create it and insert it into the corresponding list.
                     if dstIsectInit['hasTurns']:
-                        newLane = SideLane(dstIsectInit['isect'].location, dstIsectInit['arriving'].head, dstIsectInit['leaving'].head)
+                        newLane = SideLane(self.doPixelCorrection, dstIsectInit['isect'].location, dstIsectInit['arriving'].head, dstIsectInit['leaving'].head)
                         self.transitionSideLanes.append(newLane)
                     else:
                         newLane = SymLane(dstIsectInit['isect'].location, dstIsectInit['arriving'].head, dstIsectInit['leaving'].head)
@@ -1108,5 +1113,31 @@ class StreetGenerator():
                 endBundleIntersection(self, bundle)
 
 
+    def postProcessing(self):
+
+        # Propagate the width and offset from a Section following SideLane
+        for sideLane in self.wayManager.transitionSideLanes:
+            item = sideLane.succ
+            width, offset = item.width, item.offset
+            while item:
+                item = item.succ
+                if item:
+                    if isinstance(item, Section):
+                        item.width = width
+                        item.offset = offset
+                    elif not (isinstance(item, Intersection) and item.isMinor):
+                        item = None
+
+        # Propagate the width from a Section following SymLane
+        for symLane in self.wayManager.transitionSymLanes:
+            item = symLane.succ
+            width = item.width
+            while item:
+                item = item.succ
+                if item:
+                    if isinstance(item, Section):
+                        item.width = width
+                    elif not (isinstance(item, Intersection) and item.isMinor):
+                        item = None    
 
 
