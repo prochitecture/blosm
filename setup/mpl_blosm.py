@@ -30,6 +30,7 @@ def setup(app, osm):
     app.argParserExtra.add_argument("--generateStreets", action='store_true', help="Generate and show streets and intersections", default=False)
     app.argParserExtra.add_argument("--debugStreetRendering", action='store_true', help="Debug in StreetRenderer", default=False)
     app.argParserExtra.add_argument("--printStreetContent", action='store_true', help="Print the content of Streets and Bundles", default=False)
+    app.argParserExtra.add_argument("--noPixelCorrection", action='store_true', help="Do the pixel correction in SideLane objects", default=False)
     app.argParserExtra.add_argument("--assetsDir", help="Path to a folder with assets and PML styles", default='')
     
     # parse the newly added command line arguments
@@ -51,6 +52,7 @@ def setup(app, osm):
     generateStreets = getattr(app, "generateStreets", False)
     debugStreetRendering = getattr(app,"debugStreetRendering", False)
     printStreetContent = getattr(app, "printStreetContent", False)
+    noPixelCorrection =  getattr(app, "noPixelCorrection", False)
     
     
     app.setAssetPackagePaths()
@@ -110,7 +112,7 @@ def setup(app, osm):
             
             styleStore = StyleStore(app.pmlFilepathStreet, app.assetsDir, styles=None)
             
-            wayManager.addAction(StreetGenerator(styleStore, getStyle=getStyleStreet))
+            wayManager.addAction(StreetGenerator(styleStore, getStyle=getStyleStreet, doPixelCorrection=not noPixelCorrection))
             wayManager.addRenderer(StreetRenderer(debug=debugStreetRendering, printStreetContent=printStreetContent))
         else:
             wayManager.addRenderer(WayVisibilityRenderer(showIDs=showIDs))

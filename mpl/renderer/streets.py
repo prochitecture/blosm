@@ -160,7 +160,7 @@ class StreetRenderer(Renderer):
 
                     if isinstance(item,SymLane):
                         p = item.location
-                        plt.plot(p[0],p[1],'rP',markersize=6,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                        plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
                         if self.debug:
                             plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='k',fontsize=8,zorder=130,ha='left', va='top', clip_on=True)
 
@@ -177,62 +177,62 @@ class StreetRenderer(Renderer):
 
         for bundle in manager.iterBundles():
             vertices = []
-            for street in bundle.streetsHead:
-                p = street.head.polyline[1]
-                plt.text(p[0],p[1]+1.5,'   S'+str(street.id),fontsize=10,color='green',ha='right', va='bottom')
-                for item in street.iterItems():
-                    if isinstance(item,Section):
-                        section = item
-                        if section.valid:
-                            color = 'gray' if isSmallestCategory(section) else 'g' if isMinorCategory(section) else 'g'
-                            width = 1 if isSmallestCategory(section) else 1.1 if isMinorCategory(section) else 1.5
-                            style = 'dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid'
-                            upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
-                            section.polyline.plotWithArrows(color,width,0.5,style,False,950)
-                            vertices.extend(section.centerline)
-                            p = section.src
-                            plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
-                    if isinstance(item,SideLane):
-                        p = item.location
-                        plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
-                        if self.debug:
-                            plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+            # for street in bundle.streetsHead:
+            #     p = street.head.polyline[1]
+            #     plt.text(p[0],p[1]+1.5,'   S'+str(street.id),fontsize=10,color='green',ha='right', va='bottom')
+            #     for item in street.iterItems():
+            #         if isinstance(item,Section):
+            #             section = item
+            #             if section.valid:
+            #                 color = 'gray' if isSmallestCategory(section) else 'g' if isMinorCategory(section) else 'g'
+            #                 width = 1 if isSmallestCategory(section) else 1.1 if isMinorCategory(section) else 1.5
+            #                 style = 'dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid'
+            #                 upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
+            #                 section.polyline.plotWithArrows(color,width,0.5,style,False,950)
+            #                 vertices.extend(section.centerline)
+            #                 p = section.src
+            #                 plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
+            #         if isinstance(item,SideLane):
+            #             p = item.location
+            #             plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+            #             if self.debug:
+            #                 plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
-                    if isinstance(item,SymLane):
-                        p = item.location
-                        plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
-                        if self.debug:
-                            plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+            #         if isinstance(item,SymLane):
+            #             p = item.location
+            #             plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+            #             if self.debug:
+            #                 plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
-            for street in bundle.streetsTail:
-                if street in bundle.streetsHead:
-                    continue# already drawn
-                p = street.head.polyline[1]
-                plt.text(p[0],p[1]+1.5,'   S'+str(street.id),fontsize=10,color='green',ha='right', va='bottom')
-                for item in street.iterItems():
-                    if isinstance(item,Section):
-                        section = item
-                        if section.valid:
-                            color = 'gray' if isSmallestCategory(section) else 'g' if isMinorCategory(section) else 'g'
-                            width = 1 if isSmallestCategory(section) else 1.1 if isMinorCategory(section) else 1.5
-                            style = 'dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid'
-                            upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
-                            section.polyline.plotWithArrows(color,width,0.5,style,False,950)
-                            vertices.extend(section.centerline)
-                            p = section.src
-                            plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
+            # for street in bundle.streetsTail:
+            #     if street in bundle.streetsHead:
+            #         continue# already drawn
+            #     p = street.head.polyline[1]
+            #     plt.text(p[0],p[1]+1.5,'   S'+str(street.id),fontsize=10,color='green',ha='right', va='bottom')
+            #     for item in street.iterItems():
+            #         if isinstance(item,Section):
+            #             section = item
+            #             if section.valid:
+            #                 color = 'gray' if isSmallestCategory(section) else 'g' if isMinorCategory(section) else 'g'
+            #                 width = 1 if isSmallestCategory(section) else 1.1 if isMinorCategory(section) else 1.5
+            #                 style = 'dotted' if isSmallestCategory(section) else '--' if isMinorCategory(section) else 'solid'
+            #                 upset = 0 if isSmallestCategory(section) else 1 if isMinorCategory(section) else 2
+            #                 section.polyline.plotWithArrows(color,width,0.5,style,False,950)
+            #                 vertices.extend(section.centerline)
+            #                 p = section.src
+            #                 plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
 
-                    if isinstance(item,SideLane):
-                        p = item.location
-                        plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
-                        if self.debug:
-                            plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+            #         if isinstance(item,SideLane):
+            #             p = item.location
+            #             plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+            #             if self.debug:
+            #                 plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
-                    if isinstance(item,SymLane):
-                        p = item.location
-                        plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
-                        if self.debug:
-                            plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+            #         if isinstance(item,SymLane):
+            #             p = item.location
+            #             plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+            #             if self.debug:
+            #                 plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
             for street in manager.iterStreets():
                 if street.bundle and street.bundle == bundle:
@@ -250,9 +250,15 @@ class StreetRenderer(Renderer):
                                 plt.text(p[0],p[1]+width*1.3,' sect'+str(section.id),fontsize=10,color=color)
                         if isinstance(item,SideLane):
                             p = item.location
-                            plt.plot(p[0],p[1],'rs',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                            plt.plot(p[0],p[1],'rs',markersize=6,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
                             if self.debug:
                                 plt.text(p[0]+2,p[1]-2,'Side '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
+
+                        if isinstance(item,SymLane):
+                            p = item.location
+                            plt.plot(p[0],p[1],'rP',markersize=8,zorder=999,markeredgecolor='green', markerfacecolor='cyan')
+                            if self.debug:
+                                plt.text(p[0]+2,p[1]-2,'Sym '+str(item.id),color='green',fontsize=10,zorder=130,ha='left', va='top', clip_on=True)
 
             c = sum(vertices,Vector((0,0)))/len(vertices)
             plt.text(c[0],c[1]+upset,'B'+str(bundle.id),fontsize=18,color='red',ha='center', va='center',zorder=999)

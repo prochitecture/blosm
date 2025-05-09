@@ -451,8 +451,10 @@ def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
 
     for longStreet in newLongStreets:
         # adjust connectors of adjacent major intersections
-        longStreet.pred.item = longStreet
-        longStreet.succ.item = longStreet
+        if longStreet.pred:
+            longStreet.pred.item = longStreet
+        if longStreet.succ:
+            longStreet.succ.item = longStreet
         streetGenerator.streets[longStreet.id] = longStreet
         streetGroup.append(longStreet)
 
@@ -1003,6 +1005,9 @@ def mergeBundles(streetGenerator,involvedBundles):
         mergedBundle.tailLocs.append(item['firstVert'])
 
     streetGenerator.bundles[mergedBundle.id] = mergedBundle
+    for street in mergedStreets:
+        if street.id not in streetGenerator.streets:
+            streetGenerator.streets[street.id] = street
 
     # Bookkeeping:
     # remove old bundles

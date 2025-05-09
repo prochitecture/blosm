@@ -8,12 +8,13 @@ class SideLane(Item):
 
     ID = 0
 
-    def __init__(self, location, incoming, outgoing):
+    def __init__(self, doPixelCorrection, location, incoming, outgoing):
         super().__init__()
         self.id = SideLane.ID
         SideLane.ID += 1
 
         self._location = location
+        self.doPixelCorrection = doPixelCorrection
 
         # A reference to the incoming Section before the turn lanes
         self.pred = incoming
@@ -43,14 +44,15 @@ class SideLane(Item):
         return self._location
 
     def createSideLane(self):
-        # Way width and offset correction for seamless connections according to
-        # https://github.com/prochitecture/blosm/issues/57#issuecomment-1544025403
-        widePixels = self.succ.totalLanes * 220.0 + 8 * (self.succ.totalLanes - 1)
-        smallPixels = self.pred.totalLanes * 220.0 + 8 * (self.succ.totalLanes - 2)
-        factor = widePixels / smallPixels
-        # Fix ratio by changing wider way
-        self.succ.width = factor * self.pred.width
-        self.succ.laneWidth = self.succ.width / self.succ.totalLanes
+        if self.doPixelCorrection:
+            # Way width and offset correction for seamless connections according to
+            # https://github.com/prochitecture/blosm/issues/57#issuecomment-1544025403
+            widePixels = self.succ.totalLanes * 220.0 + 8 * (self.succ.totalLanes - 1)
+            smallPixels = self.pred.totalLanes * 220.0 + 8 * (self.succ.totalLanes - 2)
+            factor = widePixels / smallPixels
+            # Fix ratio by changing wider way
+            self.succ.width = factor * self.pred.width
+            self.succ.laneWidth = self.succ.width / self.succ.totalLanes
 
         # Create direction indicators, positive, if start of Section at location
         signOfTurn = signOfPre = 1 if self.pred.src == self.location else -1
