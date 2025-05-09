@@ -15,10 +15,22 @@ class Bundle(ItemRenderer):
         return
 
     def setPolyline1ParamsForCorner(self, modifier, connector):
-        return
+        intersection = connector.intersection
+        bundle = connector.item
+        # we need the rightmost street in the bundle for the 1st polyline
+        street = bundle.streetsHead[0] if connector.leaving else bundle.streetsTail[-1]
+        leaving = bool(street.pred and street.pred.intersection is intersection)
+        modifier["Socket_3"] = street.obj
+        modifier["Socket_4"] = leaving
 
     def setPolyline2ParamsForCorner(self, modifier, connector):
-        return
+        intersection = connector.intersection
+        bundle = connector.item
+        # we need the leftmost street in the bundle for the 2nd polyline
+        street = bundle.streetsHead[-1] if connector.leaving else bundle.streetsTail[0]
+        leaving = bool(street.pred and street.pred.intersection is intersection)
+        modifier["Socket_6"] = street.obj
+        modifier["Socket_7"] = leaving
     
     def renderNeighborIntersection(self, intersection, connector, index, modifier):
         bundle = connector.item

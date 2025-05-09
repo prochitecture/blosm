@@ -115,35 +115,35 @@ class StreetRenderer:
         #    for street in bundle.streetsHead:
         #        self.initStreet(street)
         
-        # render instances of the class <Street>
-        for street in manager.iterStreets():
-                self.initStreet(street)
-        
         from .item.section import Section
         from .item.intersection import Intersection
         
         for sideLane in manager.transitionSideLanes:
-            section = sideLane.succ
-            width, offset = section.width, section.offset
-            while section:
-                section = section.succ
-                if isinstance(section, Section):
-                    section.width = width
-                    section.offset = offset
-                elif section and not (isinstance(section, Section) and section.isMinor):
-                    section = None
+            item = sideLane.succ
+            width, offset = item.width, item.offset
+            while item:
+                item = item.succ
+                if item:
+                    if isinstance(item, Section):
+                        item.width = width
+                        item.offset = offset
+                    elif not (isinstance(item, Intersection) and item.isMinor):
+                        item = None
 
-        for sideLane in manager.transitionSymLanes:
-            section = sideLane.succ
-            width = section.width
-            while section:
-                section = section.succ
-                if isinstance(section, Section):
-                    section.width = width
-                elif section and not (isinstance(section, Section) and section.isMinor):
-                    section = None
-                    
-                
+        for symLane in manager.transitionSymLanes:
+            item = symLane.succ
+            width = item.width
+            while item:
+                item = item.succ
+                if item:
+                    if isinstance(item, Section):
+                        item.width = width
+                    elif not (isinstance(item, Intersection) and item.isMinor):
+                        item = None
+        
+        # render instances of the class <Street>
+        for street in manager.iterStreets():
+                self.initStreet(street)  
         
         # render instances of class <Intersection>
         intersectionRenderer = self.itemRenderers["Intersection"]
