@@ -115,32 +115,6 @@ class StreetRenderer:
         #    for street in bundle.streetsHead:
         #        self.initStreet(street)
         
-        from .item.section import Section
-        from .item.intersection import Intersection
-        
-        for sideLane in manager.transitionSideLanes:
-            item = sideLane.succ
-            width, offset = item.width, item.offset
-            while item:
-                item = item.succ
-                if item:
-                    if isinstance(item, Section):
-                        item.width = width
-                        item.offset = offset
-                    elif not (isinstance(item, Intersection) and item.isMinor):
-                        item = None
-
-        for symLane in manager.transitionSymLanes:
-            item = symLane.succ
-            width = item.width
-            while item:
-                item = item.succ
-                if item:
-                    if isinstance(item, Section):
-                        item.width = width
-                    elif not (isinstance(item, Intersection) and item.isMinor):
-                        item = None
-        
         # render instances of the class <Street>
         for street in manager.iterStreets():
                 self.initStreet(street)  

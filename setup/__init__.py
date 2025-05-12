@@ -201,6 +201,7 @@ class Setup:
             from way.manager import WayManager
             from .realistic_streets import getStyleStreet
             
+            self.app.trafficSide = "auto" # FIXME a temporary assignment
             self.wayManager = WayManager(self.osm, self.app, getStyleStreet)
         return self.wayManager
 

@@ -140,6 +140,40 @@ patternCharLeft = {
     },
 }
 
+leftHandTrafficAreas = (
+    # Ireland, Isle of Man, the majority of Great Britain island
+    ((-14.50, 1.13), (49.95, 61.1)),
+    # the rest of Great Britain island in the east of England
+    ((1.13, 1.8), (51.0, 53.0)),
+    # Guernsey and Jersey
+    ((-2.774, -1.98), (48.879, 49.772)),
+    
+    # Australia, the majority of Indonesia, Timor-Leste, Papua New Guinea, Solomon Island (without Temotu province),
+    # the majority of Malaysia, Singapore, Brunei
+    ((88.33, 163.26), (-44.9, 5.35)),
+    # Indonesia (Banda Aceh), India (Adaman Islands)
+    ((90.98, 97.0), (5.35, 13.75)),
+    # Malaysia (North), Thailand (South)
+    ((97.6, 103.2), (5.35, 9.595)),
+    # Malaysia (Sabah province)
+    ((115.1, 118.0), (5.35, 7.5)),
+    # Malaysia (Sabah province)
+    ((118.0, 119.4), (5.35, 6.07)),
+    # Thailand (Bangkok, Center)
+    ((99.67, 102.32), (11.49, 17.45)),
+    # Thailand (North)
+    ((98.0, 100.96), (17.51, 19.47)),
+    # Thailand (North)
+    ((99.56, 100.40), (19.47, 20.2)),
+    # Thailand (East)
+    ((101.25, 104.66), (14.45, 17.55)),
+    # Thailand (East)
+    ((104.66, 105.342), (14.44, 16.03)),
+    
+    # New Zealand (without Chatham Islands)
+    ((161.0, 179.7), (-53.0, -33.0))
+)
+
 # Convert turn-lane tag values to lane pattern
 # left-hand traffic version
 def val2patLeft(tags,fwd):

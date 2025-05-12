@@ -77,6 +77,9 @@ class WayManager:
         return ( way for category in categories for way in self.layers[category] )
     
     def process(self):
+        # set <self.rightHandTraffic> here, since during the execution of the constructor OSM data is not yet parsed
+        self.rightHandTraffic = self.isRightHandTraffic(self.data) if self.app.trafficSide == 'auto' else self.app.trafficSide == "rht"
+        
         for way in self.getAllWays():
             # <osm.projection> may not be availabe in the constructor of a <Way>, but it's needed to
             # create way-segments. That's why an additional <init(..)> method is needed.
@@ -206,6 +209,23 @@ class WayManager:
                 processedStreets = processedStreets.union(processedStreetsInLoop)
                 
                 yield longStreet
+    
+    def isRightHandTraffic(self, data):
+        """
+        Determines if the Right Hand-Traffic (True) or Left Hand-Traffic is in the area defined by <data>
+        """
+        from .way_properties import leftHandTrafficAreas
+        
+        # get the first node
+        node = next(iter(data.nodes.values()))
+        lon, lat = node.lon, node.lat
+        
+        # check if <node> defined by <lon> and <lat> is within any of <leftHandTrafficAreas>
+        for lonRange, latRange in leftHandTrafficAreas:
+            if lonRange[0] <= lon <= lonRange[1] and latRange[0] <= lat <= latRange[1]:
+                return False
+        
+        return True
 
 class RailwayManager:
     """
