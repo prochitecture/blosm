@@ -52,13 +52,12 @@ def _pseudoangle(d):
 
 class StreetGenerator():
 
-    def __init__(self, styleStore, getStyle, doPixelCorrection=True, leftHandTraffic=True,
+    def __init__(self, styleStore, getStyle, doPixelCorrection=True,
             debugCircularStreets = False, debugParallelStreets = False, debugBundle=False, plotStreetID=None
         ):
         self.styleStore = styleStore
         self.getStyle = getStyle
         self.doPixelCorrection = doPixelCorrection
-        self.leftHandTraffic = leftHandTraffic
         
         #
         # Debug configuration
@@ -99,6 +98,7 @@ class StreetGenerator():
         # Finally, the results of StreetGenerator.do() are stored by the WayManager.
         # Link the local attributes to them.
         self.wayManager = manager
+        self.leftHandTraffic = self.rightHandTraffic = manager.rightHandTraffic # FIXME remove self.leftHandTraffic
         self.waymap = manager.waymap
         self.majorIntersections = manager.majorIntersections
         self.minorIntersections = manager.minorIntersections
