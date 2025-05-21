@@ -1,4 +1,5 @@
 from . import ItemRenderer
+from ..way_properties import wayCategoryProps
 
 
 class Street(ItemRenderer):
@@ -14,13 +15,17 @@ class Street(ItemRenderer):
     def setNodeGroups(self, nodeGroups):
         return
     
-    def setPolyline1ParamsForCorner(self, modifier, connector):
+    def setPolyline1ParamsForCorner(self, modifier, connector, setRadius):
         modifier["Socket_3"] = connector.item.obj
         modifier["Socket_4"] = connector.leaving
+        if setRadius:
+            modifier["Socket_8"] = wayCategoryProps[ (connector.item.head if connector.leaving else connector.item.tail).tags["highway"] ]["radius"]
 
-    def setPolyline2ParamsForCorner(self, modifier, connector):
+    def setPolyline2ParamsForCorner(self, modifier, connector, setRadius):
         modifier["Socket_6"] = connector.item.obj
         modifier["Socket_7"] = connector.leaving
+        if setRadius:
+            modifier["Socket_8"] = wayCategoryProps[ (connector.item.head if connector.leaving else connector.item.tail).tags["highway"] ]["radius"]
     
     def renderNeighborIntersection(self, intersection, connector, index, modifier):
         street = connector.item

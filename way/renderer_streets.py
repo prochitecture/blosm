@@ -105,6 +105,8 @@ class StreetRenderer:
         gnMeshToCurve = "blosm_mesh_to_curve"
     
     def render(self, manager, data):
+        # attributes of <manager>, for example <rightHandTraffic>, are used by item renderers
+        self.m = manager
         
         # split neighbor street sections for the side lane transitions
         #for sideLane in manager.transitionSideLanes:
@@ -188,7 +190,6 @@ class StreetRenderer:
                 self.initItemPolyline2(item, itemIndex)
                 itemIndex += 1
         
-        addGeometryNodesModifier(street.obj, self.gnInitPolyline, "Init Polyline")
         addGeometryNodesModifier(street.obj, self.gnInitPolyline, "Init Polyline")
     
     def initItemPolyline1(self, item, singleItem):

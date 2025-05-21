@@ -1,4 +1,5 @@
 from . import ItemRenderer
+from ..way_properties import wayCategoryProps
 
 
 class Bundle(ItemRenderer):
@@ -14,7 +15,7 @@ class Bundle(ItemRenderer):
     def setNodeGroups(self, nodeGroups):
         return
 
-    def setPolyline1ParamsForCorner(self, modifier, connector):
+    def setPolyline1ParamsForCorner(self, modifier, connector, setRadius):
         intersection = connector.intersection
         bundle = connector.item
         # we need the rightmost street in the bundle for the 1st polyline
@@ -22,8 +23,10 @@ class Bundle(ItemRenderer):
         leaving = bool(street.pred and street.pred.intersection is intersection)
         modifier["Socket_3"] = street.obj
         modifier["Socket_4"] = leaving
+        if setRadius:
+            modifier["Socket_8"] = wayCategoryProps[ (street.head if leaving else street.tail).tags["highway"] ]["radius"]
 
-    def setPolyline2ParamsForCorner(self, modifier, connector):
+    def setPolyline2ParamsForCorner(self, modifier, connector, setRadius):
         intersection = connector.intersection
         bundle = connector.item
         # we need the leftmost street in the bundle for the 2nd polyline
@@ -31,6 +34,8 @@ class Bundle(ItemRenderer):
         leaving = bool(street.pred and street.pred.intersection is intersection)
         modifier["Socket_6"] = street.obj
         modifier["Socket_7"] = leaving
+        if setRadius:
+            modifier["Socket_8"] = wayCategoryProps[ (street.head if leaving else street.tail).tags["highway"] ]["radius"]
     
     def renderNeighborIntersection(self, intersection, connector, index, modifier):
         bundle = connector.item

@@ -55,9 +55,17 @@ class Intersection(ItemRenderer):
             m = addGeometryNodesModifier(defObj, self.gnDefRoundStreetCorner, "Def Round Street Corner")
             
             if _connector.item.__class__.__name__ in self.renderers:
-                self.renderers[_connector.item.__class__.__name__].setPolyline1ParamsForCorner(m, _connector)
+                self.renderers[_connector.item.__class__.__name__].setPolyline1ParamsForCorner(
+                    m,
+                    _connector,
+                    setRadius = self.r.m.rightHandTraffic
+                )
             if connector.item.__class__.__name__ in self.renderers:
-                self.renderers[connector.item.__class__.__name__].setPolyline2ParamsForCorner(m, connector)
+                self.renderers[connector.item.__class__.__name__].setPolyline2ParamsForCorner(
+                    m, 
+                    connector,
+                    setRadius = not self.r.m.rightHandTraffic
+                )
             _connector = connector
         
         return
