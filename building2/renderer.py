@@ -1,18 +1,20 @@
+import os
+
 import bpy
-from . import Building
 from renderer import Renderer
+from .layer import BuildingLayer
 from .item_store import ItemStore
-from .item_factory import ItemFactory
-from .asset_store import AssetStore
 from .texture_exporter import TextureExporter
 
+from item.building import Building
 from item.footprint import Footprint
 from item.facade import Facade
-from item.level import Level, CurtainWall
+from item.level import Level
 from item.div import Div
 from item.bottom import Bottom
 from item.window import Window
-from item.door import Door
+from item.entrance import Entrance
+from item.corner import Corner
 from item.balcony import Balcony
 from item.chimney import Chimney
 
@@ -24,27 +26,27 @@ from item.roof_hipped import RoofHipped
 from item.roof_hipped_multi import RoofHippedMulti
 from item.roof_side import RoofSide
 
+from util.blender import appendNodeGroupFromFile
 
-def _createReferenceItems(app):
-    return (
-        (Building(), 5),
-        Footprint(app.buildingEntranceAttr),
-        Facade(),
-        Level(),
-        CurtainWall(),
-        Div(),
-        Bottom(),
-        Window(),
-        Door(),
-        Balcony(),
-        Chimney(),
-        RoofFlat(),
-        RoofFlatMulti(),
-        RoofProfile(),
-        RoofGeneratrix(),
-        RoofHipped(),
-        RoofHippedMulti(),
-        RoofSide()
+_itemClasses = (
+        Building,
+        Footprint,
+        Facade,
+        Level,
+        Div,
+        Bottom,
+        Window,
+        Entrance,
+        Corner,
+        Balcony,
+        Chimney,
+        RoofFlat,
+        RoofFlatMulti,
+        RoofProfile,
+        RoofGeneratrix,
+        RoofHipped,
+        RoofHippedMulti,
+        RoofSide
     )
 
 
@@ -66,6 +68,7 @@ class BuildingRendererNew(Renderer):
         self.useCladdingColor = True
         
         self.itemRenderers = itemRenderers
+        self.facadeRenderer = itemRenderers["Facade"]
         
         self.exportMaterials = app.enableExperimentalFeatures and app.importForExport
         
@@ -79,96 +82,161 @@ class BuildingRendererNew(Renderer):
             itemRenderers[item].init(itemRenderers, self)
         
         self.getStyle = getStyle
-        referenceItems = _createReferenceItems(app)
-        self.itemStore = ItemStore(referenceItems)
-        self.itemFactory = ItemFactory(referenceItems)
-        
-        self.assetStore = AssetStore(app.assetInfoFilepath)
+        self.itemStore = ItemStore(_itemClasses)
         
         self._cache = {}
+        
+        self.actions = []
+        # "rev" stands for "render extruded volumes"
+        self.revActions = []
     
     def prepare(self):
-        # nothing to be done here for now
-        pass
-
-    def preRender(self, building):
-        element = building.outline
-        layer = element.l
-        self.layer = element.l
+        if self.app.preferMesh:
+            # A key to the dictionary below is an object name as it's defined in <self.app.assetStore>.
+            # A related value is tuple that consists of 
+            # (1) A link to a Blender object in the file defined in the related asset info.
+            # (2) A list of custom attributes defined for this object. The addon will
+            # create a separate object for each unique set of the attributes. All those created objects will
+            # share the same Blender mesh.
+            # (3) A dictionary:
+            #     A key is a combination of custom attributes described above.
+            #     A value is the name of the Blender object created for the unique set of attributes
+            #     used in the key.
+            self.meshAssets = {}
+            # A Python dictionary to store processed information about Blender objects that belong to
+            # a Blender collection. Each collection is defined in the asset store.
+            self.blenderCollections = {}
+            
+            _collectionName = "blosm_building_assets"
+            if not _collectionName in bpy.data.collections:
+                bpy.data.collections.new(_collectionName)
+            # a Blender collection for instances on the points cloud
+            self.buildingAssetsCollection = bpy.data.collections[_collectionName]
+            
+            # check if the Geometry Nodes setup with the name "blosm_gn_building" is already available
+            _gnName, _gnCollection = "blosm_gn_building", "Collection Info"
+            node_groups = bpy.data.node_groups
+            self.gnBuilding = node_groups[_gnName]\
+                if _gnName in node_groups and _gnCollection in node_groups[_gnName].nodes else\
+                appendNodeGroupFromFile(self.app.baseAssetPath, _gnName)
+            # set the input of <self.gnBuilding.nodes[_gnCollection]> to <self.buildingAssetsCollection>
+            self.gnBuilding.nodes[_gnCollection].inputs['Collection'].default_value = self.buildingAssetsCollection
+            
+            # a TEMPORARY code below to load the Geometry Nodes setup for flat roofs
+            self.gnFlatRoof = appendNodeGroupFromFile(
+                os.path.join(os.path.dirname(self.app.baseAssetPath), "flat_roof_objects.blend"),
+                "blosm_flat_roof_objects"
+            )
         
-        if layer.singleObject:
-            if not layer.bm:
-                layer.obj = self.createBlenderObject(
-                    layer.name,
-                    layer.location,
-                    collection = self.collection,
-                    parent = None
-                )
-                layer.prepare(layer)
-            self.bm = layer.bm
-            self.obj = layer.obj
-            self.materialIndices = layer.materialIndices
+        if self.app.singleObject:
+            for layer in self.app.layers:
+                if isinstance(layer, BuildingLayer):
+                    layer.obj = self.createBlenderObject(
+                        layer.name,
+                        layer.location,
+                        collection = self.collection,
+                        parent = None
+                    )
+                    layer.prepare()
+    
+    def finalize(self):
+        if self.app.singleObject:
+            for layer in self.app.layers:
+                if isinstance(layer, BuildingLayer):
+                    layer.finalize(self)
     
     def cleanup(self):
-        if Building.actions:
-            for action in Building.actions:
-                action.cleanup()
+        for action in self.actions:
+            action.cleanup()
         
         if self.exportMaterials:
             self.textureExporter.cleanup()
         
         self._cache.clear()
     
-    def render(self, buildingP, data):
-        parts = buildingP.parts
-        itemFactory = self.itemFactory
+    def render(self, building, data):
+        parts = building.parts
         itemStore = self.itemStore
-        
-        # <buildingP> means "building from the parser"
-        outline = buildingP.outline
         
         #if "id" in outline.tags: print(outline.tags["id"]) #DEBUG OSM id
         
-        building = Building.getItem(itemFactory, outline, data)
+        building.renderInfo = Building(data)
         
         # get the style of the building
         buildingStyle = self.styleStore.get(self.getStyle(building, self.app))
         if not buildingStyle:
             # skip the building
             return
-        building.setStyleMeta(buildingStyle)
+        building.renderInfo.setStyleMeta(buildingStyle)
         
-        self.preRender(building)
+        #if self.app.renderAfterExtrude:
+        #    self.preRender(building)
         
-        partTag = outline.tags.get("building:part")
-        if not parts or (partTag and partTag != "no"):
+        if not parts or building.alsoPart:
             # the building has no parts
-            footprint = Footprint.getItem(itemFactory, outline, building)
+            footprint = Footprint(building, building)
             # The attribute <footprint> below may be used in calculation of the area of
             # the building footprint or in <action.terrain.Terrain>
-            building.footprint = footprint
+            #building.footprint = footprint
             itemStore.add(footprint)
         if parts:
-            itemStore.add((Footprint.getItem(itemFactory, part, building) for part in parts), Footprint, len(parts))
+            itemStore.add((Footprint(part, building) for part in parts), Footprint, len(parts))
         
-        for itemClass in (Building, Footprint):
-            for action in itemClass.actions:
-                action.do(building, itemClass, buildingStyle, self)
-                if itemStore.skip:
-                    break
+        for action in self.actions:
+            action.do(building, buildingStyle, self)
             if itemStore.skip:
+                # <building.polygon> equal to <None> means that <building> was skipped.
+                # It can be used later in the code if two building footprints share an edge
+                building.polygon = None
                 break
         itemStore.clear()
         
         if itemStore.skip:
             itemStore.skip = False
-        else:
-            self.postRender(outline)
+        elif self.app.renderAfterExtrude:
+            self.postRender(building.element)
     
-    def createFace(self, building, indices):
-        bm = self.bm
-        verts = building.verts
-        bmVerts = building.bmVerts
+    def renderExtrudedVolumes(self, building, data):
+        #self.preRender(building)
+        
+        if not self.app.singleObject:
+            renderInfo = building.renderInfo
+            layer = building.element.l
+            
+            layer.obj = self.createBlenderObject(
+                self.getName(building.element),
+                renderInfo.offsetBlenderObject,
+                collection = layer.getCollection(self.collection),
+                parent = layer.getParent( layer.getCollection(self.collection) )
+            )
+            layer.prepare()
+        
+        # render building footprint
+        if not building.parts or building.alsoPart:
+            self.renderExtrudedVolume(building.footprint, True)
+        # render building parts
+        for part in building.parts:
+            self.renderExtrudedVolume(part.footprint, False)
+        
+        self.postRender(building.element)
+    
+    def renderExtrudedVolume(self, footprint, isBldgFootprint):
+        if not footprint:
+            return
+        
+        if not footprint.noWalls:
+            for action in self.revActions:
+                action.do(footprint)
+            
+            self.facadeRenderer.render(footprint)
+        
+        footprint.roofRenderer.render(footprint.roofItem)
+    
+    def createFace(self, footprint, indices):
+        bm = footprint.building.element.l.bm
+        renderInfo = footprint.building.renderInfo
+        verts = renderInfo.verts
+        bmVerts = renderInfo.bmVerts
         
         # extend <bmVerts> to have the same number of vertices as in <verts>
         bmVerts.extend(None for _ in range(len(verts)-len(bmVerts)))
@@ -177,29 +245,29 @@ class BuildingRendererNew(Renderer):
         for index in indices:
             if not bmVerts[index]:
                 bmVerts[index] = bm.verts.new(
-                    (verts[index] + building.offset) if building.offset else verts[index]
+                    (verts[index] + renderInfo.offsetVertex) if renderInfo.offsetVertex else verts[index]
                 )
         
         return bm.faces.new(bmVerts[index] for index in indices)
     
-    def setUvs(self, face, uvs, layerName):
+    def setUvs(self, face, uvs, layer, uvLayerName):
         # assign uv coordinates
-        uvLayer = self.bm.loops.layers.uv[layerName]
+        uvLayer = layer.bm.loops.layers.uv[uvLayerName]
         loops = face.loops
         for loop,uv in zip(loops, uvs):
             loop[uvLayer].uv = uv
     
-    def setVertexColor(self, face, color, layerName):
-        vertexColorLayer = self.bm.loops.layers.color[layerName]
+    def setVertexColor(self, face, color, layer, layerName):
+        vertexColorLayer = layer.bm.loops.layers.color[layerName]
         for loop in face.loops:
             loop[vertexColorLayer] = color
 
-    def setMaterial(self, face, materialName):
+    def setMaterial(self, layer, face, materialName):
         """
         Set material (actually material index) for the given <face>.
         """
-        materialIndices = self.materialIndices
-        materials = self.obj.data.materials
+        materialIndices = layer.materialIndices
+        materials = layer.obj.data.materials
         
         if not materialName in materialIndices:
             materialIndices[materialName] = len(materials)
