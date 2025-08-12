@@ -4,20 +4,13 @@ from .level_groups import LevelGroups
 
 class Div(Container):
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent, footprint, facade, styleBlock):
+        super().__init__(parent, footprint, facade, styleBlock)
+        self.isContainer = True
         self.levelGroups = LevelGroups(self)
-        
-    def init(self):
-        super().init()
-        self.levelGroups.clear()
+        self.minHeight = self.footprint.minHeight
+        self.minLevel = self.footprint.minLevel
+        self.highEnoughForLevel = True
     
-    @classmethod
-    def getItem(cls, itemFactory, parent, styleBlock):
-        item = itemFactory.getItem(cls)
-        item.init()
-        item.parent = parent
-        item.footprint = parent.footprint
-        item.building = parent.building
-        item.styleBlock = styleBlock
-        return item
+    def getBuildingPart(self):
+        return self.parent.getBuildingPart()

@@ -1,14 +1,16 @@
 
 
-_numGroups = 170
-
-
 class LevelGroups:
     
     def __init__(self, item):
         self.item = item
-        self.groups = tuple(LevelGroup() for _ in range(_numGroups))
-        self.bottom = None
+        totalNumLevels = item.footprint.totalNumLevels
+        self.numGroups = totalNumLevels if totalNumLevels < 5 else (
+            5 if totalNumLevels < 24 else totalNumLevels // 4
+        )
+        self.groups = [
+            LevelGroup() for _ in range(self.numGroups)
+        ]
         # a wrapper level group for the bottom
         self.bottomGroup = LevelGroup()
         # setting <singleLevel> to <True> is needed for correct height calculation of the level group
@@ -28,9 +30,8 @@ class LevelGroups:
         footprint = item.footprint
         lh = footprint.levelHeights
         numLevels = footprint.numLevels
-        numRoofLevels = footprint.numRoofLevels
-        totalNumLevels = numLevels + numRoofLevels
-        minLevel = footprint.minLevel
+        totalNumLevels = footprint.totalNumLevels
+        minLevel = item.minLevel
         top = None
         bottom = None
         begin = None
@@ -46,16 +47,26 @@ class LevelGroups:
             top.levelHeight = topHeight
             self.top = top
         # check if have the bottom
-        if not footprint.minHeight:
+        if not item.minHeight:
             bottomHeight = item.getStyleBlockAttr("bottomHeight")
             if bottomHeight is None:
                 bottomHeight = lh.bottomHeight
-            if item.building.altitudeDifference:
-                self.bottomGroup.levelHeight = item.building.altitudeDifference
+            if item.building.renderInfo.altitudeDifference:
+                self.bottomGroup.levelHeight = item.building.renderInfo.altitudeDifference
             if bottomHeight:
                 self.bottomGroup.levelHeight += bottomHeight
             if self.bottomGroup.levelHeight:
                 self.bottom = bottom = self.bottomGroup
+        
+        # We need to convert the negative level indices to the absolute (and positive) ones.
+        # If there is at least one element in the markup with the attribute <roof> equal to <True>,
+        # then <numLevels> will be added to the negative level index.
+        # Otherwise <totalNumLevels> will be to the negative level index.
+        # Note, that if an element in the markup has the attribute <roof> equal to <True> and
+        # a negative level index, than <totalNumLevels> will be added to that negative level index.
+        negativeLevelIndexBase = numLevels\
+            if sum(_item.styleBlock.roof for _item in item.markup) else\
+            totalNumLevels
         
         for _item in reversed(item.markup):
             styleBlock = _item.styleBlock
@@ -71,32 +82,41 @@ class LevelGroups:
                 index1, index2 = styleBlock.indices
                 
                 if index1 == index2:
-                    if index1 < 0:
-                        index1 += totalNumLevels
-                    elif styleBlock.roof:
-                        index1 += numLevels
-                    if index1 < minLevel:
+                    if styleBlock.roof:
+                        index1 += totalNumLevels if index1 < 0 else numLevels
+                    elif index1 < 0:
+                        index1 += negativeLevelIndexBase
+                    # sanity check
+                    if index1 < minLevel or index1 >= totalNumLevels:
                         continue
-                    group.index1 = index1
-                    group.index2 = index1
+                    group.index1 = group.index2 = index1
                     group.singleLevel = True
                 else:
-                    if index1 < 0:
-                        index1 += totalNumLevels
-                    elif styleBlock.roof:
-                        index1 += numLevels
-                    if index2 < 0:
-                        index2 += totalNumLevels
-                    elif styleBlock.roof:
-                        index2 += numLevels
+                    if styleBlock.roof:
+                        index1 += totalNumLevels if index1 < 0 else numLevels
+                        index2 += totalNumLevels if index2 < 0 else numLevels
+                    else:
+                        if index1 < 0:
+                            index1 += negativeLevelIndexBase
+                        if index2 < 0:
+                            index2 += negativeLevelIndexBase
                     # sanity check
                     if index2 < minLevel:
                         continue
                     elif index1 < minLevel:
                         index1 = minLevel
-                    group.index1 = index1
-                    group.index2 = index2
-                groupCounter += 1
+                    elif index1 >= totalNumLevels:
+                        continue
+                    elif index2 >= totalNumLevels:
+                        index2 = totalNumLevels-1
+                    
+                    if index1 == index2:
+                        group.index1 = group.index2 = index1
+                        group.singleLevel = True
+                    else:
+                        group.index1 = index1
+                        group.index2 = index2
+                
                 if begin:
                     if index1 > end.index2:
                         end.next = group
@@ -106,6 +126,10 @@ class LevelGroups:
                         pass
                 else:
                     begin = end = group
+                
+                groupCounter += 1
+                if groupCounter >= self.numGroups:
+                    break
         
         # Check if we need to split some level groups due to the different level height inside a level group
         if lh.levelHeight:
@@ -115,7 +139,7 @@ class LevelGroups:
                 if lh.groundLevelHeight and not minLevel:
                     if begin.singleLevel:
                         # override <buildingPart> for an item
-                        begin.buildingPart = "groundlevel"
+                        #begin.buildingPart = "groundlevel"
                         group = begin
                     else:
                         # split <begin>
@@ -123,7 +147,7 @@ class LevelGroups:
                         groupCounter += 1
                         group.item = begin.item
                         group.index1 = 0
-                        group.singleLevel = True
+                        group.makeSingleLevel()
                         group.next = begin
                         begin.prev = group
                         begin.index1 += 1
@@ -183,3 +207,7 @@ class LevelGroup:
             self.singleLevel = False
         if self.buildingPart:
             self.buildingPart = None
+    
+    def makeSingleLevel(self):
+        self.index2 = self.index1
+        self.singleLevel = True

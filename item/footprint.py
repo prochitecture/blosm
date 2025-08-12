@@ -1,6 +1,6 @@
+from building import BldgPolygon
 from . import Item
-from util.polygon import Polygon
-from action.volume.level_heights import LevelHeights
+from defs.base.level_heights import LevelHeights
 
 
 _facadeClassName = "Facade"
@@ -8,19 +8,18 @@ _facadeClassName = "Facade"
 
 class Footprint(Item):
     
-    def __init__(self, entranceAttr):
-        """
-        Args:
-            entranceAttr (str): A datta attribute for the entrance to look up in the polygon vertices.
-                Typically, it's "entrance" from OSM, that designates an etrance to the building.
-        """
-        super().__init__()
-        self.entranceAttr = entranceAttr
-        self.building = None
+    def __init__(self, bldgPart, building, styleBlock=None):
+        # <styleBlock> is the style block within the markup definition,
+        # if the footprint is generated through the markup definition
+        super().__init__(None, None, None, styleBlock)
+        self.bldgPart = bldgPart
+        if bldgPart:
+            self.polygon = bldgPart.polygon
+            self.element = bldgPart.element
+        self.building = building
         # all style blocks that define the style for the building
         self.buildingStyle = None
-        self.polygon = Polygon()
-        self.projections = []
+        self.projections = None
         self.minProjIndex = 0
         self.maxProjIndex = 0
         self.polygonWidth = 0.
@@ -34,46 +33,8 @@ class Footprint(Item):
         self.facadeStyle = None
         self.facades = []
         self.levelHeights = LevelHeights(self)
-        
-        if entranceAttr:
-            # indices of original <self.polygon> vertices containg <entranceAttr>
-            self.entranceVertexIndices = []
-            # Element index of <self.entranceAttrVertexMapping> is the index of
-            # a original polygon vertex
-            # Element is None if the related vertex doesn't contain <entranceAttr> OR
-            # the element index if the vertex is preserved after <self.polygon.removeStraightAngle(..)> OR
-            # index of the nearest remaing vertex if the original vertex was skippped
-            # after <self.polygon.removeStraightAngle(..)>
-            self.entranceAttrVertexMapping = []
-    
-    def init(self):
-        super().init()
-        self.building = None
-        self.buildingStyle = None
-        self.numRoofLevels = 0
-        self.minLevel = 0
-        self.lastLevelOffset = 0.
-        self.projections.clear()
-        self.facadeStyle = None
-        self.facades.clear()
-        self.levelHeights.init()
-
-    def clone(self):
-        item = self.__class__(self.entranceAttr)
-        # set item factory to be used inside <item.calculateMarkupDivision(..s)>
-        item.itemFactory = self.itemFactory
-        return item
-    
-    @classmethod
-    def getItem(cls, itemFactory, element, building, styleBlock=None):
-        # <styleBlock> is the style block within the markup definition,
-        # if the footprint is generated through the markup definition
-        item = itemFactory.getItem(cls)
-        item.init()
-        item.styleBlock = styleBlock
-        item.element = element
-        item.building = building
-        return item
+        # <self.rectangularWalls> defines if ALL walls in the volume extruded from the footprint are rectangles
+        self.rectangularWalls = False
     
     def attr(self, attr):
         return self.element.tags.get(attr)
@@ -120,88 +81,8 @@ class Footprint(Item):
             self.buildingStyle.styleBlocks.get(_facadeClassName)
         )
     
-    def classifyFacades(self, data):
-        # Definitions for the terms used below:
-        # Original polygon: <self.polygon> before <self.removeStraightAngle(..)>
-        
-        # First, we check if facades contains entrances
-        facades = self.facades
-        polygon = self.polygon
-        indices = polygon.indices
-        nodes = tuple( self.element.getNodes(data) )
-        numNodes = len(nodes)
-        
-        facadesWithEntrance = []
-        prevFacade = facades[-1]
-        _vertIndex = indices[prevFacade.edgeIndex]
-        for facade in facades:
-            if not facade.outer:
-                # The special case for the inner facades.
-                # For now we consider that they are side facades
-                facade.side = True
-                continue
-            # vertex index in the original polygon
-            vertIndex = indices[facade.edgeIndex]
-            # If <_vertIndex> and <vertIndex> are adjacent in the original polygon,
-            # <difference> is equal to 1, if some vertices were skipped by
-            # <self.removeStraightAngle(..)>, <difference> is more than 1.
-            if polygon.reversed:
-                difference = numNodes + _vertIndex - vertIndex\
-                    if _vertIndex < vertIndex else\
-                    _vertIndex - vertIndex
-            else:
-                difference = numNodes - _vertIndex + vertIndex\
-                    if vertIndex < _vertIndex else\
-                    vertIndex - _vertIndex
-            while difference != 1:
-                # getting the next vertex in the original polygon
-                _vertIndex = (_vertIndex-1 if _vertIndex else numNodes-1)\
-                    if polygon.reversed else\
-                    (_vertIndex+1) % numNodes
-                if nodes[_vertIndex].tags and nodes[_vertIndex].tags.get(self.entranceAttr):
-                    if prevFacade.numEntrances:
-                        prevFacade.numEntrances += 1
-                    else:
-                        prevFacade.numEntrances = 1
-                        facadesWithEntrance.append(prevFacade)
-                        # consider for now that a facade with a door is a front facade
-                        prevFacade.front = True
-                difference -= 1
-            if nodes[vertIndex].tags and nodes[vertIndex].tags.get(self.entranceAttr):
-                facade.numEntrances = 1
-                facadesWithEntrance.append(facade)
-                # consider for now that a facade with a door is a front facade
-                facade.front = True
-            prevFacade = facade
-            _vertIndex = vertIndex
-        
-        if not facadesWithEntrance:
-            # Consider that the facade corresponding to the longest edge of <self.polygon>
-            # has an entrance
-            maxEdgeIndex = polygon.maxEdgeIndex
-            if facades[0].edgeIndex:
-                # treat the case if facade count in <facades> from an index greater than zero
-                maxEdgeIndex = polygon.n - facades[0].edgeIndex + maxEdgeIndex\
-                    if maxEdgeIndex < facades[0].edgeIndex  else\
-                    maxEdgeIndex-facades[0].edgeIndex
-            
-            facades[maxEdgeIndex].numEntrances = 1
-            # consider for now that a facade with a door is a front facade
-            facades[maxEdgeIndex].front = True
-            facadesWithEntrance.append(facades[maxEdgeIndex])
-        # Next, find back facades. We consider that a back facade has a normal opposite to
-        # the main front facade. If there are more than two front facades, we take the longest
-        # of them as the main front facade.
-        backNormal = -(
-            facadesWithEntrance[0].normal\
-            if len(facadesWithEntrance) == 1 else\
-            max(facadesWithEntrance, key = lambda facade: facade.width).normal
-        )
-        
-        # Next, mark the remaining facades as back or side
-        for facade in facades:
-            if facade.outer and not facade.front:
-                if facade.normal.dot(backNormal) > 0.98:
-                    facade.back = True
-                else:
-                    facade.side = True
+    def createPolygon(self, lineString, manager):
+        """
+        Create and set <self.polygon>. Used only for some exotic cases.
+        """
+        self.polygon = BldgPolygon(lineString, manager, self.building)

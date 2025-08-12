@@ -14,7 +14,7 @@ class ItemRendererMixin:
     
     def getCladdingMaterialId(self, item, claddingTextureInfo):
         return claddingTextureInfo["name"]
-
+    
     def createCladdingMaterial(self, materialName, claddingTextureInfo):
         materialTemplate = self.getMaterialTemplate(
             _claddingMaterialTemplateName
@@ -38,7 +38,7 @@ class ItemRendererMixin:
     def setVertexColor(self, item, face):
         color = item.getCladdingColor()
         if color:
-            self.r.setVertexColor(face, color, self.r.layer.vertexColorLayerNameCladding)
+            self.r.setVertexColor(face, color, item.building.element.l, item.building.element.l.vertexColorLayerNameCladding)
     
     def getCladdingTextureInfo(self, item):
         return self._getCladdingTextureInfo(item)
@@ -69,6 +69,14 @@ class ItemRendererMixin:
                     "Cladding"
                 )
                 setTextureSize(claddingTextureInfo, image)
+            elif facadeTextureInfo.get("specularMapName"):
+                # specular map
+                setImage(
+                    facadeTextureInfo["specularMapName"],
+                    getPath(self.r, facadeTextureInfo["path"]),
+                    nodes,
+                    "Specular Map"
+                )
         
         setTextureSize2(facadeTextureInfo, materialName, "Main")
         if claddingTextureInfo:

@@ -1,14 +1,13 @@
-from .. import ItemRenderer
-from util import zAxis
+from . import ItemRendererTexture
+from mathutils import Vector
 
 
-class RoofFlat(ItemRenderer):
+class RoofFlat(ItemRendererTexture):
     
     def render(self, roofItem):
-        building = roofItem.building
         face = self.r.createFace(
-            building,
-            range(roofItem.firstVertIndex, roofItem.firstVertIndex+roofItem.footprint.polygon.n)
+            roofItem.footprint,
+            range(roofItem.firstVertIndex, roofItem.firstVertIndex+roofItem.footprint.polygon.numEdges)
         )
         
         cl = roofItem.getStyleBlockAttr("cl")
@@ -16,33 +15,44 @@ class RoofFlat(ItemRenderer):
             self.renderClass(roofItem, cl, face, None)
         else:
             self.renderCladding(roofItem, face, None)
+
+        if self.app.preferMesh:
+            area = face.calc_area()
+            # set attributes
+            roofItem.building.element.l.attributeValuesFlatRoof.append((
+                False, # triangulate
+                # subdivide_level
+                0 if area <= 50. else (
+                    1 if 50. < area <= 500. else (
+                        2 if 500. < area < 2000. else 3
+                    )
+                )
+            ))
     
     def setCladdingUvs(self, roofItem, face, claddingTextureInfo, uvs):
         textureWidthM = claddingTextureInfo["textureWidthM"]
         textureHeightM = textureWidthM * claddingTextureInfo["textureSize"][1] / claddingTextureInfo["textureSize"][0]
         
         polygon = roofItem.footprint.polygon
-        verts = polygon.allVerts
-        indices = polygon.indices
         
         # Arrange the texture along the longest edge of <polygon>,
         # so the longest edges surves as u-axis for the texture
-        maxEdgeIndex = polygon.maxEdgeIndex
-        offset = verts[indices[maxEdgeIndex]]
-        uVec = (verts[indices[maxEdgeIndex+1]] - offset)
-        uVec.normalize()
-        vVec = zAxis.cross(uVec)
+        uVec = polygon.getLongestVector()
+        offset = uVec.v1
+        uVec = uVec.unitVector
+        vVec = Vector( (-uVec[1], uVec[0]) )
 
         self.r.setUvs(
             face,
             # a generator!
             (
                 (
-                    (verts[indices[i]]-offset).dot(uVec)/textureWidthM,
-                    (verts[indices[i]]-offset).dot(vVec)/textureHeightM
-                ) for i in range(polygon.n)
+                    (vector.v2-offset).dot(uVec)/textureWidthM,
+                    (vector.v2-offset).dot(vVec)/textureHeightM
+                ) for vector in polygon.getVectors()
             ),
-            self.r.layer.uvLayerNameCladding
+            roofItem.building.element.l,
+            roofItem.building.element.l.uvLayerNameCladding
         )
     
     def setClassUvs(self, item, face, uvs, texUl, texVb, texUr, texVt):

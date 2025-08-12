@@ -1,5 +1,6 @@
 import os
 import bpy
+from util import rgbToHex
 from util.blender_extra.material import createMaterialFromTemplate, setImage
 from ...util import setTextureSize, setTextureSize2, getPath
 
@@ -13,9 +14,12 @@ class ItemRendererMixin:
     A mixin class
     """
     
+    def getAssetType(self):
+        return "texture"
+    
     def getCladdingMaterialId(self, item, claddingTextureInfo):
         color = self.getCladdingColorHex(item)
-        return "%s_%s%s" % (color, claddingTextureInfo["material"], os.path.splitext(claddingTextureInfo["name"])[1])\
+        return "%s_%s%s" % (color, claddingTextureInfo["cladding"], os.path.splitext(claddingTextureInfo["name"])[1])\
             if claddingTextureInfo and color\
             else claddingTextureInfo["name"]
     
@@ -62,11 +66,11 @@ class ItemRendererMixin:
         # remember the color for a future use in the next funtion call
         self.claddingColor = color
         # return a hex string
-        return "{:02x}{:02x}{:02x}".format(round(255*color[0]), round(255*color[1]), round(255*color[2]))
+        return rgbToHex(color)
     
     def getTextureFilepath(self, materialName):
         textureFilename = "baked_%s" % materialName
-        textureDir = os.path.join(self.r.app.dataDir, _textureDir)
+        textureDir = os.path.join(self.app.dataDir, _textureDir)
         return textureFilename, textureDir, os.path.join(textureDir, textureFilename)
     
     def createMaterialFromTemplate(self, materialName, textureFilepath):

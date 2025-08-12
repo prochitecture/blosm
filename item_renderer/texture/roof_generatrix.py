@@ -1,5 +1,6 @@
 import math
-from .. import ItemRenderer
+from mathutils import Vector
+from . import ItemRendererTexture
 from ..util import initUvAlongPolygonEdge
 from grammar import smoothness
 from util import zAxis
@@ -36,7 +37,7 @@ generatrix_onion =(
 )
 
 
-class RoofGeneratrix(ItemRenderer):
+class RoofGeneratrix(ItemRendererTexture):
     
     def __init__(self, generatrix, basePointPosition, exportMaterials=False):
         super().__init__(exportMaterials)
@@ -62,8 +63,7 @@ class RoofGeneratrix(ItemRenderer):
         gen = self.generatrix
         footprint = roofItem.footprint
         polygon = footprint.polygon
-        building = roofItem.building
-        verts = building.verts
+        verts = footprint.building.renderInfo.verts
         # the index of the first vertex of the polygon that defines the roof base
         firstVertIndex = roofItem.firstVertIndex
         
@@ -72,9 +72,9 @@ class RoofGeneratrix(ItemRenderer):
         if self.basePointPosition == MiddleOfTheLongesSide:
             center = polygon.middleOfTheLongestSide(footprint.roofVerticalPosition)
         else:
-            center = polygon.centerBB(footprint.roofVerticalPosition)
+            center = polygon.centerBB3d(footprint.roofVerticalPosition)
         
-        n = polygon.n
+        n = polygon.numEdges
         numRows = len(self.generatrix)
         if self.hasCenter:
             numRows -= 1
@@ -89,11 +89,13 @@ class RoofGeneratrix(ItemRenderer):
             # create a vertex at the center
             verts.append(center + gen[-1][1]*roofHeight*zAxis)
         
-        for pi in range(n-1):
+        vectors = polygon.getVectors()
+        
+        for pi,vector in zip(range(n-1), vectors):
             # Create a petal of quads, i.e. the quads are created along the generatrix
             
             # <uVec> is a unit vector along the base edge
-            uVec, uv0, uv1 = initUvAlongPolygonEdge(polygon, pi, pi+1)
+            uVec, uv0, uv1 = initUvAlongPolygonEdge(vector)
             
             # The quad for the first row
             uv0, uv1 = self.createFace(
@@ -125,7 +127,7 @@ class RoofGeneratrix(ItemRenderer):
         # Create the closing petal of quads
         
         # <uVec> is a unit vector along the base edge
-        uVec, uv0, uv1 = initUvAlongPolygonEdge(polygon, -1, 0)
+        uVec, uv0, uv1 = initUvAlongPolygonEdge(next(vectors))
         # The quad for first row
         uv0, uv1 = self.createFace(
             roofItem,
@@ -165,14 +167,13 @@ class RoofGeneratrix(ItemRenderer):
         firstVertIndex = roofItem.firstVertIndex
         
         roofHeight = footprint.roofHeight
-        roofVerticalPosition = footprint.roofVerticalPosition
 
         if self.basePointPosition == MiddleOfTheLongesSide:
             center = polygon.middleOfTheLongestSide(footprint.roofVerticalPosition)
         else:
             center = polygon.centerBB(footprint.roofVerticalPosition)
         
-        n = polygon.n
+        n = polygon.numEdges
         numRows = len(self.generatrix)
         if self.hasCenter:
             numRows -= 1
@@ -246,18 +247,20 @@ class RoofGeneratrix(ItemRenderer):
             )
     
     def createFace(self, roofItem, smooth, indices, uVec, uv0, uv1):
-        face = self.r.createFace(roofItem.building, indices)
+        face = self.r.createFace(roofItem.footprint, indices)
         if smooth:
             face.smooth = smooth
         
         # assign UV-coordinates
         isQuad = len(indices)==4
-        verts = roofItem.building.verts
+        verts = roofItem.footprint.building.renderInfo.verts
         if isQuad:
             vec3 = verts[indices[3]]-verts[indices[0]]
+            vec3 = Vector((vec3[0], vec3[1]))
             vec3u = vec3.dot(uVec)
             uv3 = (vec3u+uv0[0], (vec3 - vec3u*uVec).length+uv0[1])
         vec2 = verts[indices[2]]-verts[indices[0]]
+        vec2 = Vector((vec2[0], vec2[1]))
         vec2u = vec2.dot(uVec)
         uv2 = (vec2u+uv0[0], (vec2 - vec2u*uVec).length+uv0[1])
         

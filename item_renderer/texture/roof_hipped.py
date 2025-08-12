@@ -1,14 +1,12 @@
-from .. import ItemRenderer
+from . import ItemRendererTexture
 
 
-class RoofHipped(ItemRenderer):
+class RoofHipped(ItemRendererTexture):
         
     def render(self, roofItem):
-        building = roofItem.building
-        
         for roofSide in roofItem.roofSides:
             face = self.r.createFace(
-                building,
+                roofItem.footprint,
                 roofSide.indices
             )
             
