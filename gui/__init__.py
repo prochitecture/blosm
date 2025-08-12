@@ -862,6 +862,12 @@ class BlosmProperties(bpy.types.PropertyGroup):
         description = "Import railways",
         default = False
     )
+
+    aviation: bpy.props.BoolProperty(
+        name = "Import aviation infrastructure",
+        description = "Import aviation infrastructure",
+        default = False
+    )
     
     defaultRoofShape: bpy.props.EnumProperty(
         items = (("flat", "flat", "flat shape"), ("gabled", "gabled", "gabled shape")),
