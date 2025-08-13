@@ -133,7 +133,7 @@ class BuildingRenderer(Renderer2d):
             self.renderElement(outline, building, osm)
         if parts:
             for part in parts:
-                self.renderElement(part, building, osm)
+                self.renderElement(part.element, building, osm)
         
         # cleanup <self.offset> and <self.offsetZ>
         if not app.singleObject:
@@ -148,7 +148,7 @@ class BuildingRenderer(Renderer2d):
         roof = self.roofs.get(element.tags.get("roof:shape"), self.defaultRoof)
         if element.t is parse.multipolygon:
             # check if the multipolygon has holes
-            if element.hasInner():
+            if element.hasInner:
                 # flat roof is always for multipolygons with holes
                 roof = self.flatRoofMulti
                 data = None

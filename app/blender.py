@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import sys
 from . import BaseApp, AppType
 from .asset_store import AssetStore
+from util.polygon import PolygonOLD
 
 if "bpy" in sys.modules:
     import os, json, math, gzip, struct
@@ -176,6 +177,9 @@ class BlenderApp(BaseApp):
     
     def initOsm(self, op, context):
         super().initOsm()
+
+        # tangent to check if an angle of the polygon is straight
+        PolygonOLD.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
         
         addonName = self.addonName
         addon = context.scene.blosm
@@ -432,7 +436,7 @@ class BlenderApp(BaseApp):
         self.renderers = []
         
         # tangent to check if an angle of the polygon is straight
-        Polygon.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
+        PolygonOLD.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
     
     def setAttributes(self, context):
         """
