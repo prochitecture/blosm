@@ -1,7 +1,13 @@
 import os, math, ssl
 from urllib import request
 
-from util.polygon import Polygon
+from building import BldgPolygon
+from way.asset_store import AssetType
+
+
+class AppType:
+    commandLine = 1
+    blender = 2
 
 
 class BaseApp:
@@ -28,9 +34,6 @@ class BaseApp:
     def initOsm(self):
         self.baseInit()
         
-        # a data attribute to mark a building entrance
-        self.buildingEntranceAttr = "entrance"
-        
         # <self.logger> may be set in <setup(..)>
         self.logger = None
         
@@ -52,7 +55,7 @@ class BaseApp:
         self.layerKwargs = {}
         
         # tangent to check if an angle of the polygon is straight
-        Polygon.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
+        BldgPolygon.straightAngleSin = math.sin(math.radians( abs(180.-self.straightAngleThreshold) ))
     
     def download(self, url, filepath, data=None):
         print("Downloading the file from %s..." % url)
@@ -132,19 +135,32 @@ class BaseApp:
             raise Exception("The directory for the asset package %s doesn't exist" % assetPackageDir)
         self.assetPackageDir = assetPackageDir
         
-        pmlFilepath = os.path.join(assetPackageDir, "style/building/main.pml")
-        if not os.path.isfile(pmlFilepath):
-            raise Exception("%s isn't a valid path for the PML file" % pmlFilepath)
-        self.pmlFilepath = pmlFilepath
+        if self.buildings and self.type != AppType.commandLine:
+            pmlFilepath = os.path.join(assetPackageDir, "style/building/main.pml")
+            if not os.path.isfile(pmlFilepath):
+                raise Exception("%s isn't a valid path for the PML file" % pmlFilepath)
+            self.pmlFilepathBuilding = pmlFilepath
+            
+            assetInfoFilepath = os.path.join(assetPackageDir, "asset_info/building.json")
+            if self.enableExperimentalFeatures and self.importForExport:
+                _assetInfoFilepath = "%s_export.json" % assetInfoFilepath[:-5]
+                if os.path.isfile(_assetInfoFilepath):
+                    assetInfoFilepath = _assetInfoFilepath
+            if not os.path.isfile(assetInfoFilepath):
+                raise Exception("%s isn't a valid path for the asset info file" % assetInfoFilepath)
+            self.assetInfoFilepath = assetInfoFilepath
         
-        assetInfoFilepath = os.path.join(assetPackageDir, "asset_info/asset_info.json")
-        if self.enableExperimentalFeatures and self.importForExport:
-            _assetInfoFilepath = "%s_export.json" % assetInfoFilepath[:-5]
-            if os.path.isfile(_assetInfoFilepath):
-                assetInfoFilepath = _assetInfoFilepath
-        if not os.path.isfile(assetInfoFilepath):
-            raise Exception("%s isn't a valid path for the asset info file" % assetInfoFilepath)
-        self.assetInfoFilepath = assetInfoFilepath
+        if self.highways or self.railways or self.aviation:
+            pmlFilepath = os.path.join(assetPackageDir, "style/street/main.pml")
+            if not os.path.isfile(pmlFilepath):
+                raise Exception("%s isn't a valid path for the PML file" % pmlFilepath)
+            self.pmlFilepathStreet = pmlFilepath
+            
+            if self.type != AppType.commandLine:
+                assetInfoFilepathStreet = os.path.join(assetPackageDir, "asset_info/street.json")
+                if not os.path.isfile(assetInfoFilepathStreet):
+                    raise Exception("%s isn't a valid path for the asset info file" % assetInfoFilepathStreet)
+                self.assetInfoFilepathStreet = assetInfoFilepathStreet
     
     def loadSetupScript(self, setupScript):
         setupScript = os.path.realpath(setupScript)
@@ -159,7 +175,7 @@ class BaseApp:
             module = imp.load_module(moduleName, _file, _pathname, _description)
             _file.close()
             return module.setup
-        except Exception:
+        except Exception as e:
             raise Exception(
                 "Unable to execute the setup script! See the error message in the Blender console!"
             )
@@ -167,6 +183,11 @@ class BaseApp:
     def process(self):
         logger = self.logger
         if logger: logger.processStart()
+        
+        # get Blender coordinates of the extent of the area of interest
+        data = self.managers[0].data
+        self.minX, self.minY = self.projection.fromGeographic(data.minLat, data.minLon)
+        self.maxX, self.maxY = self.projection.fromGeographic(data.maxLat, data.maxLon)
         
         for m in self.managers:
             m.process()
@@ -176,21 +197,19 @@ class BaseApp:
     def createLayers(self, osm):
         layerIndices = self.layerIndices
         
-        # create mapping between user or GUI layer names and the layer ids used in the managers
-        self.createLayerMapping()
-        
         if osm.conditions:
             # go through <osm.conditions> to fill <layerIndices> and <self.layers> with values
             for c in osm.conditions:
                 manager = c[1]
                 layerId = c[3]
                 if layerId and not layerId in layerIndices:
-                    if manager and manager.layerClass:
-                        manager.createLayer(
-                            layerId,
-                            self,
-                            **self.layerKwargs
-                        )
+                    if manager:
+                        if manager.layerClass:
+                            manager.createLayer(
+                                layerId,
+                                self,
+                                **self.layerKwargs
+                            )
                     else:  
                         self.createLayer(
                             layerId,
@@ -212,12 +231,13 @@ class BaseApp:
                 layerId = c[3]
                 if layerId and not layerId in layerIndices:
                     if manager:
-                        manager.createNodeLayer(
-                            layerId,
-                            self,
-                            **self.layerKwargs
-                        )
-                    else:  
+                        if manager.nodeLayerClass:
+                            manager.createNodeLayer(
+                                layerId,
+                                self,
+                                **self.layerKwargs
+                            )
+                    else:
                         self.createLayer(
                             layerId,
                             self.nodeLayerClass,
@@ -229,33 +249,6 @@ class BaseApp:
                 (c[0], c[1], c[2], None if c[3] is None else self.getLayer(c[3])) \
                 for c in osm.nodeConditions
             )
-        
-        for layer in self.layers:
-            # set layer if used in the managers
-            if layer.id in self.layerMapping:
-                layer.mlId = self.layerMapping[layer.id]
-            
-    def createLayerMapping(self):
-        """
-        Create mapping between user or GUI layer names and the layer ids used in the managers
-        """
-        self.layerMapping = dict(
-            roads_motorway = "motorway",
-            roads_trunk = "trunk",
-            roads_primary = "primary",
-            roads_secondary = "secondary",
-            roads_tertiary = "tertiary",
-            roads_unclassified = "unclassified",
-            roads_residential = "residential",
-            paths_footway = "footway",
-            roads_service = "service",
-            roads_pedestrian = "pedestrian",
-            roads_track = "track",
-            paths_steps = "steps",
-            paths_cycleway = "cycleway",
-            paths_bridleway = "bridleway",
-            roads_other = "other"
-        )
 
     def initLayers(self):
         for layer in self.layers:

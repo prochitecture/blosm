@@ -1,6 +1,6 @@
 import os, argparse
 
-from . import BaseApp
+from . import BaseApp, AppType
 from util.transverse_mercator import TransverseMercator
 
 
@@ -9,8 +9,6 @@ class Layer:
     def __init__(self, layerId, app):
         self.app = app
         self.id = layerId
-        # a layer id used in the managers; <mlId> stands for "layer id used in the managers"
-        self.mlId = None
     
     def init(self):
         pass
@@ -19,6 +17,7 @@ class Layer:
 class CommandLineApp(BaseApp):
     
     def __init__(self):
+        self.type = AppType.commandLine
         super().__init__()
         
         self.projection = None
@@ -35,9 +34,14 @@ class CommandLineApp(BaseApp):
         self.initArgParser()
         
         self.mode = BaseApp.twoD
+        
+        self.assetPackage = "default"
     
     def initArgParser(self):
         self.argParser = argParser = argparse.ArgumentParser()
+        # a parser for <self.unparsedArgs>
+        self.argParserExtra = argparse.ArgumentParser()
+        
         argParser.add_argument("--coords", help="Coordinates of the area of interest, for example -78.3105468750,39.1982386,-77.5854492188,39.6057213001")
         argParser.add_argument("--osmFilepath", help="Path to an OSM file")
         argParser.add_argument("--osmDir", help="A directory for the downloaded OSM files")
@@ -49,6 +53,16 @@ class CommandLineApp(BaseApp):
         argParser.add_argument("--water", action='store_true', help="Import water objects", default=False)
         argParser.add_argument("--forests", action='store_true', help="Import forests", default=False)
         argParser.add_argument("--vegetation", action='store_true', help="Import vegetation", default=False)
+        argParser.add_argument("--aviation", action='store_true', help="Import aviation infrastructure", default=False)
+        
+        # arguments for an overlay
+        argParser.add_argument("--overlayDir", help="A directory for overlay images")
+        argParser.add_argument("--overlayType", help="Type of an overlay. Possible values: arcgis-satellite, mapbox-satellite, osm-mapnik, mapbox-streets, custom")
+        argParser.add_argument("--overlayUrl", help="URL template for the custom overlay type")
+        argParser.add_argument("--overlayAccessToken", help="An access token for some overlay providers (ArcGIS, Mapbox)")
+        argParser.add_argument("--maxNumTiles", type=int, default=256, help="Maximum number of overlay tiles")
+        argParser.add_argument("--showOverlayOnly", action='store_true', help="Show overlay only", default=False)
+        
         
         args, self.unparsedArgs = argParser.parse_known_args()
         args = vars(args)
@@ -58,13 +72,16 @@ class CommandLineApp(BaseApp):
         if self.coords:
             self.minLon, self.minLat, self.maxLon, self.maxLat =\
                 map(lambda coord: float(coord), self.coords.split(',') )
+        
+        if self.overlayType:
+            self.initOverlay()
     
     def parseArgs(self):
         """
         Parse <self.unparsedArgs>
         """
         if self.unparsedArgs:
-            args = vars( self.argParser.parse_args(self.unparsedArgs) )
+            args = vars( self.argParserExtra.parse_args(self.unparsedArgs) )
             for arg in args:
                 setattr(self, arg, args[arg])
     
@@ -97,3 +114,22 @@ class CommandLineApp(BaseApp):
     def clean(self):
         self.managers = None
         self.renderers = None
+    
+    def initOverlay(self):
+        from overlay.command_line import OverlayMixin
+        
+        overlay = self.setOverlay(OverlayMixin)
+        overlay.originAtTop = True
+        if overlay.imageExtension in ('jpg', 'jpeg'):
+            # jpg-images don't have the opacity component
+            overlay.numComponents = 3
+        overlay.overlayDir = os.path.join( self.overlayDir, overlay.getOverlaySubDir() )
+    
+    def getArcgisAccessToken(self):
+        return self.overlayAccessToken
+    
+    def getMapboxAccessToken(self):
+        return self.overlayAccessToken
+    
+    def print(self, value):
+        print(value)

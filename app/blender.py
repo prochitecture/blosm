@@ -17,7 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import sys
-from . import BaseApp
+from . import BaseApp, AppType
+from .asset_store import AssetStore
+from util.polygon import PolygonOLD
+
 if "bpy" in sys.modules:
     import os, json, math, gzip, struct
     import bpy
@@ -116,6 +119,7 @@ class BlenderApp(BaseApp):
     voidSubstitution = 0
     
     def __init__(self):
+        self.type = AppType.blender
         super().__init__()
         
         # path to the top directory of the addon
@@ -143,6 +147,12 @@ class BlenderApp(BaseApp):
         self.polygonLayer = MeshLayer
         self.nodeLayer = NodeLayer
         self.wayLayer = CurveLayer
+        
+        # If <True>: render a building immediately after extruding its volume.
+        # If <False>: first extrude all buildings and only then render them
+        self.renderAfterExtrude = False
+        
+        self.preferMesh = True
     
     def getAssetsDir(self, context):
         addonName = self.addonName
@@ -167,6 +177,9 @@ class BlenderApp(BaseApp):
     
     def initOsm(self, op, context):
         super().initOsm()
+
+        # tangent to check if an angle of the polygon is straight
+        PolygonOLD.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
         
         addonName = self.addonName
         addon = context.scene.blosm
@@ -227,6 +240,12 @@ class BlenderApp(BaseApp):
                 )
             
             self.setAssetPackagePaths()
+
+            if self.buildings:
+                self.assetStore = AssetStore(self.assetInfoFilepath)
+            
+                if self.preferMesh and not self.assetStore.hasMesh:
+                    self.preferMesh = False
         
         if self.mode == BaseApp.twoD and self.gnSetup2d != '-':
             filepath = os.path.realpath(
@@ -441,7 +460,7 @@ class BlenderApp(BaseApp):
         self.renderers = []
         
         # tangent to check if an angle of the polygon is straight
-        Polygon.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
+        PolygonOLD.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
     
     def setAttributes(self, context):
         """
@@ -458,7 +477,6 @@ class BlenderApp(BaseApp):
         Sets <self.dataDir>, i.e. path to data
         """
         prefs = context.preferences.addons
-        j = os.path.join
         if addonName in prefs:
             dataDir = prefs[addonName].preferences.dataDir
             if not dataDir:
@@ -469,22 +487,34 @@ class BlenderApp(BaseApp):
             self.dataDir = dataDir
         else:
             # set <self.dataDir> to basePath/../../../data (development version)
-            self.dataDir = os.path.realpath( j( j( j( j(basePath, os.pardir), os.pardir), os.pardir), "data") )
+            self.dataDir = os.path.realpath(os.path.join(
+                basePath, os.pardir, os.pardir, os.pardir, "data"
+            ))
     
     def render(self):
         logger = self.logger
         if logger: logger.renderStart()
+
+        Renderer.begin(self)
         
         for r in self.renderers:
             r.prepare()
         
-        Renderer.begin(self)
         for m in self.managers:
             m.render()
+        
         Renderer.end(self)
         
         for m in self.managers:
             m.renderExtra()
+
+        # finalize layers
+        if self.singleObject:
+            for layer in self.layers:
+                layer.finalize()
+        # finalize renderers
+        for r in self.renderers:
+            r.finalize()
         
         for r in self.renderers:
             r.cleanup()
@@ -565,7 +595,6 @@ class BlenderApp(BaseApp):
         if not nodeGroupName in bpy.data.node_groups:
             appendNodeGroupFromFile(self.baseAssetPath, nodeGroupName)
         addGeometryNodesModifier(obj, bpy.data.node_groups[nodeGroupName], "Terrain Base")
-        
         
         # force smooth shading
         bpy.ops.object.shade_smooth()
