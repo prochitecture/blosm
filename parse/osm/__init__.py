@@ -187,7 +187,7 @@ class Osm:
                 # If <self.projection> isn't set,
                 # it means we need to set <self.projection> here,
                 # using <bounds> from the OSM file
-                if not self.projection:
+                if not self.projection or forceExtentCalculation:
                     # also set the area extent
                     self.minLat = float(attrs["minlat"])
                     self.maxLat = float(attrs["maxlat"])
@@ -292,6 +292,11 @@ class Osm:
         self.lon = lon
         self.app.setProjection(lat, lon)
         self.projection = self.app.projection
+    
+    def haveSamePosition(self, nodeId1, nodeId2):
+        node1 = self.nodes[nodeId1]
+        node2 = self.nodes[nodeId2]
+        return node1.lat == node2.lat and node1.lon == node2.lon
 
 
 from .relation.multipolygon import Multipolygon
