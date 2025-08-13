@@ -26,4 +26,11 @@ zAxis = Vector((0., 0., 1.))
 def zeroVector():
     return Vector((0., 0., 0.))
 
+def zeroVector2d():
+    return Vector((0., 0.))
+
 zero = .001 # 1mm
+
+
+def rgbToHex(color):
+    return "{:02x}{:02x}{:02x}".format(round(255.*color[0]), round(255.*color[1]), round(255.*color[2]))
