@@ -113,6 +113,7 @@ class BuildingRendererNew(Renderer):
             # a Blender collection for instances on the points cloud
             self.buildingAssetsCollection = bpy.data.collections[_collectionName]
             
+            """" FIXME: uncomment the code below or remove it if you don't need Geometry Nodes setup for buildings
             # check if the Geometry Nodes setup with the name "blosm_gn_building" is already available
             _gnName, _gnCollection = "blosm_gn_building", "Collection Info"
             node_groups = bpy.data.node_groups
@@ -127,6 +128,7 @@ class BuildingRendererNew(Renderer):
                 os.path.join(os.path.dirname(self.app.baseAssetPath), "flat_roof_objects.blend"),
                 "blosm_flat_roof_objects"
             )
+            """
         
         if self.app.singleObject:
             for layer in self.app.layers:
