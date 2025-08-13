@@ -29,8 +29,6 @@ class Layer:
     def __init__(self, layerId, app):
         self.app = app
         self.id = layerId
-        # a layer id used in the managers; <mlId> stands for "layer id used in the managers"
-        self.mlId = None
         self.singleObject = app.singleObject
         # instance of BMesh
         self.bm = None
@@ -69,6 +67,9 @@ class Layer:
             )
             self.parent = parent
         return parent
+    
+    def init(self):
+        return
 
 
 class MeshLayer(Layer):
@@ -123,21 +124,25 @@ class MeshLayer(Layer):
     def getDefaultSwOffset(self, app):
         return app.swOffset
     
-    def prepare(self, instance):
-        instance.bm = getBmesh(instance.obj)
-        instance.materialIndices = {}
+    def prepare(self):
+        self.bm = getBmesh(self.obj)
+        self.materialIndices = {}
     
-    def finalizeBlenderObject(self, obj):
+    def finalize(self):
         """
         Slice Blender MESH object, add modifiers
         """
-        app = self.app
-        terrain = app.terrain
-        if terrain and self.sliceMesh:
-            self.slice(obj, terrain, app)
-        if self.modifiers:
-            self.addBoolenModifier(obj, terrain.envelope)
-            addShrinkwrapModifier(obj, terrain.terrain, self.swOffset)
+        obj = self.obj
+        if obj:
+            setBmesh(obj, self.bm)
+            
+            app = self.app
+            terrain = app.terrain
+            if terrain and self.sliceMesh:
+                self.slice(obj, terrain, app)
+            if self.modifiers:
+                self.addBoolenModifier(obj, terrain.envelope)
+                addShrinkwrapModifier(obj, terrain.terrain, self.swOffset)
     
     def addBoolenModifier(self, obj, operand):
         m = obj.modifiers.new(name="Boolean", type='BOOLEAN')

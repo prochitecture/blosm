@@ -65,18 +65,19 @@ class Renderer:
                     collection = self.collection,
                     parent = None
                 )
-                layer.prepare(layer)
+                layer.prepare()
             self.bm = layer.bm
             self.obj = layer.obj
             self.materialIndices = layer.materialIndices
         else:
-            self.obj = self.createBlenderObject(
+            self.obj = layer.obj = self.createBlenderObject(
                 self.getName(element),
                 self.offsetZ if self.offsetZ else (self.offset if self.offset else layer.location),
                 collection = layer.getCollection(self.collection),
                 parent = layer.getParent(layer.getCollection(self.collection))
             )
-            layer.prepare(self)
+            layer.prepare()
+            self.bm = layer.bm
     
     def renderLineString(self, element, data):
         pass
@@ -88,35 +89,23 @@ class Renderer:
         pass
     
     def postRender(self, element):
-        layer = self.layer
+        layer = element.l
         if not layer.singleObject:
-            obj = self.obj
-            # finalize BMesh
-            setBmesh(obj, self.bm)
             # assign OSM tags to the blender object
-            assignTags(obj, element.tags)
-            layer.finalizeBlenderObject(obj)
+            assignTags(layer.obj, element.tags)
+            layer.finalize()
     
     @classmethod
     def end(self, app):
-        for layer in app.layers:
-            if layer.bm:
-                setBmesh(layer.obj, layer.bm)
-        
-        #bpy.context.scene.update()
-        # Go through <app.layers> once again after <bpy.context.scene.update()>
-        # to get correct results for <layer.obj.bound_box>
-        if not app.mode is app.realistic and app.singleObject:
-            for layer in app.layers:
-                if layer.obj:
-                    layer.finalizeBlenderObject(layer.obj)
-        
         self.join()
     
     def cleanup(self):
         terrain = self.app.terrain
         if terrain and terrain.terrain:
             terrain.cleanup()
+    
+    def finalize(self):
+        return
     
     @classmethod
     def join(self):
