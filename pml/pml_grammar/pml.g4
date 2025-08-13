@@ -62,7 +62,7 @@ function
     | 'bldgAttr' LPAREN string_literal RPAREN                   #BUILDATTR
     | 'random_normal' LPAREN NUMBER RPAREN                      #RANDN
     | 'random_weighted' nested_list                             #RANDW
-    | 'if' LPAREN conditional RPAREN (function | alternatives)  #COND
+    | 'if' LPAREN conditional RPAREN (function )                #COND
     | 'use_from' LPAREN IDENTIFIER RPAREN                       #USEFROM
     | 'per_building' LPAREN (function | alternatives) RPAREN    #PERBUILD
     | 'rgb' LPAREN NUMBER COMMA NUMBER COMMA NUMBER RPAREN      #RGB
@@ -91,7 +91,7 @@ spec_conditions
     ;
 
 spec_condition
-    : ('@roof' | 'all')          #SPEC_ROOF
+    : ('@roof' | '@all')        #SPEC_ROOF
     | NUMBER                    #SPEC_SINGLE
     | NUMBER COLON NUMBER       #SPEC_FULL_INDX
     | NUMBER COLON              #SPEC_LEFT_INDX
@@ -126,8 +126,8 @@ arith_expr
     ;
 
 arith_atom
-    : 'item' '.' IDENTIFIER                                 # ATOM_SINGLE
-    | 'item' '.' IDENTIFIER '.' IDENTIFIER                  # ATOM_SINGLE
+    : 'item' '.' IDENTIFIER ('.' IDENTIFIER)*               # ATOM_SINGLE
+    | 'item' '.' IDENTIFIER                                 # ATOM_SINGLE
     | 'item' '.' IDENTIFIER LBRACK STRING_LITERAL RBRACK    # ATOM_FROMATTR
     | 'item' LBRACK STRING_LITERAL RBRACK                   # ATOM_FROMATTR_SHORT
     | 'style' '.' IDENTIFIER                                # ATOM_STYLE
@@ -214,7 +214,7 @@ NOT         : 'not';
 IN          : 'in';
 
 IDENTIFIER
-    : [a-zA-Z]([a-zA-Z0-9_]|'-')*
+    : [a-zA-Z_]([a-zA-Z0-9_]|'-')*
     ;
 
 STRING_LITERAL
