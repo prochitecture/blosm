@@ -13,21 +13,14 @@ class Offset(Action):
         # <buildingsP> means "buildings from the parser"
         return
 
-    def do(self, building, itemClass, style, globalRenderer):
-        outline = building.outline
-        offset = Vector(
-            next(
-                outline.getOuterData(self.data) if outline.t is parse.multipolygon else outline.getData(self.data)
-            )
-        )
+    def do(self, building, style, globalRenderer):
+        element = building.element
+        renderInfo = building.renderInfo
         
-        layer = outline.l
-        globalRenderer.obj = globalRenderer.createBlenderObject(
-            globalRenderer.getName(outline),
-            offset+building.offset if building.offset else offset,
-            collection = layer.getCollection(globalRenderer.collection),
-            parent = layer.getParent( layer.getCollection(globalRenderer.collection) )
+        offset = next(
+            element.getOuterData(self.data) if element.t is parse.multipolygon else element.getData(self.data)
         )
-        layer.prepare(globalRenderer)
+        # <renderInfo.offsetVertex> could have been set in <action.terrain>
+        renderInfo.offsetBlenderObject = Vector( (offset[0], offset[1], renderInfo.offsetVertex[2]) ) if renderInfo.offsetVertex else Vector( (offset[0], offset[1], 0.) )
         
-        building.offset = -offset
+        renderInfo.offsetVertex = Vector( (-offset[0], -offset[1], 0.) )

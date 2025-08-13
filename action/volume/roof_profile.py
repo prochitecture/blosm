@@ -5,7 +5,7 @@ from item.facade import Facade
 from item.roof_profile import RoofProfile as ItemRoofProfile
 from .geometry.trapezoid import TrapezoidRV, TrapezoidChainedRV
 from .geometry.rectangle import RectangleFRA
-from util import zero, zAxis
+from util import zero
 
 
 # Use https://raw.githubusercontent.com/wiki/vvoovv/blosm/assets/roof_profiles.blend
@@ -80,17 +80,20 @@ class ProfiledVert:
     """
     A class represents a vertex belonging to RoofProfile.polygon projected on the profile
     """
-    def __init__(self, footprint, roof, i):
+    def __init__(self, footprint, roof, vector, i):
         """
         Args:
             footprint (item.footprint.Footprint): a <Footprint> item
             roof (RoofProfile): an instance of the class <RoofProfile>
+            vector (building.BldgVector): a vector that originates from the given polygon vertex to
+                the next polygon vertex
             i (int): index (between 0 and <footprint.polygon.n-1>) of the polygon vertex
         """
+        self.vector = vector
         self.i = i
         # the related index (in <verts>) of the polygon vertex in the basement of the volume
         vertBasementIndex = roof.vertOffset + i
-        verts = footprint.building.verts
+        verts = footprint.building.renderInfo.verts
         proj = footprint.projections
         p = roof.profile
         d = footprint.direction
@@ -490,9 +493,10 @@ class RoofProfile(Roof):
         super().__init__("RoofProfile", data, volumeAction, itemRenderers)
         self.hasGable = True
         # geometries for wall faces
-        self.geometryRectangle = RectangleFRA()
-        self.geometryTrapezoid = TrapezoidRV()
         self.geometryTrapezoidChained = TrapezoidChainedRV()
+        self.geometryRectangle = self.geometryTrapezoidChained.geometryRectangle
+        self.geometryTrapezoidL = self.geometryTrapezoidChained.geometryTrapezoidL # Left is lower than right
+        self.geometryTrapezoidR = self.geometryTrapezoidChained.geometryTrapezoidR # Right is lower than left
         
         self.hasRidge = True
         
@@ -531,7 +535,7 @@ class RoofProfile(Roof):
         profileQ.append(index)
         self.profileQ = profileQ
         
-        # where the vertices for the volume start in <footprint.building.verts>
+        # where the vertices for the volume start in <footprint.building.renderInfo.verts>
         self.vertOffset = 0
         
         self._initUv()
@@ -568,8 +572,8 @@ class RoofProfile(Roof):
         # the lenths of profile parts
         self.partLength = [0. for i in range(self.lastProfileIndex)]
     
-    def init(self, footprint, coords):
-        roofItem = super().init(footprint, coords)
+    def init(self, footprint):
+        roofItem = super().init(footprint)
         
         if not footprint.valid:
             return
@@ -615,14 +619,15 @@ class RoofProfile(Roof):
             self.slots[i].reset()
     
     def getRoofItem(self, footprint):
-        return ItemRoofProfile.getItem(self.itemFactory, footprint)
+        return ItemRoofProfile(footprint)
     
-    def render(self, footprint, roofItem):
+    def extrude(self, footprint, roofItem):
         polygon = footprint.polygon
-        verts = footprint.building.verts
+        verts = footprint.building.renderInfo.verts
         self.vertOffset = len(verts)
         # vertices for the basement of the volume
-        verts.extend(v for v in polygon.verts)
+        minHeight = footprint.minHeight
+        verts.extend(Vector( (v[0], v[1], minHeight) ) for v in polygon.verts)
         
         slots = self.slots
         
@@ -634,17 +639,19 @@ class RoofProfile(Roof):
         # Start with the vertex from <polygon> with <x=0.> in the profile coordinate system;
         # the variable <i0> is needed to break the cycle below
         i = i0 = footprint.minProjIndex
+        vector = footprint.minProjVector
         # Create a profiled vertex out of the related basement vertex;
         # <pv> stands for profiled vertex
-        pv1 = pv0 = self.getProfiledVert(footprint, i)
+        pv1 = pv0 = self.getProfiledVert(footprint, vector, i)
         _pv = None
         while True:
             i = polygon.next(i)
             if i == i0:
                 # came to the starting vertex, so break the cycle
                 break
+            vector = vector.next
             # create a profiled vertex out of the related basement vertex
-            pv2 = self.getProfiledVert(footprint, i)
+            pv2 = self.getProfiledVert(footprint, vector, i)
             # The order of profiled vertices is <_pv>, <pv1>, <pv2>
             # Create in-between vertices located on the slots for the segment between <pv1> and <pv2>),
             # also form a wall face under the segment between <pv1> and <pv2>
@@ -685,18 +692,15 @@ class RoofProfile(Roof):
             slotR.trackUp(roofItem, slotIndex)
             slotL.trackDown(roofItem, slotIndex)
             self.onRoofForSlotCompleted(slotIndex)
-        
-        self.facadeRenderer.render(footprint, self.data)
-        self.roofRenderer.render(roofItem)
     
-    def getProfiledVert(self, footprint, i):
+    def getProfiledVert(self, footprint, vector, i):
         """
         A factory method to get an instance of the <ProfiledVert> class.
         
         The arguments of the method are the same as for the constructor
         of the <ProfiledVert> class.
         """
-        pv = ProfiledVert(footprint, self, i)
+        pv = ProfiledVert(footprint, self, vector, i)
         
         # the code below is needed for UV-mapping
         y = pv.y
@@ -745,7 +749,7 @@ class RoofProfile(Roof):
             pv2 (ProfiledVert): Defines the second vertex of the segment of <self.polygon> projected on the profile
             _pv (ProfiledVert): Precedes <pv1>
         """
-        verts = footprint.building.verts
+        verts = footprint.building.renderInfo.verts
         p = self.profile
         slots = self.slots
         # the current slot
@@ -953,12 +957,14 @@ class RoofProfile(Roof):
         if appendPv1:
             _wallIndices.append(pv1.vertIndex)
         
-        footprint.facades.append(Facade.getItem(
-            self,
-            footprint,
-            _wallIndices,
-            pv1.i # edge index
-        ))
+        footprint.facades.append(
+            Facade(
+                footprint,
+                _wallIndices,
+                pv1.vector,
+                self
+            )
+        )
         
         # append <pv2.vertIndex> to the last part of the current slot (i.e. to <slot.parts[-1]>)
         slot.append(pv2.vertIndex)
@@ -995,41 +1001,42 @@ class RoofProfile(Roof):
         """
     
     def initFacadeItem(self, item):
-        verts = item.building.verts
+        verts = item.building.renderInfo.verts
         indices = item.indices
         numVerts = len(indices)
         firstVert = verts[indices[0]]
-        # a vector along the bottom side of the trapezoid
-        bottomVec = verts[indices[1]] - firstVert
+        
         heightLeft = verts[indices[-1]][2] - firstVert[2]
         heightRight = verts[indices[2]][2] - verts[indices[1]][2]
         # facade item width
-        width = bottomVec.length
+        width = item.vector.length
         if numVerts == 4:
             if heightLeft == heightRight:
                 geometry = self.geometryRectangle
                 # flat vertices coordinates on the facade surface (i.e. on the rectangle)
                 uvs = geometry.getUvs(width, heightLeft)
             else:
-                geometry = self.geometryTrapezoid
+                geometry = self.geometryTrapezoidL if heightLeft < heightRight else self.geometryTrapezoidR
                 # flat vertices coordinates on the facade surface (i.e. on the trapezoid)
                 uvs = ( (0., 0.), (width, 0.), (width, heightRight), (0., heightLeft) )
         else:
             geometry = self.geometryTrapezoidChained
             # flat vertices coordinates on the facade surface (i.e. on the chained trapezoid)
-            unitBottomVec = bottomVec/width
+            unitBottomVec = item.vector.unitVector
             # Now flat vertices coordinates on the facade surface:
             # first the vertices at the bottom and the next vertex,
             # then the rest of the vertices but the last one,
             # and finally the last vertex adjoining the left vertex at the bottom
             # A sum of several Python tuples gives a single Python tuple
+            
+            # The following dot product is calculated in the code below:
+            # (verts[indices[i]]-firstVert)*unitBottomVec
             uvs =\
                 ((0., 0.), (width, 0.), (width, heightRight)) +\
-                tuple( ((verts[indices[i]]-firstVert).dot(unitBottomVec), verts[indices[i]][2]-firstVert[2]) for i in range(3,numVerts-1) ) +\
+                tuple( ((verts[indices[i]][0]-firstVert[0])*unitBottomVec[0] + (verts[indices[i]][1]-firstVert[1])*unitBottomVec[1], verts[indices[i]][2]-firstVert[2]) for i in range(3,numVerts-1) ) +\
                 ( (0., heightLeft), )
         
         item.width = width
-        item.normal = bottomVec.cross(zAxis)/width
         item.geometry = geometry
         # assign uv-coordinates (i.e. surface coordinates on the facade plane)
         item.uvs = uvs
@@ -1038,8 +1045,7 @@ class RoofProfile(Roof):
         roofItem.addRoofSide(
             indices,
             self.getUvs(indices, slotIndex) if self.setUvs else None,
-            slotIndex,
-            self.itemFactory
+            slotIndex
         )
     
     def getUvs(self, indices, slotIndex):
@@ -1056,7 +1062,7 @@ class RoofProfile(Roof):
         #     if <roofVertexData[index][0]> is equal to False;
         # <roofVertexData[index][2]> is a coordinate along Y-axis of the profile
         #     coordinate system
-        return (
+        return [
             (
                 # U-coordinate: set it depending on the value of <slopes[slotIndex]>
                 self.maxY - roofVertexData[index][2]\
@@ -1074,4 +1080,4 @@ class RoofProfile(Roof):
                 roofVertexData[index][1]
             )
             for index in indices
-        )
+        ]

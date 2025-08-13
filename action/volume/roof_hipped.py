@@ -42,7 +42,7 @@ class RoofHipped(RoofLeveled):
         self.distance = []
     
     def getRoofItem(self, footprint):
-        return ItemRoofHipped.getItem(self.itemFactory, footprint)
+        return ItemRoofHipped(footprint)
 
     def validate(self, footprint):
         """
@@ -57,31 +57,35 @@ class RoofHipped(RoofLeveled):
                 return False
         return True
     
-    def render(self, footprint, roofItem):
+    def extrude(self, footprint, roofItem):
         # <firstVertIndex> is the index of the first vertex of the polygon that defines the roof base
         firstVertIndex = self.getRoofFirstVertIndex(footprint)
         
         super().extrude(footprint, roofItem)
         
         # now generate the roof
-        if footprint.polygon.n == 4:
+        if footprint.polygon.numEdges == 4:
             ok = self.generateRoofQuadrangle(footprint, roofItem, firstVertIndex)
         else:
             ok = self.generateRoof(footprint, roofItem, firstVertIndex)
         
-        if ok:
-            self.facadeRenderer.render(footprint, self.data)
-            self.roofRenderer.render(roofItem)
-        else:
+        if not ok:
             # Unable to generate the hipped roof.
             # Generate a flat roof as a fallback solution
             self.volumeAction.volumeGenerators["flat"].do(
                 footprint,
                 footprint.element.getData(self.data)
             )
+        
+        return ok
+
+    def render(self, footprint, roofItem):
+        if self.extrude(self, footprint, roofItem):
+            self.facadeRenderer.render(footprint, self.data)
+            self.roofRenderer.render(roofItem)
     
     def generateRoofQuadrangle(self, footprint, roofItem, firstVertIndex):
-        verts = footprint.building.verts
+        verts = footprint.building.renderInfo.verts
         
         vector, length, cos, sin, distance = self.vector, self.length, self.cos, self.sin, self.distance
         # cleanup
@@ -153,8 +157,7 @@ class RoofHipped(RoofLeveled):
             roofItem.addRoofSide(
                 (firstVertIndex + minDistanceIndex1, firstVertIndex + minDistanceIndex1Next, vertIndex1),
                 ( (0., 0.), (length[minDistanceIndex1], 0.), (u1, v1) ) if self.setUvs else None,
-                minDistanceIndex1,
-                self.itemFactory
+                minDistanceIndex1
             )
             
             # Quadrangle of the hipped roof originating from the polygon edge
@@ -167,8 +170,7 @@ class RoofHipped(RoofLeveled):
                     (length[minDistanceIndex1Next] - u2, v2),
                     (length[minDistanceIndex1] - u1, v1)
                 ) if self.setUvs else None,
-                minDistanceIndex1Next,
-                self.itemFactory
+                minDistanceIndex1Next
             )
             
             # Triangle of the hipped roof originating from the polygon edge
@@ -176,8 +178,7 @@ class RoofHipped(RoofLeveled):
             roofItem.addRoofSide(
                 (firstVertIndex + minDistanceIndex2, firstVertIndex + minDistanceIndex2Next, vertIndex2),
                 ( (0., 0.), (length[minDistanceIndex2], 0.), (u2, v2) ) if self.setUvs else None,
-                minDistanceIndex2,
-                self.itemFactory
+                minDistanceIndex2
             )
             
             # Quadrangle of the hipped roof originating from the polygon edge
@@ -190,14 +191,13 @@ class RoofHipped(RoofLeveled):
                     (length[minDistanceIndex2Next] - u1, v1),
                     (length[minDistanceIndex2] - u2, v2)
                 ) if self.setUvs else None,
-                minDistanceIndex2Next,
-                self.itemFactory
+                minDistanceIndex2Next
             )
         return True
     
     def generateRoof(self, footprint, roofItem, firstVertIndex):
-        verts = footprint.building.verts
-        numPolygonVerts = footprint.polygon.n
+        verts = footprint.building.renderInfo.verts
+        numPolygonVerts = footprint.polygon.numEdges
         lastVertIndex = firstVertIndex + numPolygonVerts - 1
         
         length, unitVector, roofSideIndices = self.length, self.unitVector, self.roofSideIndices
@@ -257,8 +257,7 @@ class RoofHipped(RoofLeveled):
                             (verts[ indices[_index] ][2] - roofVerticalPosition) * factor
                         ) for _index in range(2, len(indices))
                     ),
-                    edgeIndex,
-                    self.itemFactory
+                    edgeIndex
                 )
             else:
                 # A special exotic case:
@@ -281,8 +280,7 @@ class RoofHipped(RoofLeveled):
                             (verts[indices[_index]] - origin).dot(v)
                         ) for _index in range(len(indices))
                     ),
-                    -1,
-                    self.itemFactory
+                    -1
                 )
         return True
     

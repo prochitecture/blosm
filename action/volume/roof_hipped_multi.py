@@ -38,8 +38,8 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             )
             return
         super().extrudeInnerPolygons(footprint, roofItem)
-    
-    def render(self, footprint, roofItem):
+        
+    def extrude(self, footprint, roofItem):
         # <firstVertIndex> is the index of the first vertex of the polygon that defines the roof base
         firstVertIndex = self.getRoofFirstVertIndex(footprint)
         
@@ -48,13 +48,17 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
         # now generate the roof
         ok = self.generateRoof(footprint, roofItem, firstVertIndex)
         
-        if ok: 
-            self.facadeRenderer.render(footprint, self.data)
-            self.roofRenderer.render(roofItem)
-        else:
-            # Unable to generate the hipped roof.
+        if not ok:
+            # Unable to generate the roof.
             # Generate a flat roof as a fallback solution
             self.volumeAction.volumeGeneratorMultiFlat.do(footprint)
+        
+        return ok
+    
+    def render(self, footprint, roofItem):
+        if self.extrude(footprint, roofItem):
+            self.facadeRenderer.render(footprint)
+            self.roofRenderer.render(roofItem)
     
     def generateRoof(self, footprint, roofItem, firstVertIndex):
         verts = footprint.building.verts
@@ -84,7 +88,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             holesInfo.append((_offset, innerPolygons[0].n))
             holesInfo.extend(
                 zip(
-                    (_offset + v for v in accumulate( (innerPolygons[i].n for i in range(numHoles-1)), add)), (innerPolygons[i].n for i in range(1, numHoles))
+                    (_offset + v for v in accumulate( (innerPolygons[i].numEdges for i in range(numHoles-1)), add)), (innerPolygons[i].numEdges for i in range(1, numHoles))
                 )
             )
         else:
@@ -92,7 +96,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             holesInfo.append((_offset, innerPolygons[0].n))
             holesInfo.extend(
                 zip(
-                    (_offset + v for v in accumulate( (innerPolygons[i].n + innerPolygons[i+1].n for i in range(numHoles-1)), add)), (innerPolygons[i].n for i in range(1, numHoles))
+                    (_offset + v for v in accumulate( (innerPolygons[i].numEdges + innerPolygons[i+1].numEdges for i in range(numHoles-1)), add)), (innerPolygons[i].numEdges for i in range(1, numHoles))
                 )
             )
         

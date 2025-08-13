@@ -18,10 +18,15 @@ class Volume(Action):
     
     defaultRoofShape = "flat"
     
-    def __init__(self, app, data, itemStore, itemFactory, itemRenderers):
-        super().__init__(app, data, itemStore, itemFactory)
+    def __init__(self, manager, itemStore, itemRenderers):
+        super().__init__(manager.app, manager.data, itemStore)
+        self.manager = manager
         if itemRenderers:
-            self.setVolumeGenerators(data, itemRenderers)
+            self.setVolumeGenerators(manager.data, itemRenderers)
+    
+    def preprocess(self, buildingsP):
+        # <buildingsP> means "buildings from the parser"
+        return
     
     def setRenderer(self, renderer):
         """
@@ -45,22 +50,21 @@ class Volume(Action):
         styleBlocks = footprint.styleBlock.styleBlocks.get("Footprint")
         if styleBlocks:
             for styleBlock in styleBlocks:
-                _footprint = Footprint.getItem(self.itemFactory, None, building, styleBlock)
+                _footprint = Footprint(None, building, styleBlock)
                 _footprint.parent = footprint
                 _footprint.buildingStyle = buildingStyle
                 self.itemStore.add(_footprint)
-        return footprint
     
-    def do(self, building, itemClass, buildingStyle, globalRenderer):
+    def do(self, building, buildingStyle, globalRenderer):
         itemStore = self.itemStore
-        while itemStore.hasItems(itemClass):
-            footprint = itemStore.getItem(itemClass)
+        while itemStore.hasItems(Footprint):
+            footprint = itemStore.getItem(Footprint)
             self.prepareFootprint(footprint, building, buildingStyle)
             
             element = footprint.element
             if element.t is parse.multipolygon:
                 # check if the multipolygon has holes
-                if element.hasInner():
+                if element.hasInner:
                     if footprint.getStyleBlockAttr("roofShape") in ("hipped", "gabled"):
                         self.volumeGeneratorMultiHipped.do(footprint)
                     else:
@@ -77,27 +81,23 @@ class Volume(Action):
                     # won't be used. A new footprint will be created for each polygon of
                     # the multipolygon.
                     
-                    # overrides to pretend than <element> is a polygon
-                    element.t = parse.polygon
                     ls = element.ls
                     for _l in ls:
-                        element.ls = _l
-                        footprint = Footprint.getItem(self.itemFactory, element, building)
+                        footprint = Footprint(None, building)
+                        footprint.element = element
+                        footprint.createPolygon(_l, self.manager)
                         self.prepareFootprint(footprint, building, buildingStyle)
-                        self.generateVolume(
-                            footprint,
-                            element.getLinestringData(_l, self.data)
-                        )
+                        self.generateVolume(footprint)
                     element.ls = ls
             else:
-                self.generateVolume(footprint, element.getData(self.data))
+                self.generateVolume(footprint)
     
-    def generateVolume(self, footprint, coords):
+    def generateVolume(self, footprint):
         volumeGenerator = self.volumeGenerators.get(
             footprint.getStyleBlockAttr("roofShape"),
             self.volumeGenerators[Volume.defaultRoofShape]
         )
-        volumeGenerator.do(footprint, coords)
+        volumeGenerator.do(footprint)
     
     def setVolumeGenerators(self, data, itemRenderers):
         self.volumeGenerators = {

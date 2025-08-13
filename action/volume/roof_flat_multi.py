@@ -11,12 +11,16 @@ class RoofMulti:
         roofItem = self.init(footprint)
         if footprint.valid:
             if roofItem.innerPolygons:
-                self.render(footprint, roofItem)
+                if self.renderAfterExtrude:
+                    self.render(footprint, roofItem)
+                else:
+                    self.extrude(footprint, roofItem)
+                    footprint.roofItem = roofItem
+                    footprint.roofRenderer = self.roofRenderer
             else:
                 footprint.element.makePolygon()
                 self.volumeAction.volumeGenerators[footprint.getStyleBlockAttr("roofShape")].do(
-                    footprint,
-                    footprint.element.getData(self.data)
+                    footprint
                 )
     
     def extrude(self, footprint, roofItem):
@@ -81,7 +85,7 @@ class RoofMulti:
             # create an inner polygon located at <minHeight>
             innerPolygon = PolygonCW()
             innerPolygon.init( Vector((coord[0], coord[1], z1)) for coord in element.getLinestringData(_l, data) )
-            if innerPolygon.n < 3:
+            if innerPolygon.numEdges < 3:
                 continue
             # check the direction of vertices, it must be clockwise (!)
             innerPolygon.checkDirection()

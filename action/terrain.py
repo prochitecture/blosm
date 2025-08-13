@@ -10,18 +10,18 @@ class Terrain(Action):
         # <buildingsP> means "buildings from the parser"
         self.app.terrain.initProjectionProxy(buildingsP, self.data)
     
-    def do(self, building, itemClass, style, globalRenderer):
+    def do(self, building, style, globalRenderer):
         #self.projectSingleVertex(building)
         self.projectAllVertices(building)
     
     def projectAllVertices(self, building):
-        outline = building.outline
+        element = building.element
         
         maxZ = max(
             (
                 self.app.terrain.project2(vert)\
                 for vert in\
-                (outline.getOuterData(self.data) if outline.t is parse.multipolygon else outline.getData(self.data))
+                (element.getOuterData(self.data) if element.t is parse.multipolygon else element.getData(self.data))
             ),
             key = lambda vert: vert[2]
         )[2]
@@ -36,19 +36,19 @@ class Terrain(Action):
             (
                 self.app.terrain.project2(vert)\
                 for vert in\
-                (outline.getOuterData(self.data) if outline.t is parse.multipolygon else outline.getData(self.data))
+                (element.getOuterData(self.data) if element.t is parse.multipolygon else element.getData(self.data))
             ),
             key = lambda vert: vert[2]
         )
-        building.offset = offsetZ[2] * zAxis
+        building.renderInfo.offsetVertex = offsetZ[2] * zAxis
         # we also need to store the altitude difference for the building footprint
-        building.altitudeDifference = maxZ - offsetZ[2]
+        building.renderInfo.altitudeDifference = maxZ - offsetZ[2]
     
     def projectSingleVertex(self, building):
-        outline = building.outline
+        element = building.element
         # take the first vertex of the outline as the offset
         offsetZ = self.app.terrain.project(
-            next( outline.getOuterData(self.data) if outline.t is parse.multipolygon else outline.getData(self.data) )
+            next( element.getOuterData(self.data) if element.t is parse.multipolygon else element.getData(self.data) )
         )
         if offsetZ:
             building.offset = offsetZ[2] * zAxis

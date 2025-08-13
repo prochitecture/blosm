@@ -29,8 +29,11 @@ directions = {
 
 
 def getDefaultDirection(polygon):
-    # a perpendicular to the longest edge of the polygon
-    return max(polygon.edges).cross(polygon.normal).normalized()
+    # this a perpendicular to the longest edge of the polygon
+    
+    # the longest vector
+    longestVector = polygon.getLongestVector().unitVector
+    return Vector( (-longestVector[1], longestVector[0]) )
 
 
 class Roof:
@@ -67,42 +70,42 @@ class Roof:
         self.itemRenderers = itemRenderers
         
         self.facadeRenderer = itemRenderers["Facade"]
-        self.roofRenderer = itemRenderers[roofRendererId]
+        self.roofRenderer = itemRenderers.get(roofRendererId)
         
         self.itemStore = volumeAction.itemStore
-        self.itemFactory = volumeAction.itemFactory
+        
+        self.renderAfterExtrude = volumeAction.app.renderAfterExtrude
         
         self.hasGable = False
         self.hasRoofLevels = True
         self.angleToHeight = None
         self.setUvs = True
     
-    def do(self, footprint, coords):
-        roofItem = self.init(footprint, coords)
+    def do(self, footprint):
+        roofItem = self.init(footprint)
         if footprint.valid:
-            self.render(footprint, roofItem)
+            if self.renderAfterExtrude:
+                self.render(footprint, roofItem)
+            else:
+                self.extrude(footprint, roofItem)
+                footprint.roofItem = roofItem
+                footprint.roofRenderer = self.roofRenderer
+                footprint.bldgPart.footprint = footprint
     
-    def init(self, footprint, coords):
+    def render(self, footprint, roofItem):
+        self.extrude(footprint, roofItem)
+        self.facadeRenderer.render(footprint)
+        self.roofRenderer.render(roofItem)
+    
+    def init(self, footprint):
         # calculate numerical dimensions for the building or building part
         self.calculateDimensions(footprint)
         if not footprint.valid:
             return
-        z1 = footprint.minHeight
         
-        # create a polygon located at <z1>
-        
-        # Check if a polygon has been already set (e.g. when placing the building on a terrain or
-        # calculating the area of the whole building footprint)
-        polygon = footprint.polygon
-        if polygon.allVerts:
-            polygon.setHeight(z1)
-        else:
-            polygon.init( Vector((coord[0], coord[1], z1)) for coord in coords )
-        if polygon.n < 3:
+        if footprint.polygon.numEdges < 3:
             footprint.valid = False
             return
-        # check the direction of vertices, it must be counterclockwise
-        polygon.checkDirection()
         
         return self.getRoofItem(footprint)
     
@@ -139,6 +142,8 @@ class Roof:
         
         footprint.roofVerticalPosition = z1 if footprint.noWalls else roofVerticalPosition
         
+        footprint.totalNumLevels = footprint.numLevels + footprint.numRoofLevels
+        
         self.validate(footprint)
     
     def processDirection(self, footprint):
@@ -150,7 +155,7 @@ class Roof:
             if self.hasRidge and footprint.getStyleBlockAttr("roofOrientation") == "across":
                 # The roof ridge is across the longest side of the building outline,
                 # i.e. the profile direction is along the longest side
-                d = max(polygon.edges).normalized()
+                d = polygon.getLongestVector().unitVector
             else:
                 d = getDefaultDirection(polygon)
         elif d in Roof.directions:
@@ -167,12 +172,12 @@ class Roof:
         
         # For each vertex from <polygon.verts> calculate projection of the vertex
         # on the vector <d> that defines the roof direction
-        projections = footprint.projections
-        projections.extend( d[0]*v[0] + d[1]*v[1] for v in polygon.verts )
-        minProjIndex = min(range(polygon.n), key = lambda i: projections[i])
+        projections = footprint.projections = [ d[0]*v[0] + d[1]*v[1] for v in polygon.verts ]
+        minProjIndex, footprint.minProjVector = min(
+            ( (i, vector) for i, vector in zip(range(polygon.numEdges), polygon.getVectors()) ), key = lambda entry: projections[entry[0]]
+        )
         footprint.minProjIndex = minProjIndex
-        maxProjIndex = max(range(polygon.n), key = lambda i: projections[i])
-        footprint.maxProjIndex = maxProjIndex
+        maxProjIndex = footprint.maxProjIndex = max(range(polygon.numEdges), key = lambda i: projections[i])
         # <polygon> width along the vector <d>
         footprint.polygonWidth = projections[maxProjIndex] - projections[minProjIndex]
     
@@ -199,7 +204,7 @@ class Roof:
                         # The following line means that we need to calculate
                         # the last level offset and the roof height later in the code
                         footprint.roofHeight = None
-                        return h
+                        return h + footprint.levelHeights.topHeight
                     else:
                         # default height of the roof
                         h = self.height
@@ -213,16 +218,16 @@ class Roof:
         return h
 
     def calculateRoofLevelsHeight(self, footprint):
-        numRooflevels = footprint.getStyleBlockAttr("numRoofLevels")
-        if not numRooflevels:
+        numRoofLevels = footprint.getStyleBlockAttr("numRoofLevels")
+        if not numRoofLevels:
             footprint.roofLevelsHeight = 0.
             return 0.
-        footprint.numRoofLevels = numRooflevels
+        footprint.numRoofLevels = numRoofLevels
         
         lh = footprint.levelHeights
         
         if lh.levelHeights:
-            h = lh.levelHeights.getRoofHeight(0, numRooflevels-1)
+            h = lh.levelHeights.getRoofHeight(0, numRoofLevels-1)
         else:
             roofLevelHeight = footprint.getStyleBlockAttr("roofLevelHeight")
             if roofLevelHeight:
@@ -245,7 +250,7 @@ class Roof:
             #
             # the roof levels above the very first roof level
             #
-            if numRooflevels > 1:
+            if numRoofLevels > 1:
                 #
                 # the last roof level
                 #
@@ -260,7 +265,7 @@ class Roof:
                 #
                 # the levels between the very first roof level and the last roof level
                 #
-                if numRooflevels > 2:
-                    h += (numRooflevels-2)*roofLevelHeight
+                if numRoofLevels > 2:
+                    h += (numRoofLevels-2)*roofLevelHeight
         footprint.roofLevelsHeight = h
         return h

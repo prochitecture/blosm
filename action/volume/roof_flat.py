@@ -4,8 +4,6 @@ from item.roof_flat import RoofFlat as ItemRoofFlat
 from .geometry.rectangle import RectangleFRA
 from mathutils import Vector
 
-from util import zAxis
-
 
 class RoofFlat(Roof):
     
@@ -18,11 +16,6 @@ class RoofFlat(Roof):
         self.hasRoofLevels = False
         self.extrudeTillRoof = False
     
-    def render(self, footprint, roofItem):
-        self.extrude(footprint, roofItem)
-        self.facadeRenderer.render(footprint, self.data)
-        self.roofRenderer.render(roofItem)
-    
     def validate(self, footprint):
         """
         Additional validation
@@ -32,61 +25,70 @@ class RoofFlat(Roof):
             footprint.valid = False
     
     def getRoofFirstVertIndex(self, footprint):
-        return len(footprint.building.verts) + footprint.polygon.n
+        return len(footprint.building.renderInfo.verts) + footprint.polygon.numEdges
     
     def getRoofItem(self, footprint):
         # <firstVertIndex> is the index of the first vertex of the polygon that defines the roof base;
         # since it depends on the total number of building vertices, we calculated it before any operation
         # that creates building geometry
-        return ItemRoofFlat.getItem(
-            self.itemFactory,
+        return ItemRoofFlat(
             footprint,
             self.getRoofFirstVertIndex(footprint)
         )
-    
+                
     def extrude(self, footprint, roofItem):
         building = footprint.building
-        facades = footprint.facades
-        verts = building.verts
+        verts = building.renderInfo.verts
         indexOffset = len(verts)
         polygon = footprint.polygon
-        numVerts = polygon.n
+        numVerts = polygon.numEdges
+        
+        footprint.rectangularWalls = True
         
         # create vertices
-        z = footprint.roofVerticalPosition if self.extrudeTillRoof else footprint.height
-        # verts for the lower cap
-        verts.extend(v for v in polygon.verts)
-        # verts for the upper cap
-        verts.extend(Vector((v.x, v.y, z)) for v in polygon.verts)
         
-        # the starting side
+        # verts for the lower cap
+        z = footprint.minHeight
+        verts.extend(Vector((v[0], v[1], z)) for v in polygon.verts)
+        # verts for the upper cap
+        if self.extrudeTillRoof:
+            z = footprint.roofVerticalPosition
+        elif self.roofRenderer.app.preferMesh:
+            roofOffset = roofItem.getStyleBlockAttr("roofOffset")
+            z = footprint.height - roofOffset if roofOffset else footprint.height
+        else:
+            z = footprint.height
+        verts.extend(Vector((v[0], v[1], z)) for v in polygon.verts)
+        
+        vectors = polygon.getVectors()
+        
         _in = indexOffset+numVerts
-        facades.append(Facade.getItem(
-            self,
-            footprint,
-            (_in-1, indexOffset, _in, _in+numVerts-1),
-            0 # edge index
-        ))
-        # the rest of the sides
-        facades.extend(
-            Facade.getItem(
-                self,
+        # the first <numVerts-1> edges
+        footprint.facades.extend(
+            Facade(
                 footprint,
-                (indexOffset+i-1, indexOffset+i, _in+i, _in+i-1),
-                i # edge index
-            ) for i in range(1, numVerts)
+                (indexOffset+i, indexOffset+i+1, _in+i+1, _in+i),
+                vector, # edge index
+                self
+            ) for i,vector in zip(range(numVerts-1), vectors)
+        )
+        
+        # the closing edge
+        footprint.facades.append(
+            Facade(
+                footprint,
+                (_in-1, indexOffset, _in, _in+numVerts-1),
+                next(vectors),
+                self
+            )
         )
     
     def initFacadeItem(self, item):
-        verts = item.building.verts
-        indices = item.indices
         geometry = self.rectangleGeometry
-        bottomVec = verts[indices[1]] - verts[indices[0]]
-        width = bottomVec.length
+        width = item.vector.length
         height = item.footprint.wallHeight
         
         item.width = width
-        item.normal = bottomVec.cross(zAxis)/width
         item.geometry = geometry
         # assign uv-coordinates (i.e. surface coordinates on the facade plane)
         item.uvs = geometry.getUvs(width, height)
@@ -127,12 +129,12 @@ class RoofLeveled(RoofFlat):
         return h
     
     def getRoofFirstVertIndex(self, footprint):
-        return len(footprint.building.verts) if footprint.noWalls else super().getRoofFirstVertIndex(footprint)
+        return len(footprint.building.renderInfo.verts) if footprint.noWalls else super().getRoofFirstVertIndex(footprint)
     
     def extrude(self, footprint, roofItem):
         if footprint.noWalls:
             z = footprint.roofVerticalPosition
             # the basement of the roof
-            footprint.building.verts.extend(Vector((v.x, v.y, z)) for v in footprint.polygon.verts)
+            footprint.building.renderInfo.verts.extend(Vector((v.x, v.y, z)) for v in footprint.polygon.verts)
             return
         super().extrude(footprint, roofItem)
