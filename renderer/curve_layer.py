@@ -50,6 +50,10 @@ class CurveLayer(MeshLayer):
         Slice Blender MESH object, add modifiers
         """
         obj = self.obj
+        # <obj> could be None if the layer is not used, i.e. <obj> was not set
+        if not obj:
+            return
+        
         # set a bevel object for the curve
         curve = obj.data
         # the name of the bevel object
