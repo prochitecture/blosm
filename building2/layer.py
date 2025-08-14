@@ -86,6 +86,7 @@ class RealisticBuildingLayer(BuildingLayer):
             
             self.attributeValuesGn.clear()
             
+            """ FIXME: uncomment the code below to use Geometry Nodes or remove it
             # create a modifier for the Geometry Nodes setup
             m = addGeometryNodesModifier(objGn, globalRenderer.gnBuilding, "Buildings")
             # <mAttrs> have the form like: 
@@ -96,6 +97,7 @@ class RealisticBuildingLayer(BuildingLayer):
             mAttrs = list(m.keys())
             for i1,i2 in zip( range(0, len(mAttrs), 3), range(len(mAttrs)//3) ):
                 useAttributeForGnInput(m, mAttrs[i1], gnMeshAttributes[i2])
+            """
             
     def finalizeMeshFlootRoof(self, globalRenderer):
             # TEMPORARY code below to place objects on flat roofs
