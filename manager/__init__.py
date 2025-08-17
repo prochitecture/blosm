@@ -121,6 +121,7 @@ class WayManager(Manager):
     
     def __init__(self, data, renderer):
         super().__init__(data)
+        self.id = "ways"
         # the special renderer
         self.renderer = renderer
         # the variable below is needed for the condition in <app.createLayers(..)>

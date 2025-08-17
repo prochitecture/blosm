@@ -197,7 +197,7 @@ class Setup:
         return self.unskipFeaturesAction
     
     def getWayManager(self):
-        if False and not self.wayManager: # FIXME: remove False when the code for realistic streets is ready
+        if not self.wayManager: # FIXME: remove False when the code for realistic streets is ready
             from way.manager import WayManager
             from .realistic_streets import getStyleStreet
             

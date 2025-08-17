@@ -45,7 +45,7 @@ def setup(app, osm):
                 StreetRenderer(app, itemRenderers)
             )
     
-        if app.highways:
+        if app.highways or classifyFacades:
             setup.roadsAndPaths()
             # setup.ptPlatforms() FIXME: process public transport platforms later
         
