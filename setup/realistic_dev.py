@@ -21,7 +21,7 @@ def setup(app, osm):
         setup.skipWays()
         
         wayManager = setup.getWayManager()
-        if False and app.highways or app.railways: # FIXME: remove False when the code for realistic streets is ready
+        if app.highways or app.railways:
             from action.generate_streets import StreetGenerator
             from way.renderer_streets import StreetRenderer
             
