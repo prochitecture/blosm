@@ -1,91 +1,246 @@
-from . import RealWay
+from . import Way, Railway
+from defs.way import allWayCategories, facadeVisibilityWayCategories, wayIntersectionCategories, vehicleRoadsCategories
+from style import StyleStore
+from way.waymap.waymap import WayMap
+from way.item.street import Street
+from way.item.connectors import IntConnector
 
 
-_allWays = (
-    "motorway",
-    "trunk",
-    "primary",
-    "secondary",
-    "tertiary",
-    "unclassified",
-    "residential",
-    "service",
-    "pedestrian",
-    "track",
-    "footway",
-    "steps",
-    "cycleway",
-    "bridleway",
-    "other"
-)
-
-
-_facadeVisibilityWays = (
-    "motorway",
-    "trunk",
-    "primary",
-    "secondary",
-    "tertiary",
-    "unclassified",
-    "residential",
-    #"service",
-    "pedestrian",
-    "track",
-    #"footway",
-    #"steps",
-    #"cycleway",
-    #"bridleway",
-    #"other"
-)
-
-
-class RealWayManager:
+class WayManager:
     
-    def __init__(self, data, app):
+    def __init__(self, data, app, getStyle):
         self.id = "ways"
         self.data = data
         self.app = app
+        self.styleStore = StyleStore(app.pmlFilepathStreet, app.assetsDir, styles=None)
+        self.getStyle = getStyle
         
-        # use the default layer class in the <app>
+        # no layers for this manager
         self.layerClass = None
         
         # don't accept broken multipolygons
         self.acceptBroken = False
         
-        self.layers = dict((layerId, []) for layerId in _allWays)
+        self.layers = dict((category, []) for category in allWayCategories)
+        self.layers["other"] = []
+        
+        self.renderers = []
         
         self.actions = []
+        
+        # <self.intersections>, <self.wayClusters> and <self.waySectionLines>
+        # are used for realistic rendering of streets
+        self.majorIntersections  = dict()
+        self.minorIntersections  = dict()
+        self.transitionSymLanes = []
+        self.transitionSideLanes = []
+        self.streets = dict()
+        self.bundles = dict()
+        # street sections and clusters
+        self.waymap = WayMap()
+        self.waySectionLines = dict()
+        self.wayClusters = dict()
+        
+        # <self.networkGraph>, <self.waySectionGraph> are set in an action,
+        # for example <action.way_clustering.Way>
+        self.networkGraph = self.waySectionGraph = None
         
         app.addManager(self)
 
     def parseWay(self, element, elementId):
-        self.createRealWay(element)
+        # create a wrapper for the OSM way <element>
+        way = Way(element, self)
+        self.layers[way.category].append(way)
     
     def parseRelation(self, element, elementId):
         return
     
-    def createRealWay(self, element):
-        # create a wrapper for the OSM way <element>
-        self.layers[element.l.mlId].append( RealWay(element) )
-    
     def getAllWays(self):
-        return (way for layerId in _allWays for way in self.layers[layerId])
+        return (way for category in allWayCategories for way in self.layers[category])
+    
+    def getAllIntersectionWays(self):
+        return (way for category in wayIntersectionCategories for way in self.layers[category])
+
+    def getAllVehicleWays(self):
+        return (
+            way for category in vehicleRoadsCategories for way in self.layers[category] \
+            if not way.bridge and not way.tunnel
+        )
     
     def getFacadeVisibilityWays(self):
-        return (way for layerId in _facadeVisibilityWays for way in self.layers[layerId])
+        return (
+            way for category in facadeVisibilityWayCategories for way in self.layers[category] \
+            if not way.bridge and not way.tunnel
+        )
+
+    def getSelectedWays(self, categories):
+        return ( way for category in categories for way in self.layers[category] )
     
     def process(self):
+        # set <self.rightHandTraffic> here, since during the execution of the constructor OSM data is not yet parsed
+        self.rightHandTraffic = self.isRightHandTraffic(self.data) if self.app.trafficSide == 'auto' else self.app.trafficSide == "rht"
+        
+        for way in self.getAllWays():
+            # <osm.projection> may not be availabe in the constructor of a <Way>, but it's needed to
+            # create way-segments. That's why an additional <init(..)> method is needed.
+            way.init(self)
         for action in self.actions:
             action.do(self)
     
-    def setRenderer(self, renderer, app):
-        self.renderer = renderer
-        app.addRenderer(renderer)
+    def addRenderer(self, renderer):
+        self.renderers.append(renderer)
+        self.app.addRenderer(renderer)
     
     def render(self):
-        for way in self.getAllWays():
-            self.renderer.render(way, self.data)
+        for renderer in self.renderers:
+            renderer.render(self, self.data)
+    
+    def renderExtra(self):
+        return
     
     def addAction(self, action):
         action.app = self.app
         self.actions.append(action)
+    
+    def getRailwayManager(self):
+        return RailwayManager(self)
+    
+    def iterStreets(self):
+        for street in self.streets.values():
+            yield street
+
+    def iterBundles(self):
+        for bundle in self.bundles.values():
+            yield bundle
+
+    # This is an iterator, that delivers instances of Street from the current waymap,
+    # by concatenating of Streets, that are separated by minor intersections. These are
+    # intersections with two major ways and one or more minor ways (of categories 'footway',
+    # 'cycleway' or'service').
+    def iterStreetsFromWaymap(self):
+        def findMinorNodes(street):
+            srcIsect = self.waymap.getMinorNode(street.src)
+            if srcIsect:
+                srcIsect = srcIsect if srcIsect.leaving == street or srcIsect.arriving == street else None
+            dstIsect = self.waymap.getMinorNode(street.dst)
+            if dstIsect:
+                dstIsect = dstIsect if dstIsect.leaving == street or dstIsect.arriving == street else None
+            return srcIsect, dstIsect
+        
+        processedStreets = set()
+        for _, _, _, street in self.waymap.edges(data='object',keys=True):
+            if street in processedStreets:
+                continue
+
+            processedStreetsInLoop = set()
+            srcIsectInit, dstIsectInit = findMinorNodes(street)
+            hasMinors = srcIsectInit or dstIsectInit
+
+            processedStreetsInLoop.add(street)
+            if not hasMinors:
+
+                streetStyle = self.styleStore.get( self.getStyle(street) )
+                street.style = streetStyle
+                street.setStyleBlockFromTop(streetStyle)
+                street.setStyleForItems()
+                yield street
+            else:
+                # Create a new Street
+                longStreet = Street(street.src,street.dst)
+                longStreet.insertStreetEnd(street)
+                longStreet.pred = street.pred
+
+                if dstIsectInit:    # Minor intersection at the end of this street
+                    dstIsectInit.street = longStreet
+                    longStreet.insertEnd(dstIsectInit)   # insert minor intersection object
+                    dstIsectCurr = dstIsectInit
+                    while True:
+                        nextStreet = dstIsectCurr.leaving
+                        if nextStreet in processedStreetsInLoop:
+                            break
+                        longStreet.insertStreetEnd(nextStreet)
+                        processedStreetsInLoop.add(nextStreet)
+                        _, dstIsectCurr = findMinorNodes(nextStreet)
+                        if not dstIsectCurr:
+                            if nextStreet.succ is not None:
+                                if isinstance(nextStreet.succ,IntConnector):
+                                    nextStreet.succ.item = longStreet
+                            break
+                        dstIsectCurr.street = longStreet
+                        longStreet.insertEnd(dstIsectCurr) 
+                else:
+                    if street.succ is not None:
+                        if isinstance(street.succ,IntConnector):
+                            street.succ.item = longStreet
+
+ 
+                if srcIsectInit:        # Minor intersection at the front of this street
+                    srcIsectInit.street = longStreet
+                    longStreet.insertFront(srcIsectInit)   # insert minor intersection object
+                    srcIsectCurr = srcIsectInit
+                    while True:
+                        prevStreet = srcIsectCurr.arriving
+                        if prevStreet in processedStreetsInLoop:
+                            break
+                        longStreet.insertStreetFront(prevStreet)
+                        processedStreetsInLoop.add(prevStreet)
+                        srcIsectCurr, _ = findMinorNodes(prevStreet)
+                        if not srcIsectCurr:
+                            if prevStreet.pred is not None:
+                                if isinstance(prevStreet.pred,IntConnector):
+                                    prevStreet.pred.item = longStreet
+                            break
+                        srcIsectCurr.street = longStreet
+                        longStreet.insertFront(srcIsectCurr)   # insert minor intersection object
+                else:
+                    if street.pred is not None:
+                        if isinstance(street.pred,IntConnector):
+                            street.pred.item = longStreet
+
+                streetStyle = self.styleStore.get( self.getStyle(longStreet) )
+                longStreet.style = streetStyle
+                longStreet.setStyleBlockFromTop(streetStyle)
+                longStreet.setStyleForItems()
+
+                # Undo concatenation, if result is a circular Street
+                if longStreet.src == longStreet.dst:
+                    continue
+                
+                processedStreets = processedStreets.union(processedStreetsInLoop)
+                
+                yield longStreet
+    
+    def isRightHandTraffic(self, data):
+        """
+        Determines if the Right Hand-Traffic (True) or Left Hand-Traffic is in the area defined by <data>
+        """
+        from .way_properties import leftHandTrafficAreas
+        
+        # get the first node
+        node = next(iter(data.nodes.values()))
+        lon, lat = node.lon, node.lat
+        
+        # check if <node> defined by <lon> and <lat> is within any of <leftHandTrafficAreas>
+        for lonRange, latRange in leftHandTrafficAreas:
+            if lonRange[0] <= lon <= lonRange[1] and latRange[0] <= lat <= latRange[1]:
+                return False
+        
+        return True
+
+class RailwayManager:
+    """
+    An auxiliary manager to process railways
+    """
+    
+    def __init__(self, wayManager):
+        self.layers = wayManager.layers
+        # no layers for this manager
+        self.layerClass = None
+    
+    def parseWay(self, element, elementId):
+        # create a wrapper for the OSM way <element>
+        way = Railway(element, self)
+        self.layers[way.category].append(way)
+    
+    def parseRelation(self, element, elementId):
+        return
