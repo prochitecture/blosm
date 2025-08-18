@@ -1,0 +1,534 @@
+# ----------------------------------------------------------------
+# PolyLine holds an ordered list of vertices that describe a line.
+# The vertices are of the class mathutils.Vector.
+#
+# The line parameter <t> describes a position onto the line. It is
+# constructed ba a compound of the last vertex number and the percentage
+# of the following segment. <t> measures the distance from the start
+# vertex, given by the <view> of the polyline. The vertex at the position
+# can be found by the method t2v().
+#
+#          t=1.4 (fwd)                 t= 2.8 (rev)
+#        ------------>         <--------------------------
+#       |             |       |                           |
+#       |             V       V                           |
+#       o---------o---x-----o-x-------o---------o---------o
+#       0         1         2         3         4         5
+#
+# The line parameter <d> describes a position onto the line. It measures
+# the cumulated length of the polyline from the start vertex, given by
+# the <view> of the polyline. to the position. The vertex at the position
+# can be found by the method d2v().
+#
+#            d (fwd)                      d (rev)
+#        ---------------->         <----------------------
+#       |                 |       |                       |
+#       |                 V       V                           |
+#       o-------------o---x-----o-x-------o-----o---------o
+#       0             1         2         3     4         5
+#
+# ----------------------------------------------------------------
+
+from mathutils import Vector
+from itertools import tee, islice, cycle, accumulate, product
+import numpy as np
+from bisect import bisect_left
+from math import floor
+
+from lib.CompGeom.OffsetGenerator import OffsetGenerator
+
+# helper functions -----------------------------------------------
+def pairs(iterable):
+    # s -> (s0,s1), (s1,s2), (s2, s3), ...
+    p1, p2 = tee(iterable)
+    next(p2, None)
+    return zip(p1,p2)
+
+def cyclePairs(lst):
+    prevs, nexts = tee(lst)
+    prevs = islice(cycle(prevs), len(lst) - 1, None)
+    return zip(prevs,nexts)
+
+class LinearInterpolator():
+    def __init__(self, x, y):
+        # <x> and <Y> must be of equal length (at least two elements) and x must
+        # be continuously increasing.
+        self.x = x
+        self.y = y
+        self.length = len(x)
+
+        # precalculate slopes
+        intervals = zip(x, x[1:], y, y[1:])
+        self.slopes = [(y2 - y1) / (x2 - x1) for x1, x2, y1, y2 in intervals]
+
+    def __call__(self, x):
+        i = bisect_left(self.x, x) - 1
+        if i == -1:
+            i = 0
+        elif i == self.length - 1:
+            i = -1
+        return self.y[i] + self.slopes[i] * (x - self.x[i])
+
+def unitDoubleParabola(nrPoints):
+    x = np.linspace(0.,1.,nrPoints)
+    return np.where(x <= 0.5, 2.*x*x, 1.-2.*(1.-x)*(1.-x))
+
+def unitHalfParabola(nrPoints):
+    x = np.linspace(0.,1.,nrPoints)
+    return np.where(x <= 0.5, 1.-4*(0.5-x)*(0.5-x), 1.)
+# ----------------------------------------------------------------
+
+class PolyLine():
+    fwd = slice(None,None,1)
+    rev = slice(None,None,-1)
+    def __init__(self, vertList):
+        # Initilaizes an instance from a list of vertices of the
+        # classes mathutils.Vector, pyGEOS Coordinate or of
+        # tuples of two floats for x and y values.
+        self.verts = None
+        if isinstance(vertList[0],Vector):
+            self.verts = vertList
+        # elif isinstance(vertList[0],Coordinate):
+        #     self.verts = [Vector((v.x,v.x)) for v in vertList]
+        elif isinstance(vertList[0],tuple):
+            self.verts = [Vector(v) for v in vertList]
+        else:
+            raise TypeError('PolyLine: Unexpected input type.')
+
+        self.view = PolyLine.fwd
+        self.prepareLineParameters()
+
+    def setView(self,view):
+        # <view> can either be <PolyLine.fwd> or <PolyLine.rev>
+        # All operations of the polyline use the vertex order forward or
+        # reverse, according to this setting.
+        self.view = view
+        self.tInterp = None
+        self.dInterp = None
+        self.prepareLineParameters()
+
+    def toggleView(self):
+        self.view = PolyLine.rev if self.view==PolyLine.fwd else PolyLine.fwd
+        self.prepareLineParameters()
+
+    def prepareLineParameters(self):
+        vD = list( accumulate([0]+[(v2-v1).length for v1,v2 in pairs(self.verts[self.view])]) )
+        vI = [i for i in range(len(self.verts))]
+        x = [v[0] for v in self.verts[self.view]]
+        y = [v[1] for v in self.verts[self.view]]
+        xy = [complex(xx,yy) for xx,yy in zip(x,y)]
+        self.tInterp = LinearInterpolator(vI,xy)
+        self.dInterp = LinearInterpolator(vD,xy)
+        self.dtInterp = LinearInterpolator(vD,vI)
+        self.tdInterp = LinearInterpolator(vI,vD)
+
+    def t2v(self,t):
+        # Computes the vertex given by the line parameter <t>.
+        xy = self.tInterp(t)
+        return Vector((xy.real,xy.imag))
+
+    def d2v(self,d):
+        # Computes the vertex given by the line parameter <d>.
+        xy = self.dInterp(d)
+        return Vector((xy.real,xy.imag))
+
+    def d2t(self,d):
+        return self.dtInterp(d)
+
+    def t2d(self,d):
+        return self.tdInterp(d)
+
+    def __len__(self):
+        # Return the length of the polyline
+        return len(self.verts)
+
+    def clone(self):
+        # Create a copy of the polyLine
+        return PolyLine(self[:])
+
+    def __getitem__(self, indx):
+        # Acces a vertex by index
+        return self.verts[self.view][indx]
+
+    def __iter__(self):
+        # Iterator of the vertices list
+        return iter(self.verts[self.view])
+
+    def __add__(self,other):
+        # Join polylines (the last vertex of <self>
+        # is assumed to be the first vertex of <other>)
+        return PolyLine(self.verts + other.verts[1:])
+
+    def length(self):
+        # Returns the total geomteric length of the polyline.
+        return sum( (v2-v1).length for v1, v2 in pairs(self.verts) )
+
+    def segments(self):
+        # Returns a list of vertex tuples for all segments of the polyline
+        return [(v1,v2) for v1, v2 in pairs(self.verts[self.view])]
+
+    def segment(self,indx):
+        # Returns the indx'th segment of the polyline
+        assert indx < len(self.verts)-2, 'indx out of limits (%d ... %d)'%(0,len(self.verts)-2)
+        return (self.verts[self.view][indx],self.verts[self.view][indx+1])
+
+    def lengthOfSegment(self,i):
+        # Returns the length of the ith segment of the line
+        assert i<len(self.verts)+1
+        # if i<0:
+        #     return (self.verts[1]-self.verts[0]).length * abs(i)
+        # else:
+        return (self.verts[i+1]-self.verts[i]).length
+
+    def unitVectors(self):
+        # Returns a list of the unit vectors of the polyline's segments
+        return [(v2-v1)/(v2-v1).length for v1, v2 in pairs(self.verts[self.view])]
+
+    def unitEndVec(self,fwd):
+        s = slice(None,None,1) if fwd else slice(None,None,-1)
+        d = self.verts[s][1]-self.verts[s][0]
+        return d/d.length
+
+    def trimmed(self,tS,tE):
+        # Returns the slice of the line between and including the
+        # vertices given by the line parameters <tS> and <tE>
+        assert tS < tE
+        itS = floor(tS)
+        itE = floor(tE)
+
+        if itS == tS:
+            iS = itS
+            pS = []
+        else:
+            iS = itS+1
+            pS = [self.t2v(tS)]
+
+        if itE == tE:
+            iE = itE+1
+            pE = []
+        else:
+            iE = itE+1
+            pE = [self.t2v(tE)]
+
+        if iS == iE:
+            return PolyLine(pS + pE)
+        else:
+            return PolyLine(pS + self.verts[self.view][iS:iE] + pE)
+
+    def orthoProj(self,p):
+        # Projects the point <p> onto the polyline. The return values
+        # are the projected point and the line parameter t. The line
+        # is evaluated from start to end. A projection before the first
+        # vertex on the infinite line of the first edge, or after the 
+        # last vertex on the infinite line of the last edge are accepted.
+        edgeNr = 0
+        passedEnd = True
+        passedStart = False
+        for p1,p2 in pairs(self[:]):
+            edgeVector = p2-p1
+            t = (p-p1).dot(edgeVector)/edgeVector.dot(edgeVector)
+            #r = self.t2v(t+edgeNr)
+            if  0. <= t < 1.:
+                passedEnd = False
+                break
+            if t < 0.:
+                break
+            edgeNr += 1
+            passedStart = True
+
+        if t<0:
+            if passedStart:
+                # the projection is between two edges, use nearest vertex
+                t = edgeNr
+        else:
+            t += edgeNr-1 if passedEnd else edgeNr
+        return self.t2v(t), t
+
+    def distTo(self,p0):
+        # Projects the point <p0> onto the polyline and return the
+        # distance to this projection <p1>.  The line is evaluated from
+        # start to end. A projection before the first vertex on the
+        # infinite line of the first edge, or after the  last vertex
+        # on the infinite line of the last edge are accepted.
+        p1, _ = self.orthoProj(p0)
+        return p1, (p1-p0).length
+
+    def offsetPointAt(self,t,dist):
+        # Computes the position of a point <p> on the line using
+        # the line parameter <t>. This point is offset perpendicular
+        # to the segment it lies on by the distance <dist>. The result
+        # is on the left of the line when <dist> is positive and on
+        # their right else.
+        t0 = floor(t)
+        if t0 >= len(self.verts)-1:
+            v0,v1 = self.verts[self.view][-2:]
+        elif t0 < 0.:
+            v0,v1 = self.verts[self.view][:2]
+        else:
+            v0,v1 = self.verts[self.view][t0:t0+2]
+        p = self.t2v(t)
+        d = v1-v0
+        u = d/d.length
+        pOffs = p + Vector((-u[1],u[0])) * dist
+        return pOffs
+
+    @staticmethod
+    def intersectInfinite(p1,p2,p3,p4,limTan=0.0175):
+        # Finds the intersection of two infinite lines, the first one given by
+        # the vertices <p1> and <p2> and the second one by the vertices <p3>
+        # and <p4>.
+        # Returns the intersection point <p> and the polyline parameters <t1>
+        # and <t2> relative to the given segments. When the lines are almost
+        # parallel, this is when the tangent of the angle between them is less
+        # than <limTan> (0.0175 corresponds to ~1°), None is returned.
+        d1, d2 = p2-p1, p4-p3
+        cross = d1.cross(d2)
+        dot = d1.dot(d2)
+        if dot and abs(cross/dot) < limTan: # tangent of ~1°, almost parallel
+            return None
+        d3 = p1-p3
+        t1 = (d2[0]*d3[1] - d2[1]*d3[0])/cross
+        t2 = (d1[0]*d3[1] - d1[1]*d3[0])/cross
+        p = p1 + d1*t1
+        return p, t1, t2
+
+    @staticmethod
+    def intersection(poly1,poly2):
+        # Finds the intersection between two polylines <poly1> and <poly2>.
+        # Returns the intersection point <iP>, the line parameters <t1> and
+        # <t2> of the intersection on the lines and the unit vectors <uV1>
+        # and <uV2> of the intersecting segments.
+        # When there is no intersection between the polyline segments, the
+        # intersection may be on the infinite lines through the first segments.
+        # In this case, <t1> and/or <t2> may be negative. Whene these infinte
+        # lines are almost paralllel (angle between them less than 1°), or when
+        # they intersect after the last segments of the polylines, None is returned.
+        segs1, segs2 = poly1.segments(), poly2.segments()
+        found = False
+
+        # Intersections for the first few segments are most probable.
+        # The combinations of the indices are constructed so that these
+        # are first tested.
+        combinations = list(product(range(len(segs1)),range(len(segs2))))
+        combinations = sorted(combinations,key=lambda x: sum(x))
+        for i1,i2 in combinations:
+            p1, p2 = segs1[i1]
+            p3, p4 = segs2[i2]
+            isect = PolyLine.intersectInfinite(p1,p2,p3,p4)
+            if isect is None: continue
+
+            # Accept intersection of infinite lines (negative line parameters)
+            # only between first segments.
+            iP, t1, t2 = isect
+            if (i1,i2) == (0,0): 
+                if t1 > 2. or t2 > 2.:
+                    continue # out of segment
+            else:
+                if t1 < 0. or t1 > 1. or t2 < 0. or t2 > 1.:
+                    continue # out of segment
+            found = True
+            break # valid intersection between polylines  found
+
+        if found:
+            d1, d2 = p2-p1, p4-p3
+            return iP, i1+t1, i2+t2, d1/d1.length, d2/d2.length
+        else:
+            return None
+
+    def intersectSegment(self, p1, p2):
+        for v1,v2 in pairs(self.verts[self.view]):
+            d1, d2 = v2-v1, p2-p1
+            cross = d1.cross(d2)
+            if cross == 0.:
+                continue
+            d3 = v1-p1
+            t1 = (d2[0]*d3[1] - d2[1]*d3[0])/cross
+            t2 = (d1[0]*d3[1] - d1[1]*d3[0])/cross
+            if 0. <= t1 <= 1. and 0. <= t2 <= 1:
+                return v1 + d1*t1, t1
+        return None
+
+    def intersectWithLine(self, p1, p2):
+        # Intersection of this polyline with the infinite line
+        # given by p1 and p2
+        for t0,(v1,v2) in enumerate(pairs(self.verts[self.view])):
+            d1, d2 = v2-v1, p2-p1
+            cross = d1.cross(d2)
+            if cross == 0.:
+                continue
+            d3 = v1-p1
+            t1 = (d2[0]*d3[1] - d2[1]*d3[0])/cross
+            # t2 = (d1[0]*d3[1] - d1[1]*d3[0])/cross
+            if 0. <= t1 <= 1.:# and 0. <= t2 <= 1:
+                return v1 + d1*t1, t0+t1
+        return None, None
+
+    def parallelOffset(self, dist):
+        # Returns the PolyLine that is offset perpendicularly by
+        # the distance <dist>. The result is on the left of
+        # the line when <dist> is positive and on their right else.
+        offsetter = OffsetGenerator()
+        offsetVerts = offsetter.parallel_offset(self.verts[self.view],dist)
+        return PolyLine(offsetVerts)
+
+    def buffer(self,leftW,rightW):
+        # Expands the line to a polygon, to the left by the distance
+        # <leftW> and to the right by <rightW>.
+        offsetter = OffsetGenerator()
+        offsetL = offsetter.parallel_offset(self.verts[self.view],leftW)
+        offsetR = offsetter.parallel_offset(self.verts[self.view],-rightW)
+        offsetR.reverse()
+        offsetVerts = offsetL + offsetR
+        offsetPoly = PolyLine(offsetVerts)
+        return offsetPoly
+
+    def bufferPoly(self,dist, resolution=8):
+        # Interprets the polyline as polygon and expands it by <dist> if 
+        # dist is poisitve or shrinks it when dist is negative.
+        # This solution is a hack and will maybe not work for all polygons !!!
+
+        assert len(self.verts) > 3, 'does not work for triangles'
+        verts = self.verts[self.view]
+
+         # adapt if polygon has clockwise order
+        if sum( v1.cross(v2) for v1,v2 in cyclePairs(verts) ) < 0.:
+            dist = -dist
+
+        # split polyline at longest edge
+        lengths = [(v2-v1).length for v1,v2 in cyclePairs(verts)]
+        longIndx = lengths.index(max(lengths))
+        verts = verts[longIndx:] + verts[:longIndx]
+
+        # offset polyline
+        offsetter = OffsetGenerator(resolution)
+        offset = offsetter.parallel_offset(verts,-dist)
+
+        # create and offset cap
+        cap = verts[-2:] + verts[:2]
+        offsetCap = offsetter.parallel_offset(cap,-dist)
+
+        # combine both and return
+        return offset[1:-1] + offsetCap[1:-1]
+
+    def parabolicOffset(self,dist,delta,nrPoints = 30):
+        # Prepare transform of segment lengths along polyline to line parameters <t>
+        segLengths = np.array([0]+[(v1-v2).length for v1,v2 in pairs(self.verts[self.view])])
+        sumLengths = np.cumsum(segLengths)
+        t = np.array([i for i in range(len(self.verts))])
+
+        # Create <samples> and transform to line parameter samples <tSamples>
+        samples = np.linspace(sumLengths[0],sumLengths[-1],nrPoints)
+        tSamples = np.interp(samples,sumLengths,t)
+
+        # Create offset samples offSamples, shifted by dist and added double parabola
+        # with width of delta.
+        offVerts = []
+        para = unitHalfParabola(nrPoints)#unitDoubleParabola(nrPoints)
+        # plt.close()
+        # plt.plot(para)
+        # plt.show()
+        for i in range(nrPoints):
+            o = self.offsetPointAt(tSamples[i],dist+para[i]*delta)
+            offVerts.append(o)
+        return offVerts
+
+    def parabolicBuffer(self,leftW,rightW,leftD,rightD ):
+        #p = self.verts[0]
+        # plt.plot(p[0],p[1],'ro',markersize=10,zorder=950)
+        offsetter = OffsetGenerator()
+        if leftD != 0.:
+            offsetL = self.parabolicOffset(leftW-leftD,leftD)
+        else:
+            offsetL = offsetter.parallel_offset(self.verts[self.view],leftW)
+        if rightD != 0.:
+            offsetR = self.parabolicOffset(-(rightW-rightD),-rightD)
+        else:
+            offsetR = offsetter.parallel_offset(self.verts[self.view],-rightW)
+        offsetR.reverse()
+        offsetVerts = offsetL + offsetR
+        offsetPoly = PolyLine(offsetVerts)
+        return offsetPoly
+    
+    def getCorners(self,maxSin=0.7):
+        # Find corners along polyline (sin(angle)>maxSin)
+        corners = []
+        uV = self.unitVectors()
+        for i, (v1,v2) in enumerate(pairs(uV)):
+            if abs(v1.cross(v2)) > maxSin:
+                corners.append(i+1)
+        return corners
+    
+    def localCurvature(self, step):
+        if len(self.verts) < 3:
+            return 0.0
+        from debug import plt, plotEnd
+        s = list( accumulate([0]+[(v2-v1).length for v1,v2 in pairs(self.verts[self.view])]) )
+        x = [v[0] for v in self.verts[self.view]]
+        y = [v[1] for v in self.verts[self.view]]
+
+        px = np.poly1d( np.polyfit(s, x, 2) )
+        py = np.poly1d( np.polyfit(s, y, 2) )
+
+        t = np.linspace(0, self.length(), max(int(self.length()/step),4))
+
+        # # Other mehtod using the formula: curvature = |d2y/dx2| / (1 + (dy/dx)^2)^(3/2)
+        xx = px(t)
+        yy = py(t)
+        coeffs = np.polyfit(xx, yy, 2)
+        dy_dx = np.polyval(np.polyder(coeffs), xx)
+        d2y_dx2 = np.polyval(np.polyder(coeffs, 2), xx)
+        curvature = np.abs(d2y_dx2) / np.power(1 + np.power(dy_dx, 2), 1.5)
+
+        # # from https://stackoverflow.com/questions/28269379/curve-curvature-in-numpy
+        # dx_dt = np.gradient(px(t))
+        # dy_dt = np.gradient(py(t))
+        # velocity = np.array([ [dx_dt[i], dy_dt[i]] for i in range(dx_dt.size)])
+        # ds_dt = np.sqrt(dx_dt * dx_dt + dy_dt * dy_dt) 
+        # tangent = np.array([1/ds_dt]).transpose() * velocity
+
+        # tangent_x = tangent[:, 0]
+        # tangent_y = tangent[:, 1]
+        # deriv_tangent_x = np.gradient(tangent_x)
+        # deriv_tangent_y = np.gradient(tangent_y)
+
+        # dT_dt = np.array([ [deriv_tangent_x[i], deriv_tangent_y[i]] for i in range(deriv_tangent_x.size)])
+        # length_dT_dt = np.sqrt(deriv_tangent_x * deriv_tangent_x + deriv_tangent_y * deriv_tangent_y)
+        # normal = np.array([1/length_dT_dt]).transpose() * dT_dt        
+
+        # d2s_dt2 = np.gradient(ds_dt)
+        # d2x_dt2 = np.gradient(dx_dt)
+        # d2y_dt2 = np.gradient(dy_dt)
+
+        # curvature = np.abs(d2x_dt2 * dy_dt - dx_dt * d2y_dt2) / (dx_dt * dx_dt + dy_dt * dy_dt)**1.5
+
+        # t_component = np.array([d2s_dt2]).transpose()                       # tangential component
+        # n_component = np.array([curvature * ds_dt * ds_dt] * 2).transpose()     # normal component
+        # acceleration = t_component * tangent + n_component * normal
+        
+        return np.mean(curvature[1:-1])
+
+    def plot(self,color,width=1,linestyle='solid',showOrder=False,order=999):
+        import matplotlib.pyplot as plt        
+        x = [n[0] for n in self.verts[self.view]]
+        y = [n[1] for n in self.verts[self.view]]
+        plt.plot(x,y,color=color,linewidth=width,linestyle=linestyle,zorder=order)
+        if showOrder:
+            for i,(xx,yy) in enumerate(zip(x,y)):
+                plt.text(xx,yy,' '+str(i),fontsize=12)
+
+    def plotWithArrows(self,color,width=1,length=2,linestyle='solid',showOrder=False,order=999):
+        import matplotlib.pyplot as plt 
+        i = 0    
+        length = 0.7*width   
+        for v0,v1 in pairs(self.verts[self.view]):
+            dv = v1-v0
+            dvu = dv/dv.length
+            xy1 = v0 + 0.5*dv
+            xy0 = v0 + 0.5*dv - length*dvu
+            arrowprops=dict(color=color, linewidth=width, linestyle=linestyle, shrink=0.05, headwidth=width*3, headlength=5*width)
+            plt.gca().annotate("", xy=(xy1[0],xy1[1]), xytext=(xy0[0],xy0[1]),arrowprops=arrowprops,zorder=order)
+            plt.plot([v0[0],v1[0]],[v0[1],v1[1]],color=color, linestyle=linestyle, linewidth=width,zorder=order)
+            if showOrder:
+                plt.text(v0[0],v0[1],' '+str(i),fontsize=12,color='r')
+                plt.text(v1[0],v1[1],' '+str(i+1),fontsize=12,color='r')
+                i += 1
