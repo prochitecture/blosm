@@ -9,7 +9,8 @@ class Facade(Div):
     """
     
     def __init__(self, parent, indices, vector, volumeGenerator):
-        super().__init__(parent, parent, self, None)
+        footprintWithGn = len(indices) == 2
+        super().__init__(parent, parent, None if footprintWithGn else self, None)
         
         self.cornerL = True
         self.cornerR = True
@@ -46,8 +47,9 @@ class Facade(Div):
         if cl:
             self.setClass(cl)
         
-        # <volumeGenerator> knows which geometry the facade items have and how to map UV-coordinates
-        volumeGenerator.initFacadeItem(self)
+        if not footprintWithGn:
+            # <volumeGenerator> knows which geometry the facade items have and how to map UV-coordinates
+            volumeGenerator.initFacadeItem(self)
     
     def getBuildingPart(self):
         return self.buildingPart

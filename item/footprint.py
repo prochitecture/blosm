@@ -35,6 +35,9 @@ class Footprint(Item):
         self.levelHeights = LevelHeights(self)
         # <self.rectangularWalls> defines if ALL walls in the volume extruded from the footprint are rectangles
         self.rectangularWalls = False
+        # <self.doFootprintOnly> defines if the footprint is generated only, without any extruded volume.
+        # A Geometry Node setup will be used to generate the volume with a desired roof shape and further styling.
+        self.doFootprintOnly = True
     
     def attr(self, attr):
         return self.element.tags.get(attr)

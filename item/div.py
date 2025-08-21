@@ -7,9 +7,10 @@ class Div(Container):
     def __init__(self, parent, footprint, facade, styleBlock):
         super().__init__(parent, footprint, facade, styleBlock)
         self.isContainer = True
-        self.levelGroups = LevelGroups(self)
-        self.minHeight = self.footprint.minHeight
-        self.minLevel = self.footprint.minLevel
+        if facade:
+            self.levelGroups = LevelGroups(self)
+            self.minHeight = self.footprint.minHeight
+            self.minLevel = self.footprint.minLevel
         self.highEnoughForLevel = True
     
     def getBuildingPart(self):

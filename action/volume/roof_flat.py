@@ -15,6 +15,7 @@ class RoofFlat(Roof):
         self.rectangleGeometry = RectangleFRA()
         self.hasRoofLevels = False
         self.extrudeTillRoof = False
+        self.gnForFootprintAvailable = True
     
     def validate(self, footprint):
         """

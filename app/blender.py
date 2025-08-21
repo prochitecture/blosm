@@ -152,6 +152,7 @@ class BlenderApp(BaseApp):
         # If <False>: first extrude all buildings and only then render them
         self.renderAfterExtrude = False
         
+        self.preferableResult = defs.Result.FootprintWithGn
         self.preferMesh = True
     
     def getAssetsDir(self, context):

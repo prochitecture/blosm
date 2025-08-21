@@ -1,5 +1,7 @@
 from operator import attrgetter
 
+import defs
+
 from building.layer import BuildingLayer
 
 from renderer import Renderer
@@ -33,8 +35,12 @@ class RealisticBuildingLayer(BuildingLayer):
 
     def prepare(self):
         # below is the TEMPORARY oode to place roof objects on float roofs
-        
-        if self.app.preferMesh:
+
+        if self.app.preferableResult == defs.Result.FootprintWithGn:
+            # create attributes for the Geometry Nodes
+            objGnMesh = self.obj.data
+            objGnMesh.attributes.new("roof_shape", 'INT8', 'FACE')
+        elif self.app.preferMesh:
             # create attributes for the Geometry Nodes
             objGnMesh = self.obj.data
             # an asset index in Blender collection <globalRenderer.buildingAssetsCollection>

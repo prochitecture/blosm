@@ -279,6 +279,7 @@ class SetupBlender(Setup):
     
     def itemRenderers(self):
         from item_renderer.texture.roof_generatrix import generatrix_dome, generatrix_onion, Center, MiddleOfTheLongesSide
+        from item_renderer.footprint import Footprint as FootprintRenderer
         
         if self.doExport:
             from item_renderer.texture.export import\
@@ -297,6 +298,7 @@ class SetupBlender(Setup):
                 RoofHipped as RoofHippedRendererExport
             
             itemRenderers = dict(
+                Footprint = FootprintRenderer(),
                 Facade = FacadeRendererExport(),
                 Div = DivRendererExport(),
                 Level = LevelRendererExport(),
@@ -330,6 +332,7 @@ class SetupBlender(Setup):
                 RoofHipped as RoofHippedRenderer
             
             itemRenderers = dict(
+                Footprint = FootprintRenderer(),
                 Facade = FacadeRenderer(),
                 Div = DivRenderer(),
                 Level = LevelRenderer(),
@@ -369,9 +372,9 @@ class SetupBlender(Setup):
         buildingRenderer.actions.append(volumeAction)
         
         # "rev" stands for "render extruded volumes"
-        buildingRenderer.revActions.append(
-            FacadeBoolean()
-        )
+        #buildingRenderer.revActions.append(
+        #    FacadeBoolean()
+        #)
         buildingRenderer.revActions.append(
             FacadeClassificationPart()
         )

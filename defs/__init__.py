@@ -17,6 +17,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+from enum import Enum
+
+class Result(Enum):
+    FootprintWithGn = 1
+
+
 class Keys:
     mode3d = "mode3d"
     mode3dRealistic = "mode3dRealistic"

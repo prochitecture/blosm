@@ -68,6 +68,7 @@ class BuildingRendererNew(Renderer):
         self.useCladdingColor = True
         
         self.itemRenderers = itemRenderers
+        self.footprintRenderer = itemRenderers["Footprint"]
         self.facadeRenderer = itemRenderers["Facade"]
         
         self.exportMaterials = app.enableExperimentalFeatures and app.importForExport
@@ -215,14 +216,20 @@ class BuildingRendererNew(Renderer):
         
         # render building footprint
         if not building.parts or building.alsoPart:
-            self.renderExtrudedVolume(building.footprint, True)
+            if building.footprint.doFootprintOnly:
+                self.footprintRenderer.render(building.footprint)
+            else:
+                self.renderExtrudedVolume(building.footprint)
         # render building parts
         for part in building.parts:
-            self.renderExtrudedVolume(part.footprint, False)
+            if part.footprint.doFootprintOnly:
+                self.footprintRenderer.render(part.footprint)
+            else:
+                self.renderExtrudedVolume(part.footprint)
         
         self.postRender(building.element)
     
-    def renderExtrudedVolume(self, footprint, isBldgFootprint):
+    def renderExtrudedVolume(self, footprint):
         if not footprint:
             return
         

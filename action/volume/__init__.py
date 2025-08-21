@@ -1,3 +1,4 @@
+import defs
 from .. import Action
 from item.footprint import Footprint
 import parse
@@ -97,7 +98,11 @@ class Volume(Action):
             footprint.getStyleBlockAttr("roofShape"),
             self.volumeGenerators[Volume.defaultRoofShape]
         )
-        volumeGenerator.do(footprint)
+        if self.app.preferableResult == defs.Result.FootprintWithGn and volumeGenerator.gnForFootprintAvailable:
+            volumeGenerator.doFootprintOnly(footprint)
+        else:
+            footprint.doFootprintOnly = False
+            volumeGenerator.do(footprint)
     
     def setVolumeGenerators(self, data, itemRenderers):
         self.volumeGenerators = {
