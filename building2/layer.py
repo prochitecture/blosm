@@ -34,20 +34,23 @@ class RealisticBuildingLayer(BuildingLayer):
         self.objGnExtra = None
 
     def prepare(self):
-        # below is the TEMPORARY oode to place roof objects on float roofs
+        super().prepare()
 
         if self.app.preferableResult == defs.Result.FootprintWithGn:
             # create attributes for the Geometry Nodes
-            objGnMesh = self.obj.data
-            objGnMesh.attributes.new("roof_shape", 'INT8', 'FACE')
+            #objGnMesh = self.obj.data
+            #objGnMesh.attributes.new("roof_shape", 'INT8', 'FACE')
+            #objGnMesh.attributes.new("facade_class", 'INT8', 'EDGE')
+            self.bm.faces.layers.int.new("roof_shape")
+            self.bm.edges.layers.int.new("facade_class")
         elif self.app.preferMesh:
+            # below is the TEMPORARY oode to place roof objects on float roofs
+
             # create attributes for the Geometry Nodes
             objGnMesh = self.obj.data
             # an asset index in Blender collection <globalRenderer.buildingAssetsCollection>
             objGnMesh.attributes.new("triangulate", 'BOOLEAN', 'FACE')
             objGnMesh.attributes.new("subdivide_level", 'INT', 'FACE')
-        
-        super().prepare()
     
     def finalize(self, globalRenderer=None):
         if not globalRenderer:

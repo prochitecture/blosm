@@ -37,7 +37,7 @@ class Facade(Div):
         self.processed = False
         
         # set facade class
-        self.cl = None
+        self.cl = FacadeClass.unknown
         self.front = False
         self.side = False
         self.back = False
