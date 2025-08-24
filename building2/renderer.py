@@ -1,6 +1,6 @@
-import os
-
 import bpy
+
+import defs
 from renderer import Renderer
 from .layer import BuildingLayer
 from .item_store import ItemStore
@@ -79,8 +79,8 @@ class BuildingRendererNew(Renderer):
             self.cacheCladdingTextureInfo = False
         
         # initialize item renderers
-        for item in itemRenderers:
-            itemRenderers[item].init(itemRenderers, self)
+        for itemRenderer in itemRenderers.values():
+            itemRenderer.init(itemRenderers, self)
         
         self.getStyle = getStyle
         self.itemStore = ItemStore(_itemClasses)

@@ -174,7 +174,7 @@ def loadNodeGroupsFromFile(filepath, *names):
 
 def appendNodeGroupFromFile(filepath, name):
     """
-    Appends node groups with <name> from the .blend file with the given <filepath>.
+    Appends a node group with <name> from the .blend file with the given <filepath>.
     """
     with bpy.data.libraries.load(filepath) as (_, data_to):
         # a Python list (not a Python tuple!) must be set to <data_to.node_groups>
