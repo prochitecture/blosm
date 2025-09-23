@@ -753,6 +753,15 @@ def register():
     if blenderApp.app.has(Keys.mode3dRealistic):
         import realistic
         realistic.register()
+    # Pro-only: register optional baking tools if available
+    if getattr(blenderApp.app, 'isPremium', False):
+        try:
+            from util.blender_extra import baking as _baking
+            if hasattr(_baking, 'register'):
+                _baking.register()
+        except Exception:
+            # optional module; ignore if missing
+            pass
 
 def unregister():
     for c in _classes:
@@ -762,3 +771,10 @@ def unregister():
     if blenderApp.app.has(Keys.mode3dRealistic):
         import realistic
         realistic.unregister()
+    if getattr(blenderApp.app, 'isPremium', False):
+        try:
+            from util.blender_extra import baking as _baking
+            if hasattr(_baking, 'unregister'):
+                _baking.unregister()
+        except Exception:
+            pass
