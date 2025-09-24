@@ -216,7 +216,8 @@ class BlenderRenderer:
             self.copyrightHolders[copyrightHolder] += 1
     
     def joinObjects(self):
-        bpy.ops.object.join()
+        if len(self.importedObjects) > 1:
+            bpy.ops.object.join()
         joinedObject = self.importedObjects[-1]
         joinedObject.name = self.threedTilesName
         bpy.context.view_layer.objects.active = joinedObject
