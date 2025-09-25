@@ -43,6 +43,10 @@ class BlenderRenderer:
     def finalize(self, manager):
         if not self.importedObjects:
             self.collection = None
+
+            if self._gltfImporterPatched:
+                self.cleanupGltfImporterPatching()
+            
             return
         
         #
@@ -111,19 +115,7 @@ class BlenderRenderer:
         self.collection = None
         
         if self._gltfImporterPatched:
-            glTFImporter, BlenderGlTF, BlenderScene = self._gltfImporterPatched
-            
-            # clean everything up after patching
-            
-            BlenderGlTF.set_convert_functions = self._set_convert_functions
-            self._set_convert_functions = None
-
-            delattr(glTFImporter, "_offset")
-            
-            BlenderScene.select_imported_objects = self._select_imported_objects
-            self._select_imported_objects = None
-            
-            self._gltfImporterPatched = None
+            self.cleanupGltfImporterPatching()
         
         return numImportedTiles
     
@@ -262,3 +254,18 @@ class BlenderRenderer:
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
             self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
+    
+    def cleanupGltfImporterPatching(self):
+        glTFImporter, BlenderGlTF, BlenderScene = self._gltfImporterPatched
+        
+        # clean everything up after patching
+        
+        BlenderGlTF.set_convert_functions = self._set_convert_functions
+        self._set_convert_functions = None
+
+        delattr(glTFImporter, "_offset")
+        
+        BlenderScene.select_imported_objects = self._select_imported_objects
+        self._select_imported_objects = None
+        
+        self._gltfImporterPatched = None
