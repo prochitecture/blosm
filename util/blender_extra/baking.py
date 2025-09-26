@@ -147,6 +147,7 @@ class BLOSM_OT_BakeToSingleMaterial(bpy.types.Operator):
             'use_pass_direct': scene.render.bake.use_pass_direct,
             'use_pass_indirect': scene.render.bake.use_pass_indirect,
             'use_pass_color': scene.render.bake.use_pass_color,
+            'cage_extrusion': scene.render.bake.cage_extrusion,
         }
 
         try:
@@ -157,6 +158,7 @@ class BLOSM_OT_BakeToSingleMaterial(bpy.types.Operator):
             scene.render.bake.use_pass_direct = False
             scene.render.bake.use_pass_indirect = False
             scene.render.bake.use_pass_color = True
+            scene.render.bake.cage_extrusion = float(cage_extrusion)
 
             # Perform bake: select sources (all selected meshes) then target active
             bpy.ops.object.select_all(action='DESELECT')
@@ -201,6 +203,7 @@ class BLOSM_OT_BakeToSingleMaterial(bpy.types.Operator):
             scene.render.bake.use_pass_direct = prev_bake['use_pass_direct']
             scene.render.bake.use_pass_indirect = prev_bake['use_pass_indirect']
             scene.render.bake.use_pass_color = prev_bake['use_pass_color']
+            scene.render.bake.cage_extrusion = prev_bake['cage_extrusion']
 
         self.report({'INFO'}, "Baking finished")
         return {'FINISHED'}
