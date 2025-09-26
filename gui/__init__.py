@@ -678,11 +678,12 @@ class BLOSM_PT_Tools(bpy.types.Panel):
         layout = self.layout
         addon = context.scene.blosm
         
-        layout.label(text="Replace materials with")
-        layout.row().prop(addon, "replaceMaterialsWith", expand=True)
+        box = layout.box()
+        box.label(text="Replace materials with")
+        box.row().prop(addon, "replaceMaterialsWith", expand=True)
         if addon.replaceMaterialsWith == "custom":
-            layout.prop_search(addon, "replacementMaterial", bpy.data, "materials")
-        layout.operator("blosm.replace_materials")
+            box.prop_search(addon, "replacementMaterial", bpy.data, "materials")
+        box.operator("blosm.replace_materials")
 
         # Pro-only baking UI (3D Tiles). Show when module is available and active is a mesh
         try:
@@ -702,15 +703,10 @@ class BLOSM_PT_Tools(bpy.types.Panel):
         if is_premium and baking_mod and active_mesh:
             box = layout.box()
             box.label(text="Bake: single diffuse texture")
-            col = box.column(align=True)
-            col.prop(addon, "bake_image_size")
-            row = col.split(factor=0.5)
-            row.prop(addon, "bake_margin_px")
-            row.prop(addon, "bake_uv_margin")
-            row = col.split(factor=0.5)
-            row.prop(addon, "bake_cage_extrusion")
-            row.prop(addon, "bake_replace_active")
-            col.operator("blosm.bake_to_single_material", text="Bake (Pro)")
+            box.prop(addon, "bake_image_size")
+            box.split(factor=0.5)
+            box.prop(addon, "bake_replace_active")
+            box.operator("blosm.bake_to_single_material", text="Bake")
 
 
 class BLOSM_PT_BpyProj(bpy.types.Panel):
