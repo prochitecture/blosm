@@ -60,8 +60,7 @@ class RealisticBuildingLayer(BuildingLayer):
 
         if self.app.preferableResult == defs.Result.FootprintWithGn:
             globalRenderer.footprintRenderer.finalize(self)
-        
-        if self.app.preferMesh:
+        elif self.app.preferMesh:
             gnMeshAttributes = self.gnMeshAttributes
             objGn = self.objGn
             

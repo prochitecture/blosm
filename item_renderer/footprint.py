@@ -1,6 +1,6 @@
 import os
 
-from blosm.util.blender import appendNodeGroupFromFile
+from blosm.util.blender import appendNodeGroupFromFile, addGeometryNodesModifier
 
 
 class Footprint:
@@ -16,7 +16,7 @@ class Footprint:
         # Load the node group for the case when buildings will be generated as a single Blender object
         self.gnBldgSingleObject = appendNodeGroupFromFile(
             os.path.join(os.path.dirname(self.app.baseAssetPath), "prochitecture_buildings.blend"),
-            "Blosm Building Single object"
+            "Blosm Building Single Object"
         )
 
         # Load the node group for the case when each building will be generated as a separate Blender object
@@ -46,6 +46,9 @@ class Footprint:
             loop.edge[bmLayer] = facade.cl
             loop = loop.link_loop_next
     
-    def finalize(layer):
-        pass
-        
+    def finalize(self, layer):
+        addGeometryNodesModifier(
+            layer.obj,
+            self.gnBldgSingleObject if layer.singleObject else self.gnBldgSeparateObject,
+            "Building Init"
+        )       

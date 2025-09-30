@@ -21,6 +21,7 @@ from enum import Enum
 
 class Result(Enum):
     FootprintWithGn = 1
+    VolumeMesh = 2
 
 
 class Keys:
