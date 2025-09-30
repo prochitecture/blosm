@@ -29,8 +29,8 @@ class RealisticBuildingLayer(BuildingLayer):
     # the name for the auxiliary UV map used to keep the size of a BMFace
     uvNameSize = "size"
     
-    def prepare(self, instance):
-        uv_layers = instance.obj.data.uv_layers
+    def prepare(self):
+        uv_layers = self.obj.data.uv_layers
         uv_layers.new(name=self.uvName)
         uv_layers.new(name=self.uvNameSize)
-        super().prepare(instance)
+        super().prepare()

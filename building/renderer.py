@@ -319,6 +319,7 @@ class BuildingRenderer(Renderer2d):
         self.offset = Vector(
             next( outline.getOuterData(osm) if outline.t is parse.multipolygon else outline.getData(osm) )
         )
+        self.offset = Vector((self.offset[0], self.offset[1], 0.))
         if self.app.terrain:
             self.offsetZ = self.app.terrain.project(self.offset)
     
