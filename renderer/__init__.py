@@ -78,6 +78,7 @@ class Renderer:
             )
             layer.prepare()
             self.bm = layer.bm
+            self.materialIndices = layer.materialIndices
     
     def renderLineString(self, element, data):
         pass
