@@ -8,9 +8,6 @@ class Building:
     def __init__(self, data):
         self.data = data
         
-        self.verts = []
-        # counterparts for <self.verts> in the BMesh
-        self.bmVerts = []
         # A cache to store different stuff:
         # attributes evaluated per building rather than per footprint, cladding texture info
         self._cache = {}

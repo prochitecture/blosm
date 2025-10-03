@@ -106,8 +106,7 @@ class Roof:
         if not footprint.valid:
             return
         
-        building = footprint.building
-        verts = building.renderInfo.verts
+        verts = footprint.building.element.l.gen.verts
         indexOffset = len(verts)
         polygon = footprint.polygon
         numVerts = polygon.numEdges

@@ -215,7 +215,7 @@ class RectangleFRA(Geometry):
         # <self> is the geometry for <facade>
         
         # <facade> and <_facade> belongs to the same building
-        verts = facade.footprint.building.renderInfo.verts
+        verts = facade.footprint.building.element.l.gen.verts
         
         _geometry = _facade.geometry
         indices, _indices = facade.indices, _facade.indices
@@ -236,7 +236,7 @@ class RectangleFRA(Geometry):
     def subtract(self, facade, _facade):
         # <self> is the geometry for <facade>
         
-        verts, _verts = facade.footprint.building.renderInfo.verts, _facade.footprint.building.renderInfo.verts
+        verts, _verts = facade.footprint.building.element.l.gen.verts, _facade.footprint.building.element.l.gen.verts
         _geometry = _facade.geometry
         indices, _indices = facade.indices, _facade.indices
         

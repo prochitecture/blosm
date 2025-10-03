@@ -37,7 +37,7 @@ class GpBase:
             self.makeStrokes(part.footprint)
     
     def makeStrokes(self, footprint):
-        verts = footprint.building.renderInfo.verts
+        verts = footprint.building.element.l.gen.verts
         offsetVertex = footprint.building.renderInfo.offsetVertex
         for facade in footprint.facades:
             vertBL = (verts[facade.indices[0]] + offsetVertex) if offsetVertex else verts[facade.indices[0]]

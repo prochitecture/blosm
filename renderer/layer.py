@@ -125,7 +125,6 @@ class MeshLayer(Layer):
         return app.swOffset
     
     def prepare(self):
-        self.bm = getBmesh(self.obj)
         self.materialIndices = {}
     
     def finalize(self):

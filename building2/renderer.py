@@ -26,6 +26,8 @@ from item.roof_hipped import RoofHipped
 from item.roof_hipped_multi import RoofHippedMulti
 from item.roof_side import RoofSide
 
+from .content_generator import MeshGenByIndices, MeshGenByCoords
+
 from util.blender import appendNodeGroupFromFile
 
 _itemClasses = (
@@ -92,6 +94,29 @@ class BuildingRendererNew(Renderer):
         self.revActions = []
     
     def prepare(self):
+        if self.app.preferableResult == defs.Result.FootprintWithGn:
+            if self.app.singleObject:
+                self.objVolumes = self.createBlenderObject(
+                    "Building Volumes",
+                    (0., 0., 0.),
+                    collection = self.collection,
+                    parent = None
+                )
+
+                self.objHoles = self.createBlenderObject(
+                    "Multipolygon Holes",
+                    (0., 0., 0.),
+                    collection = self.collection,
+                    parent = None
+                )
+
+                self.objPartFootprints = self.createBlenderObject(
+                    "Building Part Footprints",
+                    (0., 0., 0.),
+                    collection = self.collection,
+                    parent = None
+                )
+        
         if self.app.preferMesh:
             # A key to the dictionary below is an object name as it's defined in <self.app.assetStore>.
             # A related value is tuple that consists of 
@@ -134,11 +159,14 @@ class BuildingRendererNew(Renderer):
         if self.app.singleObject:
             for layer in self.app.layers:
                 if isinstance(layer, BuildingLayer):
-                    layer.obj = self.createBlenderObject(
-                        layer.name,
-                        layer.location,
-                        collection = self.collection,
-                        parent = None
+                    # set a content (mesh) generator
+                    layer.gen = MeshGenByIndices(
+                        self.createBlenderObject(
+                            layer.name,
+                            layer.location,
+                            collection = self.collection,
+                            parent = None
+                        )
                     )
                     layer.prepare()
     
@@ -216,9 +244,9 @@ class BuildingRendererNew(Renderer):
         
         # render building footprint
         if not building.parts or building.alsoPart:
-            if building.footprint.doFootprintOnly:
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
                 self.footprintRenderer.render(building.footprint)
-            else:
+            if not building.footprint.doFootprintOnly:
                 self.renderExtrudedVolume(building.footprint)
         # render building parts
         for part in building.parts:
@@ -240,24 +268,6 @@ class BuildingRendererNew(Renderer):
             self.facadeRenderer.render(footprint)
         
         footprint.roofRenderer.render(footprint.roofItem)
-    
-    def createFace(self, footprint, indices):
-        bm = footprint.building.element.l.bm
-        renderInfo = footprint.building.renderInfo
-        verts = renderInfo.verts
-        bmVerts = renderInfo.bmVerts
-        
-        # extend <bmVerts> to have the same number of vertices as in <verts>
-        bmVerts.extend(None for _ in range(len(verts)-len(bmVerts)))
-        
-        # check if we have BMVerts for for all <indices>
-        for index in indices:
-            if not bmVerts[index]:
-                bmVerts[index] = bm.verts.new(
-                    (verts[index] + renderInfo.offsetVertex) if renderInfo.offsetVertex else verts[index]
-                )
-        
-        return bm.faces.new(bmVerts[index] for index in indices)
     
     def setUvs(self, face, uvs, layer, uvLayerName):
         # assign uv coordinates

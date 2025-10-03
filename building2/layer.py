@@ -37,12 +37,9 @@ class RealisticBuildingLayer(BuildingLayer):
         super().prepare()
 
         if self.app.preferableResult == defs.Result.FootprintWithGn:
-            # create attributes for the Geometry Nodes
-            #objGnMesh = self.obj.data
-            #objGnMesh.attributes.new("roof_shape", 'INT8', 'FACE')
-            #objGnMesh.attributes.new("facade_class", 'INT8', 'EDGE')
-            self.bm.faces.layers.int.new("roof_shape")
-            self.bm.edges.layers.int.new("facade_class")
+            self.gen.bm.faces.layers.int.new("roof_shape")
+            self.gen.bm.edges.layers.int.new("facade_class")
+        """ FIXME: uncomment the code below to use Geometry Nodes or remove it
         elif self.app.preferMesh:
             # below is the TEMPORARY oode to place roof objects on float roofs
 
@@ -51,6 +48,7 @@ class RealisticBuildingLayer(BuildingLayer):
             # an asset index in Blender collection <globalRenderer.buildingAssetsCollection>
             objGnMesh.attributes.new("triangulate", 'BOOLEAN', 'FACE')
             objGnMesh.attributes.new("subdivide_level", 'INT', 'FACE')
+        """
     
     def finalize(self, globalRenderer=None):
         if not globalRenderer:
@@ -139,7 +137,7 @@ class RealisticBuildingLayerBase(RealisticBuildingLayer):
         self.vertexColorLayerNameCladding = "cladding_color"
     
     def prepare(self):
-        mesh = self.obj.data
+        mesh = self.gen.obj.data
         uv_layers = mesh.uv_layers
         uv_layers.new(name=self.uvLayerNameFacade)
         uv_layers.new(name=self.uvLayerNameCladding)
@@ -148,6 +146,7 @@ class RealisticBuildingLayerBase(RealisticBuildingLayer):
         
         super().prepare()
         
+        """ FIXME: uncomment the code below to use Geometry Nodes or remove it
         if self.app.preferMesh:
             obj = self.obj
             # copy the values from <self.obj>
@@ -163,6 +162,7 @@ class RealisticBuildingLayerBase(RealisticBuildingLayer):
             self.attributeValuesFlatRoof = []
             
             self.bmGn = getBmesh(self.objGn)
+        """
 
 
 class RealisticBuildingLayerExport(RealisticBuildingLayer):
