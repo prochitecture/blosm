@@ -95,27 +95,32 @@ class BuildingRendererNew(Renderer):
     
     def prepare(self):
         if self.app.preferableResult == defs.Result.FootprintWithGn:
-            if self.app.singleObject:
-                self.objVolumes = self.createBlenderObject(
+            self.genVolumes = MeshGenByIndices(
+                self.createBlenderObject(
                     "Building Volumes",
                     (0., 0., 0.),
                     collection = self.collection,
                     parent = None
                 )
+            )
 
-                self.objHoles = self.createBlenderObject(
+            self.genHoles = MeshGenByIndices(
+                self.createBlenderObject(
                     "Multipolygon Holes",
                     (0., 0., 0.),
                     collection = self.collection,
                     parent = None
                 )
+            )
 
-                self.objPartFootprints = self.createBlenderObject(
+            self.genPartFootprints = MeshGenByIndices(
+                self.createBlenderObject(
                     "Building Part Footprints",
                     (0., 0., 0.),
                     collection = self.collection,
                     parent = None
                 )
+            )
         
         if self.app.preferMesh:
             # A key to the dictionary below is an object name as it's defined in <self.app.assetStore>.
@@ -168,6 +173,9 @@ class BuildingRendererNew(Renderer):
                             parent = None
                         )
                     )
+                    if self.app.preferableResult == defs.Result.FootprintWithGn:
+                        # <self.genVolumes> must be accessible from <layer>
+                        layer.genVolumes = self.genVolumes
                     layer.prepare()
     
     def finalize(self):
@@ -175,6 +183,9 @@ class BuildingRendererNew(Renderer):
             for layer in self.app.layers:
                 if isinstance(layer, BuildingLayer):
                     layer.finalize(self)
+            
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
+                self.genVolumes.finalize()
     
     def cleanup(self):
         for action in self.actions:
@@ -271,13 +282,13 @@ class BuildingRendererNew(Renderer):
     
     def setUvs(self, face, uvs, layer, uvLayerName):
         # assign uv coordinates
-        uvLayer = layer.bm.loops.layers.uv[uvLayerName]
+        uvLayer = layer.genVolumes.bm.loops.layers.uv[uvLayerName]
         loops = face.loops
         for loop,uv in zip(loops, uvs):
             loop[uvLayer].uv = uv
     
     def setVertexColor(self, face, color, layer, layerName):
-        vertexColorLayer = layer.bm.loops.layers.color[layerName]
+        vertexColorLayer = layer.genVolumes.bm.loops.layers.color[layerName]
         for loop in face.loops:
             loop[vertexColorLayer] = color
 
@@ -286,7 +297,7 @@ class BuildingRendererNew(Renderer):
         Set material (actually material index) for the given <face>.
         """
         materialIndices = layer.materialIndices
-        materials = layer.obj.data.materials
+        materials = layer.genVolumes.obj.data.materials
         
         if not materialName in materialIndices:
             materialIndices[materialName] = len(materials)

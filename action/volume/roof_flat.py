@@ -26,7 +26,7 @@ class RoofFlat(Roof):
             footprint.valid = False
     
     def getRoofFirstVertIndex(self, footprint):
-        return len(footprint.building.element.l.verts) + footprint.polygon.numEdges
+        return len(footprint.building.element.l.genVolumes.verts) + footprint.polygon.numEdges
     
     def getRoofItem(self, footprint):
         # <firstVertIndex> is the index of the first vertex of the polygon that defines the roof base;
@@ -38,7 +38,7 @@ class RoofFlat(Roof):
         )
                 
     def extrude(self, footprint, roofItem):
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.building.element.l.genVolumes.verts
         indexOffset = len(verts)
         polygon = footprint.polygon
         numVerts = polygon.numEdges
@@ -129,12 +129,12 @@ class RoofLeveled(RoofFlat):
         return h
     
     def getRoofFirstVertIndex(self, footprint):
-        return len(footprint.building.element.l.gen.verts) if footprint.noWalls else super().getRoofFirstVertIndex(footprint)
+        return len(footprint.building.element.l.genVolumes.verts) if footprint.noWalls else super().getRoofFirstVertIndex(footprint)
     
     def extrude(self, footprint, roofItem):
         if footprint.noWalls:
             z = footprint.roofVerticalPosition
             # the basement of the roof
-            footprint.building.element.l.gen.verts.extend(Vector((v.x, v.y, z)) for v in footprint.polygon.verts)
+            footprint.building.element.l.genVolumes.verts.extend(Vector((v.x, v.y, z)) for v in footprint.polygon.verts)
             return
         super().extrude(footprint, roofItem)

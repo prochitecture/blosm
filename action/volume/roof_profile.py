@@ -93,7 +93,7 @@ class ProfiledVert:
         self.i = i
         # the related index (in <verts>) of the polygon vertex in the basement of the volume
         vertBasementIndex = roof.vertOffset + i
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.building.element.l.genVolumes.verts
         proj = footprint.projections
         p = roof.profile
         d = footprint.direction
@@ -535,7 +535,7 @@ class RoofProfile(Roof):
         profileQ.append(index)
         self.profileQ = profileQ
         
-        # where the vertices for the volume start in <footprint.building.element.l.gen.verts>
+        # where the vertices for the volume start in <footprint.building.element.l.genVolumes.verts>
         self.vertOffset = 0
         
         self._initUv()
@@ -623,7 +623,7 @@ class RoofProfile(Roof):
     
     def extrude(self, footprint, roofItem):
         polygon = footprint.polygon
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.building.element.l.genVolumes.verts
         self.vertOffset = len(verts)
         # vertices for the basement of the volume
         minHeight = footprint.minHeight
@@ -749,7 +749,7 @@ class RoofProfile(Roof):
             pv2 (ProfiledVert): Defines the second vertex of the segment of <self.polygon> projected on the profile
             _pv (ProfiledVert): Precedes <pv1>
         """
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.building.element.l.genVolumes.verts
         p = self.profile
         slots = self.slots
         # the current slot
@@ -1001,7 +1001,7 @@ class RoofProfile(Roof):
         """
     
     def initFacadeItem(self, item):
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         indices = item.indices
         numVerts = len(indices)
         firstVert = verts[indices[0]]

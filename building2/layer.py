@@ -137,12 +137,11 @@ class RealisticBuildingLayerBase(RealisticBuildingLayer):
         self.vertexColorLayerNameCladding = "cladding_color"
     
     def prepare(self):
-        mesh = self.gen.obj.data
-        uv_layers = mesh.uv_layers
-        uv_layers.new(name=self.uvLayerNameFacade)
-        uv_layers.new(name=self.uvLayerNameCladding)
+        bm = self.genVolumes.bm
+        bm.loops.layers.uv.new(self.uvLayerNameFacade)
+        bm.loops.layers.uv.new(self.uvLayerNameCladding)
         
-        mesh.vertex_colors.new(name=self.vertexColorLayerNameCladding)
+        bm.loops.layers.color.new(self.vertexColorLayerNameCladding)
         
         super().prepare()
         

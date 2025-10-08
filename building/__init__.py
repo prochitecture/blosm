@@ -384,8 +384,18 @@ class BldgVector:
         return self.edge.v1 if self.direct else self.edge.v2
     
     @property
+    def v1_3d(self):
+        v1 = self.v1
+        return (v1[0], v1[1], 0.)
+    
+    @property
     def v2(self):
         return self.edge.v2 if self.direct else self.edge.v1
+    
+    @property
+    def v2_3d(self):
+        v2 = self.v2
+        return (v2[0], v2[1], 0.)
     
     @property
     def id1(self):

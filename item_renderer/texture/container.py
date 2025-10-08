@@ -287,10 +287,12 @@ class Container(ItemRendererTexture):
                         if not objName in self.r.meshAssets:
                             self.processAssetMeshObject(obj, objName)
                     
+                    """ FIXME: uncomment the code below to use Geometry Nodes or remove it
                     self.prepareGnVerts(
                         item, levelGroup, indices, assetInfo,
                         self.getGnInstanceObject(item, objName)
                     )
+                    """
                 elif item.getStyleBlockAttr("withoutRepeat") and item.getStyleBlockAttrDeep("cl"):
                     item.indices, item.uvs = indices, uvs
                     self.renderWithoutRepeat(item)
@@ -298,7 +300,7 @@ class Container(ItemRendererTexture):
                     #
                     # texture
                     #
-                    face = self.r.createFace(item.footprint, indices)
+                    face = self.r.genVolumes.createFace(item.footprint, indices)
                     
                     if item.materialId is None:
                         self.setMaterialId(
@@ -323,7 +325,7 @@ class Container(ItemRendererTexture):
         if not assetInfo:
             self.renderCladding(
                 item,
-                self.r.createFace(item.footprint, indices),
+                self.r.genVolumes.createFace(item.footprint, indices),
                 uvs
             )
             item.materialId = ""

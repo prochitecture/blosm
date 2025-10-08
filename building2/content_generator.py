@@ -16,7 +16,7 @@ class MeshGenByIndices(MeshGen):
     def createFace(self, footprint, indices):
         bm = self.bm
         renderInfo = footprint.building.renderInfo
-        verts = renderInfo.verts
+        verts = self.verts
         bmVerts = self.bmVerts
         
         # extend <bmVerts> to have the same number of vertices as in <verts>
@@ -32,13 +32,10 @@ class MeshGenByIndices(MeshGen):
         return bm.faces.new(bmVerts[index] for index in indices)
 
     def createFootprint(self, footprint):
-        # get the first vertex index from the first facade
-        firstVertIndex = footprint.facades[0].indices[0]
-
-        face = self.createFace(
-            footprint,
-            range(firstVertIndex, firstVertIndex + footprint.polygon.numEdges)
+        face = self.bm.faces.new(
+            self.bm.verts.new(vector.v1_3d) for vector in footprint.building.polygon.vectors
         )
+
         # set the attribute "roof_shape" to <face>
         # 1: flat
         # 4: skillion
@@ -51,6 +48,9 @@ class MeshGenByIndices(MeshGen):
         for facade in footprint.facades:
             loop.edge[bmLayer] = facade.cl
             loop = loop.link_loop_next
+    
+    def finalize(self):
+        setBmesh(self.obj, self.bm)
 
 
 class MeshGenByCoords(MeshGen):

@@ -32,7 +32,7 @@ class Triangle(Geometry):
         parentUvs = parentItem.uvs
         startIndexL = rs.startIndexL
         
-        verts = parentItem.building.renderInfo.verts
+        verts = parentItem.building.element.l.genVolumes.verts
         
         height = levelGroup.levelHeight\
             if levelGroup.singleLevel else\
@@ -113,7 +113,7 @@ class Triangle(Geometry):
         # only one of <raL> or <raR> can be <True>
         raR = False if raL else (parentUvs[1][0] == parentUvs[2][0])
         
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         
         # the new vertex at the bottom
         indexB = len(verts)
@@ -196,7 +196,7 @@ class Triangle(Geometry):
         # only one of <raL> or <raR> can be <True>
         raR = False if raL else (parentUvs[1][0] == parentUvs[2][0])
         
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         
         # convert <offset> to the distance from the leftmost vertex
         offset = parentUvs[1][0] - parentUvs[0][0] - offset

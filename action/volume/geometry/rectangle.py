@@ -72,7 +72,7 @@ class RectangleFRA(Geometry):
         
         unitVector = item.facade.vector.unitVector3d
         # <startIndex> is not used by the <Rectangle> geometry
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         # <texVb> is the V-coordinate for the bottom vertices of the rectangular items
         # to be created out of <item>
         texVb = item.uvs[0][1]
@@ -143,7 +143,7 @@ class RectangleFRA(Geometry):
         )
     
     def renderLevelGroup(self, parentItem, levelGroup, levelRenderer, rs):
-        verts = parentItem.building.renderInfo.verts
+        verts = parentItem.building.element.l.genVolumes.verts
         
         height = levelGroup.levelHeight\
             if levelGroup.singleLevel else\
@@ -215,7 +215,7 @@ class RectangleFRA(Geometry):
         # <self> is the geometry for <facade>
         
         # <facade> and <_facade> belongs to the same building
-        verts = facade.footprint.building.element.l.gen.verts
+        verts = facade.footprint.building.element.l.genVolumes.verts
         
         _geometry = _facade.geometry
         indices, _indices = facade.indices, _facade.indices
@@ -236,7 +236,7 @@ class RectangleFRA(Geometry):
     def subtract(self, facade, _facade):
         # <self> is the geometry for <facade>
         
-        verts, _verts = facade.footprint.building.element.l.gen.verts, _facade.footprint.building.element.l.gen.verts
+        verts, _verts = facade.footprint.building.element.l.genVolumes.verts, _facade.footprint.building.element.l.genVolumes.verts
         _geometry = _facade.geometry
         indices, _indices = facade.indices, _facade.indices
         
@@ -292,7 +292,7 @@ class RectangleFRA(Geometry):
     
     def renderCladdingStripAtMiddle(self, height, parentItem, parentRenderer):
         rs = parentRenderer.renderState
-        verts = parentItem.building.renderInfo.verts
+        verts = parentItem.building.element.l.genVolumes.verts
         
         # <indexTL> and <indexTR> are the indices of the left and right vertices on the top side of
         # the rectangular cladding strip
@@ -317,7 +317,7 @@ class RectangleFRA(Geometry):
         rs.texVb = texVt
     
     def offsetFromLeft(self, renderer, item, parentIndices, parentUvs, offset):
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         offsetVec = offset/(parentUvs[1][0]-parentUvs[0][0]) * (verts[parentIndices[1]]-verts[parentIndices[0]])
         
         # the new vertex at the bottom
@@ -342,7 +342,7 @@ class RectangleFRA(Geometry):
         )
     
     def offsetFromRight(self, renderer, item, parentIndices, parentUvs, offset):
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         offsetVec = (parentUvs[1][0] - parentUvs[0][0] - offset) / (parentUvs[1][0]-parentUvs[0][0]) * (verts[parentIndices[1]]-verts[parentIndices[0]])
         
         # the new vertex at the bottom

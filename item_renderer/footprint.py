@@ -1,6 +1,6 @@
 import os
 
-from blosm.util.blender import appendNodeGroupFromFile, addGeometryNodesModifier
+from util.blender import appendNodeGroupFromFile, addGeometryNodesModifier
 
 
 class Footprint:
@@ -30,6 +30,7 @@ class Footprint:
         footprint.building.element.l.gen.createFootprint(footprint)
     
     def finalize(self, layer):
+        layer.gen.finalize()
         addGeometryNodesModifier(
             layer.gen.obj,
             self.gnBldgSingleObject if layer.singleObject else self.gnBldgSeparateObject,

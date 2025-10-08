@@ -35,7 +35,7 @@ class TrapezoidH(Geometry):
         # only one of <raL> or <raR> can be <True>
         raR = False if raL else (parentUvs[1][0] == parentUvs[2][0])
         
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         
         # the new vertex at the bottom
         indexB = len(verts)
@@ -185,7 +185,7 @@ class TrapezoidH(Geometry):
         # only one of <raL> or <raR> can be <True>
         raR = False if raL else (parentUvs[1][0] == parentUvs[2][0])
         
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         
         # convert <offset> to the distance from the leftmost vertex
         offset = parentUvs[1][0] - parentUvs[0][0] - offset
@@ -486,7 +486,7 @@ class TrapezoidRV(Geometry):
             )
             return
         
-        verts = parentItem.building.renderInfo.verts
+        verts = parentItem.building.element.l.genVolumes.verts
         parentIndices = parentItem.indices
         parentUvs = parentItem.uvs
         # initialize the variables <indexTL> and <indexTR>
@@ -666,7 +666,7 @@ class TrapezoidRV(Geometry):
             )
     
     def offsetFromLeft(self, renderer, item, parentIndices, parentUvs, offset):
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         
         # the new vertex at the bottom
         indexB = len(verts)
@@ -690,7 +690,7 @@ class TrapezoidRV(Geometry):
         )
     
     def offsetFromRight(self, renderer, item, parentIndices, parentUvs, offset):
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         
         # convert <offset> to the distance from the leftmost vertex
         offset = parentUvs[1][0] - parentUvs[0][0] - offset
@@ -1029,7 +1029,7 @@ class TrapezoidChainedRV(Geometry):
         item.width = uvsOffset[1][0] - uvsOffset[0][0]
         item.height = height
         
-        verts = item.building.renderInfo.verts
+        verts = item.building.element.l.genVolumes.verts
         index = len(verts)
         # vertex at the bottom to the left
         verts.append(verts[indicesOffset[0]] - height*zAxis)
@@ -1076,7 +1076,7 @@ class TrapezoidChainedRV(Geometry):
         # On the contrary, <startIndexL> and <startIndexR> for <PolygonHB> can have other values due to divisions of <PolygonHB>
         startIndexL = -1
         startIndexR = 2
-        verts = parentItem.building.renderInfo.verts
+        verts = parentItem.building.element.l.genVolumes.verts
         texVt = texVb + height
         # initialize the variables <indexTL> and <indexTR>
         indexTL = indexTR = 0

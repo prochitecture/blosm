@@ -85,7 +85,7 @@ class RoofHipped(RoofLeveled):
             self.roofRenderer.render(roofItem)
     
     def generateRoofQuadrangle(self, footprint, roofItem, firstVertIndex):
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.building.element.l.genVolumes.verts
         
         vector, length, cos, sin, distance = self.vector, self.length, self.cos, self.sin, self.distance
         # cleanup
@@ -196,7 +196,7 @@ class RoofHipped(RoofLeveled):
         return True
     
     def generateRoof(self, footprint, roofItem, firstVertIndex):
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.building.element.l.genVolumes.verts
         numPolygonVerts = footprint.polygon.numEdges
         lastVertIndex = firstVertIndex + numPolygonVerts - 1
         

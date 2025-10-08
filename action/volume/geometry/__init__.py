@@ -267,7 +267,7 @@ class Geometry:
         """
         renderer.renderCladding(
             item,
-            renderer.r.createFace(
+            renderer.r.genVolumes.createFace(
                 item.footprint,
                 indices
             ),
