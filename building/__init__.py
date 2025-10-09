@@ -36,7 +36,17 @@ class BldgPolygon:
     straightAngleSin = 0.
     
     def __init__(self, element, manager, building):
-        # if <building> is None, it's a building part
+        """Build polygon vectors from an OSM geometry element.
+
+        Args:
+            element: Outline provider; either a `parse.osm.way.Way` or a
+                `parse.osm.relation.multipolygon.Linestring`. Both expose
+                `pairNodeIds`, which is consumed below.
+            manager: Building manager that supplies projection data and
+                topology helpers.
+            building: Owning building instance; pass `None` when initializing
+                polygons for building parts.
+        """
         self.building = building
         self.reversed = False
         # vectors
@@ -233,6 +243,14 @@ class BldgPolygon:
             ( min(self.verts, key=lambda v: v[1])[1] + max(self.verts, key=lambda v: v[1])[1] )/2.,
             z
         ))
+
+
+class BldgPolygonCW(BldgPolygon):
+    """
+    A polygon with clockwise order of vertices used for the holes in a multipolygon
+    """
+    def directionCondition(self, v1, v2):
+        return v1.x * v2.y - v1.y * v2.x > 0.
 
 
 class BldgPartPolygon(BldgPolygon):
