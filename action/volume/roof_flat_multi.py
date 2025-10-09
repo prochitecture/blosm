@@ -31,9 +31,8 @@ class RoofMulti:
         #
         # deal with the inner polygons below
         #
-        building = footprint.building
         facades = footprint.facades
-        verts = building.verts
+        verts = footprint.element.l.genVolumes.verts
         indexOffset = len(verts)
         z = footprint.roofVerticalPosition if self.extrudeTillRoof else footprint.height
         
