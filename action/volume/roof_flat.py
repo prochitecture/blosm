@@ -44,7 +44,7 @@ class RoofFlat(Roof):
         
         footprint.rectangularWalls = True
         
-        self._generateVerts(footprint, roofItem)
+        self._generateVerts(footprint, footprint.polygon, roofItem)
         
         vectors = polygon.getVectors()
         
@@ -69,9 +69,8 @@ class RoofFlat(Roof):
             )
         )
     
-    def _generateVerts(self, footprint, roofItem):
+    def _generateVerts(self, footprint, polygon, roofItem):
         verts = footprint.building.element.l.genVolumes.verts
-        polygon = footprint.polygon
 
         # create vertices
         

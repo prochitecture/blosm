@@ -35,14 +35,13 @@ class RoofMulti:
         facades = footprint.facades
         verts = footprint.element.l.genVolumes.verts
         indexOffset = len(verts)
-        z = footprint.roofVerticalPosition if self.extrudeTillRoof else footprint.height
         
-        for polygon in roofItem.innerPolygons:
-            numVerts = polygon.numEdges
+        for innerPolygon in roofItem.innerPolygons:
+            numVerts = innerPolygon.numEdges
 
-            self._generateVerts(footprint, roofItem)
+            self._generateVerts(footprint, innerPolygon, roofItem)
 
-            vectors = polygon.getVectors()
+            vectors = innerPolygon.getVectors()
             
             # the starting side
             _in = indexOffset+numVerts
