@@ -17,7 +17,3 @@ class RealisticBuildingManager(BuildingManager):
         if not self.app.renderAfterExtrude:
             for building in self.buildings:
                 renderer.renderExtrudedVolumes(building, self.data)
-    
-    def parseRelation(self, element, elementId):
-        # FIXME temporarily skip multipolygons
-        return
