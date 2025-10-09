@@ -62,7 +62,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
     
     def generateRoof(self, footprint, roofItem, firstVertIndex):
         verts = footprint.building.verts
-        numPolygonVerts = footprint.polygon.n
+        numPolygonVerts = footprint.polygon.numEdges
         innerPolygons = roofItem.innerPolygons
         numHoles = len(innerPolygons)
         lastVertIndex = firstVertIndex + numPolygonVerts - 1
@@ -85,15 +85,15 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
         
         if footprint.noWalls:
             _offset = firstVertIndex + numPolygonVerts
-            holesInfo.append((_offset, innerPolygons[0].n))
+            holesInfo.append((_offset, innerPolygons[0].numEdges))
             holesInfo.extend(
                 zip(
                     (_offset + v for v in accumulate( (innerPolygons[i].numEdges for i in range(numHoles-1)), add)), (innerPolygons[i].numEdges for i in range(1, numHoles))
                 )
             )
         else:
-            _offset = firstVertIndex + numPolygonVerts + innerPolygons[0].n
-            holesInfo.append((_offset, innerPolygons[0].n))
+            _offset = firstVertIndex + numPolygonVerts + innerPolygons[0].numEdges
+            holesInfo.append((_offset, innerPolygons[0].numEdges))
             holesInfo.extend(
                 zip(
                     (_offset + v for v in accumulate( (innerPolygons[i].numEdges + innerPolygons[i+1].numEdges for i in range(numHoles-1)), add)), (innerPolygons[i].numEdges for i in range(1, numHoles))
