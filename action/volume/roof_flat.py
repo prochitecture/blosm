@@ -38,27 +38,13 @@ class RoofFlat(Roof):
         )
                 
     def extrude(self, footprint, roofItem):
-        verts = footprint.building.element.l.genVolumes.verts
-        indexOffset = len(verts)
+        indexOffset = len(footprint.building.element.l.genVolumes.verts)
         polygon = footprint.polygon
         numVerts = polygon.numEdges
         
         footprint.rectangularWalls = True
         
-        # create vertices
-        
-        # verts for the lower cap
-        z = footprint.minHeight
-        verts.extend(Vector((v[0], v[1], z)) for v in polygon.verts)
-        # verts for the upper cap
-        if self.extrudeTillRoof:
-            z = footprint.roofVerticalPosition
-        elif self.roofRenderer.app.preferMesh:
-            roofOffset = roofItem.getStyleBlockAttr("roofOffset")
-            z = footprint.height - roofOffset if roofOffset else footprint.height
-        else:
-            z = footprint.height
-        verts.extend(Vector((v[0], v[1], z)) for v in polygon.verts)
+        self._generateVerts(footprint, roofItem)
         
         vectors = polygon.getVectors()
         
@@ -82,6 +68,25 @@ class RoofFlat(Roof):
                 self
             )
         )
+    
+    def _generateVerts(self, footprint, roofItem):
+        verts = footprint.building.element.l.genVolumes.verts
+        polygon = footprint.polygon
+
+        # create vertices
+        
+        # verts for the lower cap
+        z = footprint.minHeight
+        verts.extend(Vector((v[0], v[1], z)) for v in polygon.verts)
+        # verts for the upper cap
+        if self.extrudeTillRoof:
+            z = footprint.roofVerticalPosition
+        elif self.roofRenderer.app.preferMesh:
+            roofOffset = roofItem.getStyleBlockAttr("roofOffset")
+            z = footprint.height - roofOffset if roofOffset else footprint.height
+        else:
+            z = footprint.height
+        verts.extend(Vector((v[0], v[1], z)) for v in polygon.verts)
     
     def initFacadeItem(self, item):
         geometry = self.rectangleGeometry

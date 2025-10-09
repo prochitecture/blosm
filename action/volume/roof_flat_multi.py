@@ -2,7 +2,7 @@ from mathutils import Vector
 from .roof_flat import RoofFlat
 from item.facade import Facade
 from item.roof_flat_multi import RoofFlatMulti as ItemRoofFlatMulti
-from util.polygon import PolygonCW
+from blosm.building import BldgPolygonCW
 
 
 class RoofMulti:
@@ -17,6 +17,7 @@ class RoofMulti:
                     self.extrude(footprint, roofItem)
                     footprint.roofItem = roofItem
                     footprint.roofRenderer = self.roofRenderer
+                footprint.bldgPart.footprint = footprint
             else:
                 footprint.element.makePolygon()
                 self.volumeAction.volumeGenerators[footprint.getStyleBlockAttr("roofShape")].do(
@@ -37,41 +38,40 @@ class RoofMulti:
         z = footprint.roofVerticalPosition if self.extrudeTillRoof else footprint.height
         
         for polygon in roofItem.innerPolygons:
-            numVerts = polygon.n
-            
-            # create vertices
-            # verts for the lower cap
-            verts.extend(v for v in polygon.verts)
-            # verts for the upper cap
-            verts.extend(Vector((v.x, v.y, z)) for v in polygon.verts)
+            numVerts = polygon.numEdges
+
+            self._generateVerts(footprint, roofItem)
+
+            vectors = polygon.getVectors()
             
             # the starting side
             _in = indexOffset+numVerts
-            facades.append(Facade.getItem(
-                self,
-                footprint,
-                (_in-1, indexOffset, _in, _in+numVerts-1),
-                0 # edge index
-            ))
+            facades.append(
+                Facade(
+                    footprint,
+                    (_in-1, indexOffset, _in, _in+numVerts-1),
+                    next(vectors),
+                    self,
+                )
+            )
             # the rest of the sides
             facades.extend(
-                Facade.getItem(
-                    self,
+                Facade(
                     footprint,
                     (indexOffset+i-1, indexOffset+i, _in+i, _in+i-1),
-                    i # edge index
-                ) for i in range(1, numVerts)
+                    vector,
+                    self
+                ) for i,vector in zip(range(1, numVerts), vectors)
             )
             # mark the created facades as inner
             for i in range(-numVerts, 0):
                 facades[i].outer = False
-                facades[i].normal.negate()
             
             indexOffset += 2*numVerts
     
     def init(self, footprint):
         data = self.data
-        roofItem = super().init(footprint, footprint.element.getOuterData(data))
+        roofItem = super().init(footprint)
         if not footprint.valid:
             return
         z1 = footprint.minHeight
@@ -82,12 +82,9 @@ class RoofMulti:
             if _l.role is data.outer:
                 continue
             # create an inner polygon located at <minHeight>
-            innerPolygon = PolygonCW()
-            innerPolygon.init( Vector((coord[0], coord[1], z1)) for coord in element.getLinestringData(_l, data) )
+            innerPolygon = BldgPolygonCW(_l, self.volumeAction.manager, footprint.building)
             if innerPolygon.numEdges < 3:
                 continue
-            # check the direction of vertices, it must be clockwise (!)
-            innerPolygon.checkDirection()
             innerPolygons.append(innerPolygon)
         return roofItem
 
@@ -98,8 +95,7 @@ class RoofFlatMulti(RoofMulti, RoofFlat):
         super().__init__("RoofFlatMulti", data, volumeAction, itemRenderers)
     
     def getRoofItem(self, footprint):
-        return ItemRoofFlatMulti.getItem(
-            self.itemFactory,
+        return ItemRoofFlatMulti(
             footprint,
             self.getRoofFirstVertIndex(footprint)
         )

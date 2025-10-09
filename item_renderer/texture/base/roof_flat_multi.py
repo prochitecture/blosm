@@ -8,4 +8,9 @@ class RoofFlatMulti(RoofFlatMultiBase, ItemRendererMixin):
         color = item.getCladdingColor()
         if color:
             for face in faces:
-                self.r.setVertexColor(face, color, self.r.layer.vertexColorLayerNameCladding)
+                self.r.setVertexColor(
+                    face,
+                    color,
+                    item.footprint.element.l,
+                    item.footprint.element.l.vertexColorLayerNameCladding
+                )

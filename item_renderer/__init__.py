@@ -49,7 +49,8 @@ class ItemRenderer:
     
     def renderCladding(self, item, face, uvs):
         # <item> could be the current item or its parent item.
-        # The latter is the case if there is no style block for the bottom
+        # The latter is the case if there is no style block for the bottom.
+        # <face> can be a list of faces in the case of a multipolygon building footprint
         
         materialId = ''
         claddingTextureInfo = self.getCladdingTextureInfo(item)

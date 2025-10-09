@@ -66,8 +66,10 @@ class Volume(Action):
             if element.t is parse.multipolygon:
                 # check if the multipolygon has holes
                 if element.hasInner:
+                    footprint.doFootprintOnly = False
                     if footprint.getStyleBlockAttr("roofShape") in ("hipped", "gabled"):
                         self.volumeGeneratorMultiHipped.do(footprint)
+                        footprint.doFootprintOnly = False
                     else:
                         self.volumeGeneratorMultiFlat.do(footprint)
                 else:
