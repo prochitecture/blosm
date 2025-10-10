@@ -3,10 +3,6 @@ from .roof_hipped import RoofHipped
 
 class RoofHippedMulti(RoofHipped):
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, footprint, firstVertIndex):
+        super().__init__(footprint, firstVertIndex)
         self.innerPolygons = []
-    
-    def init(self):
-        super().init()
-        self.innerPolygons.clear()

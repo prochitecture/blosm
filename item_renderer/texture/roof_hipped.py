@@ -5,7 +5,7 @@ class RoofHipped(ItemRendererTexture):
         
     def render(self, roofItem):
         for roofSide in roofItem.roofSides:
-            face = self.r.createFace(
+            face = roofItem.footprint.element.l.genVolumes.createFace(
                 roofItem.footprint,
                 roofSide.indices
             )

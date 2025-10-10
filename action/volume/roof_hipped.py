@@ -23,6 +23,7 @@ class RoofHipped(RoofLeveled):
         super().__init__("RoofHipped", data, volumeAction, itemRenderers)
         
         self.extrudeTillRoof = True
+        self.gnForFootprintAvailable = False
         
         # unit vectors along the edges of footprint polygon
         self.unitVector = []

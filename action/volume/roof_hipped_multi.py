@@ -27,7 +27,10 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
         self.faceToContourIndex = {}
     
     def getRoofItem(self, footprint):
-        return ItemRoofHippedMulti.getItem(self.itemFactory, footprint)
+        return ItemRoofHippedMulti(
+            footprint,
+            self.getRoofFirstVertIndex(footprint)
+        )
     
     def extrudeInnerPolygons(self, footprint, roofItem):
         if footprint.noWalls:
