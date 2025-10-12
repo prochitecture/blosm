@@ -64,27 +64,24 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             self.roofRenderer.render(roofItem)
     
     def generateRoof(self, footprint, roofItem, firstVertIndex):
-        verts = footprint.building.verts
+        verts = footprint.element.l.genVolumes.verts
         numPolygonVerts = footprint.polygon.numEdges
         innerPolygons = roofItem.innerPolygons
         numHoles = len(innerPolygons)
         lastVertIndex = firstVertIndex + numPolygonVerts - 1
         
-        length, unitVector, roofSideIndices = self.length, self.unitVector, self.roofSideIndices
-        # cleanup
-        length.clear()
-        unitVector.clear()
-        roofSideIndices.clear()
+        roofSideIndices = []
         
         holesInfo = self.holesInfo
         holesInfo.clear()
         
         # the outer contour
-        unitVector.extend(
-            (verts[i+1]-verts[i]) for i in range(firstVertIndex, lastVertIndex)
-        )
-        unitVector.append( (verts[firstVertIndex]-verts[lastVertIndex]) )
-        
+        unitVectors = [
+            vector.unitVector3d for vector in footprint.polygon.getVectors()
+        ]
+        lengths = [
+            vector.length for vector in footprint.polygon.getVectors()
+        ]
         
         if footprint.noWalls:
             _offset = firstVertIndex + numPolygonVerts
@@ -95,7 +92,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
                 )
             )
         else:
-            _offset = firstVertIndex + numPolygonVerts + innerPolygons[0].numEdges
+            _offset = 2+ firstVertIndex + numPolygonVerts + innerPolygons[0].numEdges # FIXME
             holesInfo.append((_offset, innerPolygons[0].numEdges))
             holesInfo.extend(
                 zip(
@@ -104,12 +101,13 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             )
         
         # the holes
-        for firstVertIndexHole,numVertsHole in holesInfo:
-            lastVertIndexHole = firstVertIndexHole+numVertsHole-1
-            unitVector.extend(
-                (verts[i+1]-verts[i]) for i in range(firstVertIndexHole, lastVertIndexHole)
+        for innerPolygon in innerPolygons:
+            unitVectors.extend(
+                vector.unitVector3d for vector in innerPolygon.getVectors()
             )
-            unitVector.append( (verts[firstVertIndexHole]-verts[lastVertIndexHole]) )
+            lengths.extend(
+                vector.length for vector in innerPolygon.getVectors()
+            )
 
         if numHoles > 1:
             faceToContourIndex = self.faceToContourIndex
@@ -121,14 +119,6 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
                 for i in range(firstVertIndexHole, firstVertIndexHole+numVertsHole):
                     faceToContourIndex[i] = firstVertIndexHole - _offset
                 _offset += numVertsHole
-
-        length.extend(
-            vec.length for vec in unitVector
-        )
-        
-        for edgeIndex, vec in enumerate(unitVector):
-            vec /= length[edgeIndex]
-        
         
         #dumpInputHippedRoof(verts, firstVertIndex, numPolygonVerts, holesInfo, unitVector)
         #return
@@ -142,7 +132,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             footprint.roofHeight,
             0,
             roofSideIndices,
-            unitVector
+            unitVectors
         )
         
         if not self.validatePolygonizeOutput(roofSideIndices):
@@ -152,7 +142,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
         
         # calculate tangent of the roof pitch angle
         tan = ( verts[ roofSideIndices[0][2] ][2] - roofVerticalPosition ) / \
-        (verts[ roofSideIndices[0][2] ] - verts[ roofSideIndices[0][1] ]).dot( zAxis.cross(unitVector[0]) )
+        (verts[ roofSideIndices[0][2] ] - verts[ roofSideIndices[0][1] ]).dot( zAxis.cross(unitVectors[0]) )
         factor = math.sqrt(1. + tan*tan)
         
         for indices in roofSideIndices:
@@ -165,14 +155,13 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             roofItem.addRoofSide(
                 indices,
                 # UV-coordinates
-                ( (0., 0.), (length[edgeIndex], 0.) ) + tuple(
+                ( (0., 0.), (lengths[edgeIndex], 0.) ) + tuple(
                     (
-                        (verts[ indices[_index] ] - verts[ indices[0] ]).dot(unitVector[edgeIndex]),
+                        (verts[ indices[_index] ] - verts[ indices[0] ]).dot(unitVectors[edgeIndex]),
                         (verts[ indices[_index] ][2] - roofVerticalPosition) * factor
                     ) for _index in range(2, len(indices))
                 ),
-                edgeIndex,
-                self.itemFactory
+                edgeIndex
             )
         
         return True
