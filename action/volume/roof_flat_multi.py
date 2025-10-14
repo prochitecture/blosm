@@ -24,10 +24,6 @@ class RoofMulti:
                     footprint
                 )
     
-    def extrude(self, footprint, roofItem):
-        super().extrude(footprint, roofItem)
-        self.extrudeInnerPolygons(footprint, roofItem)
-    
     def extrudeInnerPolygons(self, footprint, roofItem):
         #
         # deal with the inner polygons below
@@ -92,6 +88,10 @@ class RoofFlatMulti(RoofMulti, RoofFlat):
     
     def __init__(self, data, volumeAction, itemRenderers):
         super().__init__("RoofFlatMulti", data, volumeAction, itemRenderers)
+
+    def extrude(self, footprint, roofItem):
+        super().extrude(footprint, roofItem)
+        self.extrudeInnerPolygons(footprint, roofItem)
     
     def getRoofItem(self, footprint):
         return ItemRoofFlatMulti(

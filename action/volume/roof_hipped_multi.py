@@ -3,6 +3,7 @@ from itertools import accumulate
 from operator import add
 from .roof_flat_multi import RoofMulti
 from .roof_hipped import RoofHipped
+from .roof_flat import RoofLeveled
 from item.roof_hipped_multi import RoofHippedMulti as ItemRoofHippedMulti
 from mathutils import Vector
 
@@ -18,7 +19,6 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
     def __init__(self, data, volumeAction, itemRenderers):
         super().__init__(data, volumeAction, itemRenderers)
         
-        self.holesInfo = []
         # Python dictionary used for mapping:
         # the index of the first face vertex -> counter index;
         # the face is formed by the straight skeleton;
@@ -46,7 +46,9 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
         # <firstVertIndex> is the index of the first vertex of the polygon that defines the roof base
         firstVertIndex = self.getRoofFirstVertIndex(footprint)
         
-        super().extrude(footprint, roofItem)
+        # extrude the outer polygon
+        RoofLeveled.extrude(self, footprint, roofItem)
+        self.extrudeInnerPolygons(footprint, roofItem)
         
         # now generate the roof
         ok = self.generateRoof(footprint, roofItem, firstVertIndex)
@@ -68,12 +70,10 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
         numPolygonVerts = footprint.polygon.numEdges
         innerPolygons = roofItem.innerPolygons
         numHoles = len(innerPolygons)
-        lastVertIndex = firstVertIndex + numPolygonVerts - 1
         
         roofSideIndices = []
         
-        holesInfo = self.holesInfo
-        holesInfo.clear()
+        holesInfo = []
         
         # the outer contour
         unitVectors = [
@@ -92,7 +92,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
                 )
             )
         else:
-            _offset = 2+ firstVertIndex + numPolygonVerts + innerPolygons[0].numEdges # FIXME
+            _offset = firstVertIndex + numPolygonVerts + innerPolygons[0].numEdges # FIXME
             holesInfo.append((_offset, innerPolygons[0].numEdges))
             holesInfo.extend(
                 zip(

@@ -369,7 +369,7 @@ class BldgVector:
         "id", # debug
         "edge", "direct", "prev", "next", "polygon", "facade",
         "straightAngle", "feature", "skip", "sin", "vectorByIndex",
-        "_unitVector", "_unitVector3d",
+        #"_unitVector", "_unitVector3d",
         "featureSymbol" # debug
     )
     
@@ -390,8 +390,9 @@ class BldgVector:
         # a facade originating from the vector
         self.facade = None
         
-        self._unitVector = None
-        self._unitVector3d = None
+        # FiXME: stop caching if for now, consider carefuly how it is used
+        #self._unitVector = None
+        #self._unitVector3d = None
     
     def reverse(self):
         self.direct = not self.direct
@@ -444,17 +445,22 @@ class BldgVector:
     
     @property
     def unitVector(self):
-        if not self._unitVector:
-            self._unitVector = self.vector/self.edge.length
-        return self._unitVector
+        # FIXME: stop caching if for now, consider carefuly how it is used
+        #if not self._unitVector:
+        #    self._unitVector = self.vector/self.edge.length
+        #return self._unitVector
+        return self.vector/self.edge.length
     
     @property
     def unitVector3d(self):
-        if not self._unitVector3d:
-            if not self._unitVector:
-                self._unitVector = self.vector/self.edge.length
-            self._unitVector3d = Vector((self._unitVector[0], self._unitVector[1], 0.))
-        return self._unitVector3d
+        # FIXME: stop caching if for now, consider carefuly how it is used
+        #if not self._unitVector3d:
+        #    if not self._unitVector:
+        #        self._unitVector = self.vector/self.edge.length
+        #    self._unitVector3d = Vector((self._unitVector[0], self._unitVector[1], 0.))
+        #return self._unitVector3d
+        unitVector2d = self.vector/self.edge.length
+        return Vector((unitVector2d[0], unitVector2d[1], 0.))
     
     @property
     def length(self):
@@ -476,11 +482,12 @@ class BldgVector:
         return self.edge.length > other.edge.length
     
     def calculateSin(self):
+        # FiXME: stop caching if for now, consider carefuly how it is used
         # delete cached unit vectors
-        if self._unitVector:
-            self._unitVector = None
-        if self.prev._unitVector:
-            self.prev._unitVector = None
+        #if self._unitVector:
+        #    self._unitVector = None
+        #if self.prev._unitVector:
+        #    self.prev._unitVector = None
         self.sin = self.prev.unitVector.cross(self.unitVector)
 
 
