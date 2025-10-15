@@ -54,7 +54,7 @@ def _checkPath():
 _checkPath()
 
 
-import bpy, bmesh, bgl, blf
+import bpy, bmesh, blf
 
 from util.transverse_mercator import TransverseMercator
 from renderer import Renderer
