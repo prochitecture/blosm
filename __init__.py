@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 bl_info = {
     "name": "Blosm",
     "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 17),
+    "version": (2, 7, 18),
     "blender": (4, 2, 0),
     "location": "Right side panel > \"Blosm\" tab",
     "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
@@ -54,7 +54,7 @@ def _checkPath():
 _checkPath()
 
 
-import bpy, bmesh, bgl, blf
+import bpy, bmesh, blf
 
 from util.transverse_mercator import TransverseMercator
 from renderer import Renderer
