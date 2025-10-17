@@ -1,8 +1,8 @@
 import os
 import bpy
 
-from util.blender import loadMaterialsFromFile
-from util.blender_extra.material import createMaterialFromTemplate, setImage
+from ..util.blender import loadMaterialsFromFile
+from ..util.blender_extra.material import createMaterialFromTemplate, setImage
 from .util import setTextureSize, setTextureSize2
 
 _materialTemplateFilename = "building_material_templates.blend"

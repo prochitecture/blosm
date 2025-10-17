@@ -1,4 +1,4 @@
-from building.manager import BuildingManager
+from ..building.manager import BuildingManager
 from . import Building
 
 

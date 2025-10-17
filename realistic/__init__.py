@@ -19,11 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bpy, bmesh
 import math
-from app.blender import app
-from util.blender import getBmesh, setBmesh
+from ..app.blender import app
+from ..util.blender import getBmesh, setBmesh
 from .renderer import AreaRenderer, ForestRenderer, WaterRenderer
-
-import util.blender_extra.material
 
 
 class BLOSM_OT_MakeRealistic(bpy.types.Operator):
@@ -161,9 +159,9 @@ class BLOSM_OT_FlattenSelected(bpy.types.Operator):
 
 
 def register():
-    from util import blender_extra
+    from ..util import blender_extra
     blender_extra.material.register()
 
 def unregister():
-    from util import blender_extra
+    from ..util import blender_extra
     blender_extra.material.unregister()

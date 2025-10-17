@@ -1,6 +1,5 @@
-import os
 import bpy
-from util.blender_extra.material import createMaterialFromTemplate, setImage
+from ....util.blender_extra.material import createMaterialFromTemplate, setImage
 from ...util import setTextureSize, setTextureSize2, getPath
 
 

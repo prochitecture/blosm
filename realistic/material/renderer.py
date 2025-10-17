@@ -19,8 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import math
 import bpy
-from util.blender import loadMaterialsFromFile
-from util.blender_extra.material import setCustomNodeValue
+from ...util.blender import loadMaterialsFromFile
+from ...util.blender_extra.material import setCustomNodeValue
 
 
 _colors = (

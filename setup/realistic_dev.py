@@ -1,24 +1,24 @@
-from style import StyleStore
+from ..style import StyleStore
 
-from parse.osm.relation.building import Building as BuildingRelation
+from ..parse.osm.relation.building import Building as BuildingRelation
 
-from building.manager import BuildingParts, BuildingRelations
+from ..building.manager import BuildingParts, BuildingRelations
 
-from manager.logging import Logger
+from ..manager.logging import Logger
 
-from building2 import Building
-from building2.manager import RealisticBuildingManager
-from building2.renderer import BuildingRendererNew
-from building2.layer import RealisticBuildingLayer, RealisticBuildingLayerExport
+from ..building2 import Building
+from ..building2.manager import RealisticBuildingManager
+from ..building2.renderer import BuildingRendererNew
+from ..building2.layer import RealisticBuildingLayer, RealisticBuildingLayerExport
 
-from item.footprint import Footprint
+from ..item.footprint import Footprint
 
-from item_renderer.texture.roof_generatrix import generatrix_dome, generatrix_onion, Center, MiddleOfTheLongesSide
+from ..item_renderer.texture.roof_generatrix import generatrix_dome, generatrix_onion, Center, MiddleOfTheLongesSide
 
-from setup.premium import setup_forests
+from ..setup.premium import setup_forests
 
 # item renderers
-from item_renderer.texture.base import\
+from ..item_renderer.texture.base import\
     Facade as FacadeRenderer,\
     Div as DivRenderer,\
     Level as LevelRenderer,\
@@ -32,7 +32,7 @@ from item_renderer.texture.base import\
     RoofPyramidal as RoofPyramidalRenderer,\
     RoofHipped as RoofHippedRenderer
 
-from item_renderer.texture.export import\
+from ..item_renderer.texture.export import\
     Facade as FacadeRendererExport,\
     Div as DivRendererExport,\
     Level as LevelRendererExport,\
@@ -46,9 +46,9 @@ from item_renderer.texture.export import\
     RoofPyramidal as RoofPyramidalRendererExport,\
     RoofHipped as RoofHippedRendererExport
 
-from action.terrain import Terrain
-from action.offset import Offset
-from action.volume import Volume
+from ..action.terrain import Terrain
+from ..action.offset import Offset
+from ..action.volume import Volume
 
 
 def setup(app, data):
