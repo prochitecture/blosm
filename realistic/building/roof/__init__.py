@@ -18,11 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import math
-from building.roof import Roof
-from building.roof.mesh import RoofMesh
-from manager import Manager
-from util.osm import parseNumber
-from util import zAxis
+from ....building.roof import Roof
+from ....building.roof.mesh import RoofMesh
+from ....manager import Manager
+from ....util import zAxis
 
 
 class RoofRealistic:

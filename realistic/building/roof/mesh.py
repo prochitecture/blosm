@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from . import RoofRealistic
-from building.roof.mesh import RoofMesh
+from ....building.roof.mesh import RoofMesh
 from .flat import RoofFlatRealistic
 
 

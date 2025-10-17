@@ -21,8 +21,8 @@ import os
 import bpy
 from mathutils import Vector
 from . import Roof
-from renderer import Renderer
-from util.blender import loadMeshFromFile
+from ...renderer import Renderer
+from ...util.blender import loadMeshFromFile
 
 
 class RoofMesh(Roof):
