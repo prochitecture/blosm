@@ -17,17 +17,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from parse.osm.relation.building import Building
+from blosm.parse.osm.relation.building import Building
 
-from manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken, WayManager
-from renderer import Renderer2d
-from renderer.node_renderer import BaseNodeRenderer
-from renderer.curve_renderer import CurveRenderer
+from blosm.manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken, WayManager
+from blosm.renderer import Renderer2d
+from blosm.renderer.node_renderer import BaseNodeRenderer
+from blosm.renderer.curve_renderer import CurveRenderer
 
-from building.manager import BuildingManager, BuildingParts, BuildingRelations
-from building.renderer import BuildingRenderer
+from blosm.building.manager import BuildingManager, BuildingParts, BuildingRelations
+from blosm.building.renderer import BuildingRenderer
 
-from manager.logging import Logger
+from blosm.manager.logging import Logger
 
 
 def tunnel(tags, e):

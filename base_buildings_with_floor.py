@@ -17,31 +17,31 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from parse.osm.relation.building import Building
+from blosm.parse.osm.relation.building import Building
 
-from manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken, WayManager
-from renderer import Renderer2d
-from renderer.node_renderer import BaseNodeRenderer
-from renderer.curve_renderer import CurveRenderer
+from blosm.manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken, WayManager
+from blosm.renderer import Renderer2d
+from blosm.renderer.node_renderer import BaseNodeRenderer
+from blosm.renderer.curve_renderer import CurveRenderer
 
-from building.manager import BuildingManager, BuildingParts, BuildingRelations
-from building.layer import BuildingLayer
-from building.renderer import BuildingRenderer
+from blosm.building.manager import BuildingManager, BuildingParts, BuildingRelations
+from blosm.building.layer import BuildingLayer
+from blosm.building.renderer import BuildingRenderer
 
-from manager.logging import Logger
+from blosm.manager.logging import Logger
 
 
 floorColor = (0.6, 0.2, 0.)
 floorMaterialName = "floor"
 def getFloorMaterialIndex(r):
-    from util.blender import createDiffuseMaterial
+    from blosm.util.blender import createDiffuseMaterial
     materialIndex = r.getMaterialIndexByName(floorMaterialName)
     if materialIndex is None:
         # the related Blender material hasn't been created yet, so create it
         materialIndex = r.getMaterialIndex( createDiffuseMaterial(floorMaterialName, floorColor) )
     return materialIndex
 
-from building.roof import Roof
+from blosm.building.roof import Roof
 def renderRoof(self):
     r = self.r
     bm = r.bm
@@ -57,7 +57,7 @@ def renderRoof(self):
 Roof.renderRoof = renderRoof
 
 
-from building.roof.flat import RoofFlat
+from blosm.building.roof.flat import RoofFlat
 _makeRoofFlat = RoofFlat.make
 def makeRoofFlat(self, osm):
     _makeRoofFlat(self, osm)
@@ -65,7 +65,7 @@ def makeRoofFlat(self, osm):
     return True
 RoofFlat.make = makeRoofFlat
 
-from building.roof.profile import RoofProfile
+from blosm.building.roof.profile import RoofProfile
 _makeRoofProfile = RoofProfile.make
 def makeRoofProfile(self, osm):
     _makeRoofProfile(self, osm)
@@ -73,7 +73,7 @@ def makeRoofProfile(self, osm):
     return True
 RoofProfile.make = makeRoofProfile
 
-from building.roof.mesh import RoofMesh
+from blosm.building.roof.mesh import RoofMesh
 _makeRoofMesh = RoofMesh.make
 def makeRoofMesh(self, osm):
     _makeRoofMesh(self, osm)
@@ -84,7 +84,7 @@ def makeRoofMesh(self, osm):
     return True
 RoofMesh.make = makeRoofMesh
 
-from building.roof.pyramidal import RoofPyramidal
+from blosm.building.roof.pyramidal import RoofPyramidal
 _makeRoofPyramidal = RoofPyramidal.make
 def makeRoofPyramidal(self, osm):
     _makeRoofPyramidal(self, osm)
@@ -92,7 +92,7 @@ def makeRoofPyramidal(self, osm):
     return True
 RoofPyramidal.make = makeRoofPyramidal
 
-from building.roof.skillion import RoofSkillion
+from blosm.building.roof.skillion import RoofSkillion
 _makeRoofSkillion = RoofSkillion.make
 def makeRoofSkillion(self, osm):
     wallIndices = self.wallIndices
@@ -109,7 +109,7 @@ def makeRoofSkillion(self, osm):
     return True
 RoofSkillion.make = makeRoofSkillion
 
-from building.roof.mansard import RoofMansard
+from blosm.building.roof.mansard import RoofMansard
 _makeRoofMansard = RoofMansard.make
 def makeRoofMansard(self, osm):
     _makeRoofMansard(self, osm)
@@ -119,7 +119,7 @@ def makeRoofMansard(self, osm):
     return True
 RoofMansard.make = makeRoofMansard
 
-from building.roof.flat import RoofFlatMulti
+from blosm.building.roof.flat import RoofFlatMulti
 _renderRoofFlatMulti = RoofFlatMulti.render
 def renderRoofFlatMulti(self):
     import bmesh
