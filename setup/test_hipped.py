@@ -1,24 +1,24 @@
-from style import StyleStore
+from ..style import StyleStore
 
-from parse.osm.relation.building import Building as BuildingRelation
+from ..parse.osm.relation.building import Building as BuildingRelation
 
-from building.manager import BuildingParts, BuildingRelations
+from ..building.manager import BuildingParts, BuildingRelations
 
-from manager.logging import Logger
+from ..manager.logging import Logger
 
-from building2.manager import RealisticBuildingManager
-from building2.renderer import BuildingRendererNew, Building
-from building2.layer import RealisticBuildingLayer
+from ..building2.manager import RealisticBuildingManager
+from ..building2.renderer import BuildingRendererNew, Building
+from ..building2.layer import RealisticBuildingLayer
 
-from item.footprint import Footprint
+from ..item.footprint import Footprint
 
 # item renderers
-from item_renderer.test import\
+from ..item_renderer.test import\
     GeometryRenderer, GeometryRendererRoofWithSides, GeometryRendererFacade, GeometryRendererRoofFlat
 
-from action.terrain import Terrain
-from action.offset import Offset
-from action.volume import Volume
+from ..action.terrain import Terrain
+from ..action.offset import Offset
+from ..action.volume import Volume
 
 
 import bpy
@@ -28,7 +28,7 @@ def redefineMethods():
     #
     # redefine BuildingManager.render(..) to render only a part of buildings
     #
-    from building.manager import BuildingManager
+    from ..building.manager import BuildingManager
     def bmRender(self):
         numBuildings = len(self.buildings)
         for i in range(numBuildings):
@@ -43,7 +43,7 @@ def redefineMethods():
     # augment BuildingRendererNew.render(..)
     #
     import math
-    from parse.osm.way import Way
+    from ..parse.osm.way import Way
     
     _brRender = BuildingRendererNew.render
     def brRender(self, buildingP, data):
@@ -68,7 +68,7 @@ def redefineMethods():
     #
     # augment BlenderApp.clean(..)
     #
-    from app.blender import BlenderApp
+    from ..app.blender import BlenderApp
     
     _clean = BlenderApp.clean
     def clean(self):
@@ -81,7 +81,7 @@ def redefineMethods():
     #
     # redefine Node.getData(..) (never cache the projected coordinates)
     #
-    from parse.osm.node import Node
+    from ..parse.osm.node import Node
     
     def getData(self, osm):
         """
@@ -94,7 +94,7 @@ def redefineMethods():
     #
     # redefine RoofHipped.render(..) to catch exceptions inside lib.bpypolyskel.polygonize(..)
     #
-    from action.volume.roof_hipped import RoofHipped
+    from ..action.volume.roof_hipped import RoofHipped
     
     _rhGenerateRoof = RoofHipped.generateRoof
     def rhGenerateRoof(self, footprint, roofItem, firstVertIndex):
@@ -119,7 +119,7 @@ def redefineMethods():
     #
     # redefine RoofHipped.render(..) to catch exceptions inside lib.bpypolyskel.polygonize(..)
     #
-    from action.volume.roof_hipped_multi import RoofHippedMulti
+    from ..action.volume.roof_hipped_multi import RoofHippedMulti
     
     _rhmGenerateRoof = RoofHippedMulti.generateRoof
     def rhmGenerateRoof(self, footprint, roofItem, firstVertIndex):

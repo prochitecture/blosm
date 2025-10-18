@@ -17,15 +17,15 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from parse.osm.relation.building import Building
+from ..parse.osm.relation.building import Building
 
-from building.manager import BuildingParts, BuildingRelations
+from ..building.manager import BuildingParts, BuildingRelations
 
-from manager.logging import Logger
+from ..manager.logging import Logger
 
-from building.manager import BuildingManager
-from realistic.building.layer import RealisticBuildingLayer
-from realistic.building.renderer import RealisticBuildingRenderer
+from ..building.manager import BuildingManager
+from ..realistic.building.layer import RealisticBuildingLayer
+from ..realistic.building.renderer import RealisticBuildingRenderer
 
 
 def setup_base(app, osm, getMaterials, bldgPreRender):
@@ -68,10 +68,10 @@ def setup_base(app, osm, getMaterials, bldgPreRender):
 
 
 def setup_forests(app, osm):
-    from renderer import Renderer2d
-    from realistic.manager import AreaManager
-    from realistic.renderer import AreaRenderer, ForestRenderer
-    from renderer.node_renderer import SingleTreeRenderer
+    from ..renderer import Renderer2d
+    from ..realistic.manager import AreaManager
+    from ..realistic.renderer import AreaRenderer, ForestRenderer
+    from ..renderer.node_renderer import SingleTreeRenderer
     
     areaRenderers = dict(forest=ForestRenderer())
     # create managers

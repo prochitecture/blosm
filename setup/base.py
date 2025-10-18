@@ -17,19 +17,19 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from parse.osm.relation.building import Building
+from ..parse.osm.relation.building import Building
 
-from manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken, WayManager
-from building.gn_2d import GnBldg2dManager
-from renderer import Renderer2d
-from renderer.node_renderer import BaseNodeRenderer
-from renderer.curve_renderer import CurveRenderer
+from ..manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken, WayManager
+from ..building.gn_2d import GnBldg2dManager
+from ..renderer import Renderer2d
+from ..renderer.node_renderer import BaseNodeRenderer
+from ..renderer.curve_renderer import CurveRenderer
 
-from building.manager import BuildingManager, BuildingParts, BuildingRelations
-from building.layer import BuildingLayer
-from building.renderer import BuildingRenderer
+from ..building.manager import BuildingManager, BuildingParts, BuildingRelations
+from ..building.layer import BuildingLayer
+from ..building.renderer import BuildingRenderer
 
-from manager.logging import Logger
+from ..manager.logging import Logger
 
 
 def tunnel(tags, e):

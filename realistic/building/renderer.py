@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from building.renderer import *
+from ...building.renderer import *
 
 from .roof.flat import RoofFlatRealistic, RoofFlatMultiRealistic
 from .roof.profile import RoofProfileRealistic

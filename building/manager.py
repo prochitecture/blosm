@@ -17,12 +17,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from manager import Manager
-import parse
-from parse.osm import Osm
-from util import zAxis
+from ..manager import Manager
+from .. import parse
+from ..parse.osm import Osm
+from ..util import zAxis
 from . import Building, BldgEdge, BldgPart
-from defs.building import Visited
+from ..defs.building import Visited
 
 
 # Adapted from https://stackoverflow.com/questions/16542042/fastest-way-to-sort-vectors-by-angle-without-actually-computing-that-angle

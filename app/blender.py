@@ -26,14 +26,14 @@ if "bpy" in sys.modules:
     import bpy
     from mathutils import Vector
     
-    import defs
-    from renderer.layer import Layer
-    from renderer.layer import MeshLayer
-    from renderer.node_layer import NodeLayer
-    from renderer.curve_layer import CurveLayer
-    from renderer import Renderer
-    from terrain import Terrain
-    from util.blender import makeActive, appendNodeGroupFromFile, addGeometryNodesModifier
+    from .. import defs
+    from ..renderer.layer import Layer
+    from ..renderer.layer import MeshLayer
+    from ..renderer.node_layer import NodeLayer
+    from ..renderer.curve_layer import CurveLayer
+    from ..renderer import Renderer
+    from ..terrain import Terrain
+    from ..util.blender import makeActive, appendNodeGroupFromFile, addGeometryNodesModifier
 
 
 _setAssetsDirStr = "Please set a directory with assets (building_materials.blend, vegetation.blend) in the addon preferences!"
@@ -334,7 +334,7 @@ class BlenderApp(BaseApp):
     
     def initOverlay(self, context):
         addonName = self.addonName
-        from overlay import Overlay, overlayTypeData
+        from ..overlay import Overlay, overlayTypeData
         addon = context.scene.blosm
         data = overlayTypeData[addon.overlayType]
         

@@ -1,7 +1,7 @@
 import os
 import bpy
-from util import rgbToHex
-from util.blender_extra.material import createMaterialFromTemplate, setImage
+from ....util import rgbToHex
+from ....util.blender_extra.material import createMaterialFromTemplate, setImage
 from ...util import setTextureSize, setTextureSize2, getPath
 
 

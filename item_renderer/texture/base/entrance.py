@@ -1,7 +1,7 @@
 import bpy
 from .container import Container
 from ..entrance import Entrance as EntranceBase
-from util.blender_extra.material import createMaterialFromTemplate, setImage
+from ....util.blender_extra.material import createMaterialFromTemplate, setImage
 from ...util import getPath
 
 

@@ -1,34 +1,32 @@
 import bpy
 
-import defs
-from renderer import Renderer
+from .. import defs
+from ..renderer import Renderer
 from .layer import BuildingLayer
 from .item_store import ItemStore
 from .texture_exporter import TextureExporter
 
-from item.building import Building
-from item.footprint import Footprint
-from item.facade import Facade
-from item.level import Level
-from item.div import Div
-from item.bottom import Bottom
-from item.window import Window
-from item.entrance import Entrance
-from item.corner import Corner
-from item.balcony import Balcony
-from item.chimney import Chimney
+from ..item.building import Building
+from ..item.footprint import Footprint
+from ..item.facade import Facade
+from ..item.level import Level
+from ..item.div import Div
+from ..item.bottom import Bottom
+from ..item.window import Window
+from ..item.entrance import Entrance
+from ..item.corner import Corner
+from ..item.balcony import Balcony
+from ..item.chimney import Chimney
 
-from item.roof_flat import RoofFlat
-from item.roof_flat_multi import RoofFlatMulti
-from item.roof_profile import RoofProfile
-from item.roof_generatrix import RoofGeneratrix
-from item.roof_hipped import RoofHipped
-from item.roof_hipped_multi import RoofHippedMulti
-from item.roof_side import RoofSide
+from ..item.roof_flat import RoofFlat
+from ..item.roof_flat_multi import RoofFlatMulti
+from ..item.roof_profile import RoofProfile
+from ..item.roof_generatrix import RoofGeneratrix
+from ..item.roof_hipped import RoofHipped
+from ..item.roof_hipped_multi import RoofHippedMulti
+from ..item.roof_side import RoofSide
 
 from .content_generator import MeshGenByIndices, MeshGenByCoords
-
-from util.blender import appendNodeGroupFromFile
 
 _itemClasses = (
         Building,
