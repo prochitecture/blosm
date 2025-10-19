@@ -1,4 +1,4 @@
-from building.manager import BuildingParts, BuildingRelations
+from ..building.manager import BuildingParts, BuildingRelations
 
 
 def conditionsSkipWays(tags, e):
@@ -22,8 +22,8 @@ class Setup:
         self.unskipFeaturesAction = None
     
     def detectFeatures(self, simplifyPolygons):
-        from action.curved_features import CurvedFeatures
-        from action.straight_angles import StraightAngles
+        from ..action.curved_features import CurvedFeatures
+        from ..action.straight_angles import StraightAngles
         
         buildingManager = self.buildingManager
         buildingManager.addAction(CurvedFeatures())
@@ -32,13 +32,13 @@ class Setup:
     
     def facadeVisibility(self, facadeVisibilityAction):
         if not facadeVisibilityAction:
-            from action.facade_visibility import FacadeVisibilityBlender
+            from ..action.facade_visibility import FacadeVisibilityBlender
             facadeVisibilityAction = FacadeVisibilityBlender()
         
         self.buildingManager.addAction(facadeVisibilityAction)
     
     def classifyFacades(self, facadeVisibilityAction=None):
-        from action.facade_classification import FacadeClassification
+        from ..action.facade_classification import FacadeClassification
         
         self.facadeVisibility(facadeVisibilityAction)
         
@@ -148,7 +148,7 @@ class Setup:
         )
     
     def ptPlatforms(self):
-        from way.pt_stop import PtStopManager
+        from ..way.pt_stop import PtStopManager
         
         osm = self.osm
         ptStopManager = PtStopManager()
@@ -178,7 +178,7 @@ class Setup:
     
     def getFeatureDetectionAction(self, simplifyPolygons):
         if not self.featureDetectionAction:
-            from action.feature_detection import FeatureDetection
+            from ..action.feature_detection import FeatureDetection
             self.featureDetectionAction = FeatureDetection(
                 self.getSkipFeaturesAction() if simplifyPolygons else None
             )
@@ -186,26 +186,26 @@ class Setup:
     
     def getSkipFeaturesAction(self):
         if not self.skipFeaturesAction:
-            from action.skip_features import SkipFeatures
+            from ..action.skip_features import SkipFeatures
             self.skipFeaturesAction = SkipFeatures()
         return self.skipFeaturesAction
     
     def getUnskipFeaturesAction(self):
         if not self.unskipFeaturesAction:
-            from action.unskip_features import UnskipFeatures
+            from ..action.unskip_features import UnskipFeatures
             self.unskipFeaturesAction = UnskipFeatures()
         return self.unskipFeaturesAction
     
     def getWayManager(self):
         if not self.wayManager: # FIXME: remove False when the code for realistic streets is ready
-            from way.manager import WayManager
+            from ..way.manager import WayManager
             from .realistic_streets import getStyleStreet
             
             self.app.trafficSide = "auto" # FIXME a temporary assignment
             self.wayManager = WayManager(self.osm, self.app, getStyleStreet)
         if not self.wayManager:
-            from manager import WayManager
-            from renderer.curve_renderer import CurveRenderer
+            from ..manager import WayManager
+            from ..renderer.curve_renderer import CurveRenderer
             self.wayManager = WayManager(self.osm, CurveRenderer(self.app))
         return self.wayManager
 
@@ -218,14 +218,14 @@ class SetupBlender(Setup):
         self.doExport = app.enableExperimentalFeatures and app.importForExport
     
     def buildingsRealistic(self, getStyle):
-        from building2.manager import RealisticBuildingManager
-        from building2.renderer import BuildingRendererNew
-        from style import StyleStore
+        from ..building2.manager import RealisticBuildingManager
+        from ..building2.renderer import BuildingRendererNew
+        from ..style import StyleStore
         
         if self.doExport:
-            from building2.layer import RealisticBuildingLayerExport as RealisticBuildingLayer
+            from ..building2.layer import RealisticBuildingLayerExport as RealisticBuildingLayer
         else:
-            from building2.layer import RealisticBuildingLayerBase as RealisticBuildingLayer
+            from ..building2.layer import RealisticBuildingLayerBase as RealisticBuildingLayer
         
         buildingParts = BuildingParts()
         buildingRelations = BuildingRelations()
@@ -252,11 +252,11 @@ class SetupBlender(Setup):
         buildingManager.setRenderer(buildingRenderer)
     
     def greasePencil(self):    
-        from action.gp_base import GpBase
+        from ..action.gp_base import GpBase
         self.buildingRenderer.actions.append(GpBase())
     
     def conditionsBuildings(self, buildingManager, buildingParts, buildingRelations):
-        from parse.osm.relation.building import Building as BuildingRelation
+        from ..parse.osm.relation.building import Building as BuildingRelation
         
         osm = self.osm
         # Important: <buildingRelation> beform <building>,
@@ -278,11 +278,11 @@ class SetupBlender(Setup):
         )
     
     def itemRenderers(self):
-        from item_renderer.texture.roof_generatrix import generatrix_dome, generatrix_onion, Center, MiddleOfTheLongesSide
-        from item_renderer.footprint import Footprint as FootprintRenderer
+        from ..item_renderer.texture.roof_generatrix import generatrix_dome, generatrix_onion, Center, MiddleOfTheLongesSide
+        from ..item_renderer.footprint import Footprint as FootprintRenderer
         
         if self.doExport:
-            from item_renderer.texture.export import\
+            from ..item_renderer.texture.export import\
                 Facade as FacadeRendererExport,\
                 Div as DivRendererExport,\
                 Level as LevelRendererExport,\
@@ -316,7 +316,7 @@ class SetupBlender(Setup):
                 RoofHipped = RoofHippedRendererExport()
             )
         else:
-            from item_renderer.texture.base import\
+            from ..item_renderer.texture.base import\
                 Facade as FacadeRenderer,\
                 Div as DivRenderer,\
                 Level as LevelRenderer,\
@@ -353,19 +353,19 @@ class SetupBlender(Setup):
         return itemRenderers
     
     def actionsBuildings(self, buildingManager, buildingRenderer, itemRenderers):
-        from action.volume import Volume
-        from action.facade_boolean import FacadeBoolean
-        from action.facade_classification import FacadeClassificationPart
+        from ..action.volume import Volume
+        from ..action.facade_boolean import FacadeBoolean
+        from ..action.facade_classification import FacadeClassificationPart
         
         app = self.app
         osm = self.osm
         
         # <app.terrain> isn't yet set at this pooint, so we use the string <app.terrainObject> instead
         if app.terrainObject:
-            from action.terrain import Terrain
+            from ..action.terrain import Terrain
             buildingRenderer.actions.append( Terrain(app, osm, buildingRenderer.itemStore) )
         if not app.singleObject:
-            from action.offset import Offset
+            from ..action.offset import Offset
             buildingRenderer.actions.append( Offset(app, osm, buildingRenderer.itemStore) )
         
         volumeAction = Volume(buildingManager, buildingRenderer.itemStore, itemRenderers)

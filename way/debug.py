@@ -20,7 +20,7 @@ def printStreetContent(street, includeEnds):
 
 
 def printBundleContent(bundle):
-    from way.item.street import Street
+    from ..way.item.street import Street
     # check if we got a simple case: <bundle.streetsHead> and <bundle.streetsTail> have the same Streets
     streetsHead, streetsTail = bundle.streetsHead, bundle.streetsTail
     

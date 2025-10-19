@@ -3,31 +3,31 @@ from itertools import tee, permutations
 from mathutils import Vector
 import re
 
-from app import AppType
+from ..app import AppType
 
-from defs.road_polygons import ExcludedWayTags
-from defs.way_cluster_params import minTemplateLength, minNeighborLength, searchDist, dbScanDist
+from ..defs.road_polygons import ExcludedWayTags
+from ..defs.way_cluster_params import minTemplateLength, minNeighborLength, searchDist, dbScanDist
 
-from way.item import Intersection, IntConnector, Section, Street, SideLane, SymLane
-from way.item.bundle import Bundle, StreetGroup, mergePseudoMinors, removeSplittingStreets, orderHeadTail, \
+from ..way.item import Intersection, IntConnector, Section, Street, SideLane, SymLane
+from ..way.item.bundle import Bundle, StreetGroup, mergePseudoMinors, removeSplittingStreets, orderHeadTail, \
                                     findInnerStreets, canBeMerged, joinBundles, mergeBundles,intersectBundles, \
                                     endBundleIntersection, parallelToSample
-from way.way_network import WayNetwork, NetSection
-from way.way_algorithms import createSectionNetwork
-from way.way_properties import lanePattern
-from way.streetRouter import streetsOnRoute
+from ..way.way_network import WayNetwork, NetSection
+from ..way.way_algorithms import createSectionNetwork
+from ..way.way_properties import lanePattern
+from ..way.streetRouter import streetsOnRoute
 
-from lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
+from ..lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 
-from lib.CompGeom.StaticSpatialIndex import StaticSpatialIndex, BBox
-from lib.CompGeom.algorithms import SCClipper
-from lib.CompGeom.GraphBasedAlgos import DisjointSets
-from lib.CompGeom.PolyLine import PolyLine
-from lib.CompGeom.LinePolygonClipper import LinePolygonClipper
-from lib.CompGeom.dbscan import dbClusterScan
-from lib.CompGeom.chains import find_all_lines
-from lib.CompGeom.ConvexHull2D import ConvexHull2D
-from lib.CompGeom.centerline import pointInPolygon
+from ..lib.CompGeom.StaticSpatialIndex import StaticSpatialIndex, BBox
+from ..lib.CompGeom.algorithms import SCClipper
+from ..lib.CompGeom.GraphBasedAlgos import DisjointSets
+from ..lib.CompGeom.PolyLine import PolyLine
+from ..lib.CompGeom.LinePolygonClipper import LinePolygonClipper
+from ..lib.CompGeom.dbscan import dbClusterScan
+from ..lib.CompGeom.chains import find_all_lines
+from ..lib.CompGeom.ConvexHull2D import ConvexHull2D
+from ..lib.CompGeom.centerline import pointInPolygon
 
 
 # helper functions -----------------------------------------------

@@ -17,12 +17,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from parse.osm.way import MissingBldgPartWay
+from ..parse.osm.way import MissingBldgPartWay
 from mathutils import Vector
-from defs.building import BldgPolygonFeature, StraightAngleType, Visited
-from defs.facade_classification import FacadeClass, WayLevel, VisibilityAngleFactor
-from util import zeroVector2d
-import building
+from ..defs.building import Visited
+from ..defs.facade_classification import WayLevel, VisibilityAngleFactor
+from ..util import zeroVector2d
 
 
 class BldgPolygon:
@@ -658,6 +657,3 @@ class VisibilityInfo:
         Currently unused.
         """
         return VisibilityAngleFactor*self.dx > self.dy
-
-
-from .feature import StraightAngle

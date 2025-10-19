@@ -2,9 +2,9 @@ import re
 
 from .feature_detection import FeatureDetection
 
-from defs.building import curvedLengthFactor, sin_lo, sin_me, chordRatioThreshold
+from ..defs.building import curvedLengthFactor, sin_lo, sin_me, chordRatioThreshold
 
-from building.feature import Curved
+from ..building.feature import Curved
 
 
 def hasAnglesForCurvedFeature(vector):

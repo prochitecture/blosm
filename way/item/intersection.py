@@ -1,9 +1,9 @@
 from itertools import tee,islice, cycle
 
 from .item import Item
-from lib.CompGeom.PolyLine import PolyLine
-from way.item.section import Section
-from way.item.connectors import IntConnector
+from ...lib.CompGeom.PolyLine import PolyLine
+from .section import Section
+from .connectors import IntConnector
 
 # helper functions -----------------------------------------------
 def pairs(iterable):

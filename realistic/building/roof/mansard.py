@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from . import RoofRealistic
-from building.roof.mansard import RoofMansard
+from ....building.roof.mansard import RoofMansard
 from .flat import RoofFlatRealistic
 
 

@@ -1,6 +1,6 @@
-from building import BldgPolygon
+from ..building import BldgPolygon
 from . import Item
-from defs.base.level_heights import LevelHeights
+from ..defs.base.level_heights import LevelHeights
 
 
 _facadeClassName = "Facade"

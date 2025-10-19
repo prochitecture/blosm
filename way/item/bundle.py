@@ -3,16 +3,16 @@ from itertools import tee, islice, cycle
 from mathutils import Vector
 from statistics import median
 
-from defs.way_cluster_params import minNeighborLength, searchDist
+from ...defs.way_cluster_params import minNeighborLength, searchDist
 
 from .item import Item
-from way.item.street import Street
-from way.item.section import Section
-from way.item.intersection import Intersection
-from way.item.connectors import IntConnector
-from lib.CompGeom.chains import find_paths
-from lib.CompGeom.PolyLine import PolyLine
-from lib.CompGeom.LinePolygonClipper import LinePolygonClipper
+from .street import Street
+from .section import Section
+from .intersection import Intersection
+from .connectors import IntConnector
+from ...lib.CompGeom.chains import find_paths
+from ...lib.CompGeom.PolyLine import PolyLine
+from ...lib.CompGeom.LinePolygonClipper import LinePolygonClipper
 
 
 # helper functions -----------------------------------------------
@@ -87,7 +87,7 @@ class Bundle(Item):
 
     def plot(self, streetGenerator, doEnd = True):
         from debug import plt, plotEnd
-        from way.item import Section, SideLane, SymLane
+        from .item import Section, SideLane, SymLane
         for iH,street in enumerate(self.streetsHead):
             p = street.head.polyline[0]
             plt.text(p[0],p[1]+1.5,'   S'+str(street.id)+' H '+str(iH),fontsize=10,color='green',ha='right', va='bottom')

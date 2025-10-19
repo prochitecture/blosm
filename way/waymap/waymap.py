@@ -1,10 +1,10 @@
 from mathutils import Vector
 from itertools import tee
 
-import lib.blosm_networkx as nx
-from way.item.dummy_node import DummyNode
-from way.item.street import Street
-from way.item.intersection import Intersection
+from ...lib import blosm_networkx as nx
+from ..item.dummy_node import DummyNode
+from ..item.street import Street
+from ..item.intersection import Intersection
 
 class WayMap(nx.MultiDiGraph):
     ID = 0

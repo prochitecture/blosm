@@ -1,4 +1,4 @@
-from building.feature import StraightAngleSfs
+from ..building.feature import StraightAngleSfs
 
 
 class SkipFeatures:

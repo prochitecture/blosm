@@ -1,8 +1,7 @@
 import os, math, ssl
 from urllib import request
 
-from building import BldgPolygon
-from way.asset_store import AssetType
+from ..building import BldgPolygon
 
 
 class AppType:

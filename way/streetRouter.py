@@ -1,4 +1,4 @@
-from way.item.section import Section
+from .item.section import Section
 
 def lengthOfStreet(street):
     length = 0.0

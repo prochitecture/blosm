@@ -1,7 +1,7 @@
 import re
-from defs.building import BldgPolygonFeature, \
+from ..defs.building import BldgPolygonFeature, \
     longEdgeFactor, midEdgeFactor, sin_me
-from building.feature import ComplexConvex5, ComplexConvex4, QuadConvex, \
+from ..building.feature import ComplexConvex5, ComplexConvex4, QuadConvex, \
     QuadConcave, TriConvex
 
 

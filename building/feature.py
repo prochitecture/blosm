@@ -3,8 +3,8 @@ A module to define features for a instance of the class <BldgPolygon>
 """
 
 from mathutils import Vector
-from building import BldgEdge, BldgPolygon
-from defs.building import BldgPolygonFeature
+from ..building import BldgEdge, BldgPolygon
+from ..defs.building import BldgPolygonFeature
 
 
 class Feature:

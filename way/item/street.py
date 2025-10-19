@@ -1,5 +1,5 @@
 from .item import Item
-from way.item.section import Section
+from .section import Section
 
 
 class Street(Item):

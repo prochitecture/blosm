@@ -1,11 +1,10 @@
 from operator import attrgetter
 
-import defs
+from .. import defs
 
-from building.layer import BuildingLayer
+from ..building.layer import BuildingLayer
 
-from renderer import Renderer
-from util.blender import getBmesh, setBmesh, addGeometryNodesModifier, useAttributeForGnInput
+from ..util.blender import getBmesh, setBmesh, addGeometryNodesModifier, useAttributeForGnInput
 
 
 class RealisticBuildingLayer(BuildingLayer):

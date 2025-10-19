@@ -1,6 +1,6 @@
-from building import BldgPolygon
-from building.feature import StraightAnglePart, StraightAngle, Curved
-from defs.building import BldgPolygonFeature
+from ..building import BldgPolygon
+from ..building.feature import StraightAnglePart, StraightAngle, Curved
+from ..defs.building import BldgPolygonFeature
 
 
 class StraightAngles:

@@ -3,10 +3,10 @@ import os
 from mathutils import Vector
 
 import bpy
-from item_renderer.util import getFilepath
+from ..item_renderer.util import getFilepath
 from mathutils.geometry import intersect_line_line_2d
-from renderer import Renderer
-from util.blender import createMeshObject, createCollection, getBmesh, setBmesh, loadMaterialsFromFile, \
+from ..renderer import Renderer
+from ..util.blender import createMeshObject, createCollection, getBmesh, setBmesh, loadMaterialsFromFile, \
     addGeometryNodesModifier, useAttributeForGnInput, createPolylineMesh
 
 from .asset_store import AssetStore, AssetType, AssetPart

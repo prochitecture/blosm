@@ -1,7 +1,7 @@
-import defs
+from ... import defs
 from .. import Action
-from item.footprint import Footprint
-import parse
+from ...item.footprint import Footprint
+from ... import parse
 
 # import roof generators
 from .roof_flat import RoofFlat

@@ -1,9 +1,9 @@
 from . import Way, Railway
-from defs.way import allWayCategories, facadeVisibilityWayCategories, wayIntersectionCategories, vehicleRoadsCategories
-from style import StyleStore
-from way.waymap.waymap import WayMap
-from way.item.street import Street
-from way.item.connectors import IntConnector
+from ..defs.way import allWayCategories, facadeVisibilityWayCategories, wayIntersectionCategories, vehicleRoadsCategories
+from ..style import StyleStore
+from .waymap.waymap import WayMap
+from .item.street import Street
+from .item.connectors import IntConnector
 
 
 class WayManager:

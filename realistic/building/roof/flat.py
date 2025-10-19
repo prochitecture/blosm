@@ -19,9 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bmesh
 from . import RoofRealistic
-from building.roof.flat import RoofFlat, RoofFlatMulti
-from util import zAxis
-from util.blender import pointNormalUpward
+from ....building.roof.flat import RoofFlat, RoofFlatMulti
+from ....util import zAxis
+from ....util.blender import pointNormalUpward
 
 
 class RoofFlatRealistic(RoofRealistic, RoofFlat):

@@ -1,7 +1,7 @@
 import bpy
 
-from util.blender import loadMaterialsFromFile
-from item_renderer.util import getFilepath
+from ...util.blender import loadMaterialsFromFile
+from ...item_renderer.util import getFilepath
 
 
 class ItemRenderer:

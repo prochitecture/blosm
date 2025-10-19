@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from . import RoofRealistic
-from building.roof.hipped import RoofHipped
+from ....building.roof.hipped import RoofHipped
 from .flat import RoofFlatRealistic, RoofFlat
 from .profile import RoofProfileRealistic, RoofProfile
 

@@ -1,5 +1,5 @@
 import os, json
-from app.asset_store import EntryList
+from ..app.asset_store import EntryList
 
 
 class AssetType:

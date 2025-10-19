@@ -1,16 +1,16 @@
 import os, math
 
-from grammar import *
-from grammar.building import *
-from grammar.street import * 
-from grammar.scope import PerBuilding, PerFootprint
-from grammar import units, symmetry, smoothness
-from grammar.value import Value, FromAttr, FromBldgAttr, Alternatives, Conditional, FromStyleBlockAttr, Constant
-from grammar.value import RandomWeighted, RandomNormal
-from action.volume.roof import Roof as RoofDefs
-from item.defs import *
+from ..grammar import *
+from ..grammar.building import *
+from ..grammar.street import * 
+from ..grammar.scope import PerBuilding, PerFootprint
+from ..grammar import units, symmetry, smoothness
+from ..grammar.value import Value, FromAttr, FromBldgAttr, Alternatives, Conditional, FromStyleBlockAttr, Constant
+from ..grammar.value import RandomWeighted, RandomNormal
+from ..action.volume.roof import Roof as RoofDefs
+from ..item.defs import *
 
-from pml import PML
+from ..pml import PML
 
 
 minHeightForLevels = 1.5
