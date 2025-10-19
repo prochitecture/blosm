@@ -211,7 +211,6 @@ def setup(app, osm):
             buildings.setRenderer(
                 BuildingRenderer(app)
             )
-            app.managers.append(buildings)
     
     if app.highways or app.railways:
         osm.addCondition(tunnel)
