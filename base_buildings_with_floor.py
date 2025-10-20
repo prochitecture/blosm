@@ -30,128 +30,130 @@ from blosm.building.renderer import BuildingRenderer
 
 from blosm.manager.logging import Logger
 
+if not hasattr(BuildingManager, "_patched"):
+    BuildingManager._patched = True
 
-floorColor = (0.6, 0.2, 0.)
-floorMaterialName = "floor"
-def getFloorMaterialIndex(r):
-    from blosm.util.blender import createDiffuseMaterial
-    materialIndex = r.getMaterialIndexByName(floorMaterialName)
-    if materialIndex is None:
-        # the related Blender material hasn't been created yet, so create it
-        materialIndex = r.getMaterialIndex( createDiffuseMaterial(floorMaterialName, floorColor) )
-    return materialIndex
+    floorColor = (0.6, 0.2, 0.)
+    floorMaterialName = "floor"
+    def getFloorMaterialIndex(r):
+        from blosm.util.blender import createDiffuseMaterial
+        materialIndex = r.getMaterialIndexByName(floorMaterialName)
+        if materialIndex is None:
+            # the related Blender material hasn't been created yet, so create it
+            materialIndex = r.getMaterialIndex( createDiffuseMaterial(floorMaterialName, floorColor) )
+        return materialIndex
 
-from blosm.building.roof import Roof
-def renderRoof(self):
-    r = self.r
-    bm = r.bm
-    verts = self.verts
-    materialIndex = r.getRoofMaterialIndex(self.element)
-    # create BMesh faces for the building roof
-    roofIndices = self.roofIndices
-    for f in (bm.faces.new(verts[i] for i in roofIndices[_i]) for _i in range(len(roofIndices)-1)):
-        f.material_index = materialIndex
-    # the floor face
-    f = bm.faces.new(verts[i] for i in roofIndices[-1])
-    f.material_index = getFloorMaterialIndex(self.r)         
-Roof.renderRoof = renderRoof
+    from blosm.building.roof import Roof
+    def renderRoof(self):
+        r = self.r
+        bm = r.bm
+        verts = self.verts
+        materialIndex = r.getRoofMaterialIndex(self.element)
+        # create BMesh faces for the building roof
+        roofIndices = self.roofIndices
+        for f in (bm.faces.new(verts[i] for i in roofIndices[_i]) for _i in range(len(roofIndices)-1)):
+            f.material_index = materialIndex
+        # the floor face
+        f = bm.faces.new(verts[i] for i in roofIndices[-1])
+        f.material_index = getFloorMaterialIndex(self.r)    
+    Roof.renderRoof = renderRoof
 
 
-from blosm.building.roof.flat import RoofFlat
-_makeRoofFlat = RoofFlat.make
-def makeRoofFlat(self, osm):
-    _makeRoofFlat(self, osm)
-    self.roofIndices.append( reversed(self.polygon.indices) )
-    return True
-RoofFlat.make = makeRoofFlat
-
-from blosm.building.roof.profile import RoofProfile
-_makeRoofProfile = RoofProfile.make
-def makeRoofProfile(self, osm):
-    _makeRoofProfile(self, osm)
-    self.roofIndices.append( reversed(self.polygon.indices) )
-    return True
-RoofProfile.make = makeRoofProfile
-
-from blosm.building.roof.mesh import RoofMesh
-_makeRoofMesh = RoofMesh.make
-def makeRoofMesh(self, osm):
-    _makeRoofMesh(self, osm)
-    if not self.noWalls:
-        n = len(self.verts)
+    from blosm.building.roof.flat import RoofFlat
+    _makeRoofFlat = RoofFlat.make
+    def makeRoofFlat(self, osm):
+        _makeRoofFlat(self, osm)
         self.roofIndices.append( reversed(self.polygon.indices) )
-        self.roofIndices.append( range(n-self.polygon.n, n) )
-    return True
-RoofMesh.make = makeRoofMesh
-
-from blosm.building.roof.pyramidal import RoofPyramidal
-_makeRoofPyramidal = RoofPyramidal.make
-def makeRoofPyramidal(self, osm):
-    _makeRoofPyramidal(self, osm)
-    self.roofIndices.append( reversed(self.polygon.indices) )
-    return True
-RoofPyramidal.make = makeRoofPyramidal
-
-from blosm.building.roof.skillion import RoofSkillion
-_makeRoofSkillion = RoofSkillion.make
-def makeRoofSkillion(self, osm):
-    wallIndices = self.wallIndices
-    n = self.polygon.n
-    numWallsBefore = len(wallIndices)
-    _makeRoofSkillion(self, osm)
-    numWallsAfter = len(wallIndices)
-    if numWallsAfter-numWallsBefore == n:
-        _roof = ( wallIndices[-1-i][0] for i in range(self.polygon.n) )
-    else:
-        _roof = [ wallIndices[-1-i][0] for i in range(self.polygon.n-1) ]
-        _roof.append(wallIndices[-1][1])
-    self.roofIndices.append(_roof)
-    return True
-RoofSkillion.make = makeRoofSkillion
-
-from blosm.building.roof.mansard import RoofMansard
-_makeRoofMansard = RoofMansard.make
-def makeRoofMansard(self, osm):
-    _makeRoofMansard(self, osm)
-    if self.makeFlat:
         return True
-    self.roofIndices.append( reversed(self.polygon.indices) )
-    return True
-RoofMansard.make = makeRoofMansard
+    RoofFlat.make = makeRoofFlat
 
-from blosm.building.roof.flat import RoofFlatMulti
-_renderRoofFlatMulti = RoofFlatMulti.render
-def renderRoofFlatMulti(self):
-    import bmesh
-    _renderRoofFlatMulti(self)
-    edges = []
-    for polygon in self.polygons:
-        # get the first vertex
-        bmVert = self.verts[polygon.indices[0]]
-        for bmLoop in bmVert.link_loops:
-            if bmLoop.link_loop_next.vert.co[2] < bmVert.co[2]:
-                break
-        bmLoop = bmLoop.link_loop_next
-        for _ in range(polygon.n):
-            edges.append(bmLoop.edge)
-            bmVert = bmLoop.link_loop_next.vert
-            bmLoop = bmVert.link_loops[0] if bmVert.link_loops[1].link_loop_next.vert.co > bmVert.co[2] else bmVert.link_loops[1]
-    # a magic function that does everything
-    geom = bmesh.ops.triangle_fill(self.r.bm, use_beauty=False, use_dissolve=False, edges=edges)
-    # check the normal direction of the created faces and assign the material
-    normalsUp = None
-    materialIndex = getFloorMaterialIndex(self.r)
-    for face in geom["geom"]:
-        if isinstance(face, bmesh.types.BMFace):
-            if normalsUp is None:
-                if face.normal[2] < 0.:
-                    normalsUp = False
-                else:
-                    normalsUp = True
-            if normalsUp:
-                face.normal_flip()
-            face.material_index = materialIndex
-RoofFlatMulti.render = renderRoofFlatMulti
+    from blosm.building.roof.profile import RoofProfile
+    _makeRoofProfile = RoofProfile.make
+    def makeRoofProfile(self, osm):
+        _makeRoofProfile(self, osm)
+        self.roofIndices.append( reversed(self.polygon.indices) )
+        return True
+    RoofProfile.make = makeRoofProfile
+
+    from blosm.building.roof.mesh import RoofMesh
+    _makeRoofMesh = RoofMesh.make
+    def makeRoofMesh(self, osm):
+        _makeRoofMesh(self, osm)
+        if not self.noWalls:
+            n = len(self.verts)
+            self.roofIndices.append( reversed(self.polygon.indices) )
+            self.roofIndices.append( range(n-self.polygon.n, n) )
+        return True
+    RoofMesh.make = makeRoofMesh
+
+    from blosm.building.roof.pyramidal import RoofPyramidal
+    _makeRoofPyramidal = RoofPyramidal.make
+    def makeRoofPyramidal(self, osm):
+        _makeRoofPyramidal(self, osm)
+        self.roofIndices.append( reversed(self.polygon.indices) )
+        return True
+    RoofPyramidal.make = makeRoofPyramidal
+
+    from blosm.building.roof.skillion import RoofSkillion
+    _makeRoofSkillion = RoofSkillion.make
+    def makeRoofSkillion(self, osm):
+        wallIndices = self.wallIndices
+        n = self.polygon.n
+        numWallsBefore = len(wallIndices)
+        _makeRoofSkillion(self, osm)
+        numWallsAfter = len(wallIndices)
+        if numWallsAfter-numWallsBefore == n:
+            _roof = ( wallIndices[-1-i][0] for i in range(self.polygon.n) )
+        else:
+            _roof = [ wallIndices[-1-i][0] for i in range(self.polygon.n-1) ]
+            _roof.append(wallIndices[-1][1])
+        self.roofIndices.append(_roof)
+        return True
+    RoofSkillion.make = makeRoofSkillion
+
+    from blosm.building.roof.mansard import RoofMansard
+    _makeRoofMansard = RoofMansard.make
+    def makeRoofMansard(self, osm):
+        _makeRoofMansard(self, osm)
+        if self.makeFlat:
+            return True
+        self.roofIndices.append( reversed(self.polygon.indices) )
+        return True
+    RoofMansard.make = makeRoofMansard
+
+    from blosm.building.roof.flat import RoofFlatMulti
+    _renderRoofFlatMulti = RoofFlatMulti.render
+    def renderRoofFlatMulti(self):
+        import bmesh
+        _renderRoofFlatMulti(self)
+        edges = []
+        for polygon in self.polygons:
+            # get the first vertex
+            bmVert = self.verts[polygon.indices[0]]
+            for bmLoop in bmVert.link_loops:
+                if bmLoop.link_loop_next.vert.co[2] < bmVert.co[2]:
+                    break
+            bmLoop = bmLoop.link_loop_next
+            for _ in range(polygon.n):
+                edges.append(bmLoop.edge)
+                bmVert = bmLoop.link_loop_next.vert
+                bmLoop = bmVert.link_loops[0] if bmVert.link_loops[1].link_loop_next.vert.co > bmVert.co[2] else bmVert.link_loops[1]
+        # a magic function that does everything
+        geom = bmesh.ops.triangle_fill(self.r.bm, use_beauty=False, use_dissolve=False, edges=edges)
+        # check the normal direction of the created faces and assign the material
+        normalsUp = None
+        materialIndex = getFloorMaterialIndex(self.r)
+        for face in geom["geom"]:
+            if isinstance(face, bmesh.types.BMFace):
+                if normalsUp is None:
+                    if face.normal[2] < 0.:
+                        normalsUp = False
+                    else:
+                        normalsUp = True
+                if normalsUp:
+                    face.normal_flip()
+                face.material_index = materialIndex
+    RoofFlatMulti.render = renderRoofFlatMulti
 
 
 def tunnel(tags, e):
