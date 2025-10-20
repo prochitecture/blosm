@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 bl_info = {
     "name": "Blosm",
     "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 17),
+    "version": (2, 7, 18),
     "blender": (4, 2, 0),
     "location": "Right side panel > \"Blosm\" tab",
     "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
@@ -54,14 +54,13 @@ def _checkPath():
 _checkPath()
 
 
-import bpy, bmesh, bgl, blf
+import bpy, bmesh, blf
 
-from util.transverse_mercator import TransverseMercator
-from renderer import Renderer
-from parse.osm import Osm
-import gui, ape
-import app.blender as blenderApp
-from defs import Keys
+from .renderer import Renderer
+from .parse.osm import Osm
+from . import gui, ape
+from .app import blender as blenderApp
+from .defs import Keys
 
 # set the minimum version for BLOSM assets
 blenderApp.app.setMinAssetsVersion(bl_info["blosmAssets"])
@@ -292,11 +291,11 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         else:
             if a.mode is a.realistic:
                 if a.enableExperimentalFeatures:
-                    from setup.realistic_dev import setup as setup_function
+                    from .setup.realistic_dev import setup as setup_function
                 else:
-                    from setup.premium_default import setup as setup_function
+                    from .setup.premium_default import setup as setup_function
             else:
-                from setup.base import setup as setup_function
+                from .setup.base import setup as setup_function
         
         scene = context.scene
         
@@ -467,8 +466,8 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         return {'FINISHED'}
     
     def import3dTiles(self, context):
-        from threed_tiles.manager import BaseManager
-        from threed_tiles.blender import BlenderRenderer
+        from .threed_tiles.manager import BaseManager
+        from .threed_tiles.blender import BlenderRenderer
         
         addon = context.scene.blosm
         google3dTiles = addon.threedTilesSource == "google"
@@ -537,8 +536,8 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         return {'FINISHED'} if numImportedTiles else {'CANCELLED'}
     
     def importGpx(self, context):
-        from parse.gpx import Gpx
-        from gpx import GpxRenderer
+        from .parse.gpx import Gpx
+        from .gpx import GpxRenderer
         
         a = blenderApp.app
         try:
@@ -578,7 +577,7 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         return {'FINISHED'}
 
     def importGeoJson(self, context):
-        from parse.geojson import GeoJson
+        from .parse.geojson import GeoJson
         
         a = blenderApp.app
         addon = context.scene.blosm
@@ -606,9 +605,9 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
                 return {'CANCELLED'}
         else:
             if a.mode is a.realistic:
-                from setup.premium_default import setup as setup_function
+                from .setup.premium_default import setup as setup_function
             else:
-                from setup.geojson_base import setup as setup_function
+                from .setup.geojson_base import setup as setup_function
         
         scene = context.scene
         
@@ -751,7 +750,7 @@ def register():
     gui.register()
     ape.register()
     if blenderApp.app.has(Keys.mode3dRealistic):
-        import realistic
+        from .import realistic
         realistic.register()
     # Pro-only: register optional baking tools if available
     if getattr(blenderApp.app, 'isPremium', False):
@@ -769,11 +768,11 @@ def unregister():
     gui.unregister()
     ape.unregister()
     if blenderApp.app.has(Keys.mode3dRealistic):
-        import realistic
+        from . import realistic
         realistic.unregister()
     if getattr(blenderApp.app, 'isPremium', False):
         try:
-            from util.blender_extra import baking as _baking
+            from .util.blender_extra import baking as _baking
             if hasattr(_baking, 'unregister'):
                 _baking.unregister()
         except Exception:

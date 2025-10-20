@@ -19,8 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, math
 import bpy, bmesh
-from app.blender import app
-from util.blender import makeActive, createMeshObject, getBmesh,\
+from ..app.blender import app
+from ..util.blender import makeActive, createMeshObject, getBmesh,\
     loadParticlesFromFile, loadNodeGroupsFromFile, getMaterialIndexByName, getMaterialByName, getModifier,\
     addShrinkwrapModifier
   

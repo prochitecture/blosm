@@ -18,15 +18,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import bpy
-import os, math, webbrowser, json, importlib.util, importlib
+import os, math, webbrowser, importlib.util, importlib
 from bpy.app.handlers import persistent
-from app.blender import app
-from defs import Keys
+from ..app.blender import app
+from ..defs import Keys
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
 if _has3dRealistic:
-    from realistic.material.renderer import FacadeWithColor
+    from ..realistic.material.renderer import FacadeWithColor
 
 
 def getDataTypes():
@@ -237,7 +237,7 @@ class BLOSM_OT_ExtentFromActive(bpy.types.Operator):
         addon = scene.blosm
         
         if not app.projection:
-            from util.transverse_mercator import TransverseMercator
+            from ..util.transverse_mercator import TransverseMercator
             app.projection = TransverseMercator(lat=scene["lat"], lon=scene["lon"])
         
         addon.minLon, addon.minLat, addon.maxLon, addon.maxLat = app.getExtentFromObject(

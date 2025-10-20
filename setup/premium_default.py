@@ -17,17 +17,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from setup.premium import setup_base
+from .premium import setup_base
 
 def setup(app, osm):
     setup_base(app, osm, getMaterials, bldgPreRender)
 
-import parse
+from .. import parse
 
-from realistic.material.renderer import\
+from ..realistic.material.renderer import\
     SeamlessTexture, SeamlessTextureWithColor, MaterialWithColor,\
     SeamlessTextureScaledWithColor, SeamlessTextureScaled, FacadeSeamlessTexture, FacadeWithOverlay
-from realistic.material.colors import\
+from ..realistic.material.colors import\
     brickColors, plasterColors, glassColors, concreteColors, roofTilesColors, metalColors
 
 

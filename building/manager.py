@@ -17,10 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-from manager import Manager
-import parse
-from parse.osm import Osm
-from util import zAxis
+from ..manager import Manager
+from .. import parse
+from ..parse.osm import Osm
+from ..util import zAxis
 from . import Building
 
 

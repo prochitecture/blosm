@@ -239,7 +239,7 @@ class BlenderRenderer:
             BlenderScene.select_imported_objects = select_imported_objects_4_1
             
             self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
-        elif bv[0] == 4 and 3 <= bv[1]:
+        elif (bv[0] == 4 and 3 <= bv[1]) or bv[0] > 4:
             from .gltf_patch import set_convert_functions_4_5, select_imported_objects_4_1
             from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
             from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF

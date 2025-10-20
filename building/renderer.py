@@ -18,9 +18,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import bpy
-import parse
-from renderer import Renderer2d
-from manager import Manager
+from .. import parse
+from ..renderer import Renderer2d
+from ..manager import Manager
 from .roof.flat import RoofFlat, RoofFlatMulti
 from .roof.pyramidal import RoofPyramidal
 from .roof.skillion import RoofSkillion
@@ -29,8 +29,8 @@ from .roof.profile import *
 from .roof.hipped import RoofHipped
 from .roof.half_hipped import RoofHalfHipped
 from .roof.mansard import RoofMansard
-from util.blender import createDiffuseMaterial
-from util.random import RandomNormal, RandomWeighted
+from ..util.blender import createDiffuseMaterial
+from ..util.random import RandomNormal, RandomWeighted
 
 # Python tuples to store some defaults to render walls and roofs of OSM 3D buildings
 # Indices to access defaults from Python tuple below

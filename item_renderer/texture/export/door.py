@@ -1,5 +1,4 @@
-import os
-from util.blender_extra.material import setImage
+from ....util.blender_extra.material import setImage
 from .container import Container
 from ..door import Door as DoorBase
 from ...util import getPath

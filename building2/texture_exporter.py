@@ -1,8 +1,8 @@
 import os
 from time import time
 import bpy
-from util.blender import loadSceneFromFile
-from util.blender_extra.material import setImage
+from ..util.blender import loadSceneFromFile
+from ..util.blender_extra.material import setImage
 
 
 _exportTemplateFilename = "building_material_templates.blend"

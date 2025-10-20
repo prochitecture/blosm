@@ -1,7 +1,7 @@
 import bpy
 from .container import Container
 from ..door import Door as DoorBase
-from util.blender_extra.material import createMaterialFromTemplate, setImage
+from ....util.blender_extra.material import createMaterialFromTemplate, setImage
 from ...util import getPath
 
 
