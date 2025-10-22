@@ -82,7 +82,7 @@ class GlTF:
         header = struct.unpack(
             str(json_chunk_length) + "s", array[index : index + json_chunk_length]
         )[0]
-        gltf.header = json.loads(header.decode("ascii"))
+        gltf.header = json.loads(header.decode("utf-8"))
 
         index += (
             json_chunk_length + GlTF.CHUNK_HEADER_LENGTH
