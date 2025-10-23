@@ -199,9 +199,12 @@ class BlenderRenderer:
             removeFile(filePath)
         
         importedObject = context.object
+        # unlink <importedObject> from its collection, there can be more than one colection
+        for collection in importedObject.users_collection:
+            collection.objects.unlink(importedObject)
+        # link <importedObject> to <self.collection>
         self.collection.objects.link(importedObject)
         self.importedObjects.append(importedObject)
-        context.scene.collection.objects.unlink(importedObject)
     
     def processCopyrightInfo(self, info):
         for copyrightHolder in info.split(';'):
