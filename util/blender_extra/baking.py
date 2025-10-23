@@ -436,7 +436,7 @@ def _prepare_uv(context, target: bpy.types.Object, uv_margin: float) -> None:
         _select_only(context, target)
         bpy.ops.object.editmode_toggle()
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.uv.smart_project(angle_limit=66, island_margin=0.0, area_weight=0.0, correct_aspect=True, scale_to_bounds=True)
+        bpy.ops.uv.smart_project(angle_limit=1.15192, island_margin=0.0, area_weight=0.0, correct_aspect=True, scale_to_bounds=True)
         bpy.ops.uv.pack_islands(rotate=True, margin=uv_margin)
         bpy.ops.object.editmode_toggle()
         if target.data.uv_layers:

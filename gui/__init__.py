@@ -1278,7 +1278,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
     bake_cage_extrusion: bpy.props.FloatProperty(
         name = "Cage extrusion",
         description = "Cage extrusion distance for selected-to-active",
-        min=0.0, max=10.0, default=0.01, precision=3
+        min=0.0, max=10.0, default=0.1, precision=3
     )
     bake_replace_active: bpy.props.BoolProperty(
         name = "Replace active",
