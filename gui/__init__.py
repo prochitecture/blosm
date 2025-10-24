@@ -184,10 +184,11 @@ class BLOSM_OT_SelectExtent(bpy.types.Operator):
     def invoke(self, context, event):
         bv = bpy.app.version
         av = app.version
-        isPremium = "premium" if app.isPremium else ""
+        # premium due to legacy reasons on the web side
+        isPro = "premium" if app.isPro else ""
         webbrowser.open_new_tab(
             "%s?blender_version=%s.%s&addon=blosm&addon_version=%s%s.%s.%s" %
-            (self.url, bv[0], bv[1], isPremium, av[0], av[1], av[2])
+            (self.url, bv[0], bv[1], isPro, av[0], av[1], av[2])
         )
         return {'FINISHED'}
 
@@ -686,13 +687,10 @@ class BLOSM_PT_Tools(bpy.types.Panel):
         box.operator("blosm.replace_materials")
 
         # Pro-only baking UI (3D Tiles). Show when module is available and active is a mesh
-        try:
-            is_premium = getattr(app, 'isPremium', False)
-        except Exception:
-            is_premium = False
+        isPro = app.isPro
         active_mesh = context.object and context.object.type == 'MESH'
         baking_mod = None
-        if is_premium:
+        if isPro:
             for name in ('util.blender_extra.baking', 'blosm.util.blender_extra.baking'):
                 try:
                     if importlib.util.find_spec(name):
@@ -700,7 +698,7 @@ class BLOSM_PT_Tools(bpy.types.Panel):
                         break
                 except Exception:
                     continue
-        if is_premium and baking_mod and active_mesh:
+        if isPro and baking_mod and active_mesh:
             box = layout.box()
             box.label(text="Bake: single diffuse texture")
             box.prop(addon, "bake_image_size")

@@ -132,7 +132,7 @@ class BlenderApp(BaseApp):
             self.has(licenseKey)
         
         self.version = None
-        self.isPremium = False
+        self.isPro = False
         
         # default layer class used in <self.createLayer(..)>
         self.layerClass = Layer
