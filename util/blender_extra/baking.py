@@ -324,10 +324,15 @@ class BLOSM_OT_BakeToSingleMaterial(bpy.types.Operator):
         settings = _gather_settings(context, self)
         job_cls = JOB_REGISTRY[channel]
         job = job_cls(context, sources, target, settings, base_name)
-        baked_image = job.execute()
+        try:
+            baked_image = job.execute()
+        except Exception as exc:
+            _safe_unlink_and_remove(target)
+            self.report({'ERROR'}, f"Baking failed: {exc}")
+            return {'CANCELLED'}
 
         _handle_replacement(context, settings.replace_active, sources, target, job.material)
-        self.report({'INFO'}, f"Baking finished ({channel.name.title()}): {baked_image.name}")
+        self.report({'INFO'}, "Baking finished successfully")
         return {'FINISHED'}
 
     def _pick_channel(self, context, sources: Sequence[bpy.types.Object]) -> Optional[BakeChannel]:
