@@ -700,7 +700,7 @@ class BLOSM_PT_Tools(bpy.types.Panel):
                     continue
         if isPro and baking_mod and active_mesh:
             box = layout.box()
-            box.label(text="Bake: single diffuse texture")
+            box.label(text="Bake: single texture")
             box.prop(addon, "bake_image_size")
             box.split(factor=0.5)
             box.prop(addon, "bake_replace_active")
