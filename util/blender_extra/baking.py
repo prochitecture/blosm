@@ -181,10 +181,7 @@ class DiffuseBakeJob(BakeJob):
         return image
 
     def _post_bake(self) -> None:
-        try:
-            self.material.node_tree.links.new(self.image_node.outputs.get("Color"), self._bsdf.inputs.get("Base Color"))
-        except Exception:
-            pass
+        self.material.node_tree.links.new(self.image_node.outputs.get("Color"), self._bsdf.inputs.get("Base Color"))
 
 
 class EmitBakeJob(BakeJob):
@@ -193,21 +190,26 @@ class EmitBakeJob(BakeJob):
     def _configure_nodes(self, nodes, links):
         output = nodes.new("ShaderNodeOutputMaterial")
         output.location = (400, 0)
-        emission = nodes.new("ShaderNodeEmission")
-        emission.location = (120, 0)
-        emission.inputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
+        bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+        bsdf.location = (120, 0)
+        bsdf.inputs[0].default_value = (0.0, 0.0, 0.0, 1.0)
+        emission_input = bsdf.inputs.get("Emission Color")
+        emission_input.default_value = (1.0, 1.0, 1.0, 1.0)
+        strength_input = bsdf.inputs.get("Emission Strength")
+        strength_input.default_value = 1.0
         image = nodes.new("ShaderNodeTexImage")
         image.location = (-220, 0)
-        links.new(emission.outputs.get("Emission"), output.inputs.get("Surface"))
-        self._emission = emission
+        links.new(bsdf.outputs.get("BSDF"), output.inputs.get("Surface"))
+        self._bsdf = bsdf
         self._image = image
         return image
 
     def _post_bake(self) -> None:
-        try:
-            self.material.node_tree.links.new(self.image_node.outputs.get("Color"), self._emission.inputs.get("Color"))
-        except Exception:
-            pass
+        emission_input = self._bsdf.inputs.get("Emission Color")
+        self.material.node_tree.links.new(
+            self.image_node.outputs.get("Color"),
+            emission_input,
+        )
 
 
 JOB_REGISTRY = {
@@ -332,6 +334,10 @@ class BLOSM_OT_BakeToSingleMaterial(bpy.types.Operator):
             return {'CANCELLED'}
 
         _handle_replacement(context, settings.replace_active, sources, target, job.material)
+
+        # Pack the image into the .blend file, so it doesn't get lost after saving the Blender file.
+        baked_image.pack()
+        
         self.report({'INFO'}, "Baking finished successfully")
         return {'FINISHED'}
 
