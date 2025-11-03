@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import bpy
-import os, math, webbrowser
+import os, math, webbrowser, importlib.util, importlib
 from bpy.app.handlers import persistent
 from ..app.blender import app
 from ..defs import Keys
@@ -184,10 +184,11 @@ class BLOSM_OT_SelectExtent(bpy.types.Operator):
     def invoke(self, context, event):
         bv = bpy.app.version
         av = app.version
-        isPremium = "premium" if app.isPremium else ""
+        # premium due to legacy reasons on the web side
+        isPro = "premium" if app.isPro else ""
         webbrowser.open_new_tab(
             "%s?blender_version=%s.%s&addon=blosm&addon_version=%s%s.%s.%s" %
-            (self.url, bv[0], bv[1], isPremium, av[0], av[1], av[2])
+            (self.url, bv[0], bv[1], isPro, av[0], av[1], av[2])
         )
         return {'FINISHED'}
 
@@ -681,11 +682,32 @@ class BLOSM_PT_Tools(bpy.types.Panel):
         layout = self.layout
         addon = context.scene.blosm
         
-        layout.label(text="Replace materials with")
-        layout.row().prop(addon, "replaceMaterialsWith", expand=True)
+        box = layout.box()
+        box.label(text="Replace materials with")
+        box.row().prop(addon, "replaceMaterialsWith", expand=True)
         if addon.replaceMaterialsWith == "custom":
-            layout.prop_search(addon, "replacementMaterial", bpy.data, "materials")
-        layout.operator("blosm.replace_materials")
+            box.prop_search(addon, "replacementMaterial", bpy.data, "materials")
+        box.operator("blosm.replace_materials")
+
+        # Pro-only baking UI (3D Tiles). Show when module is available and active is a mesh
+        isPro = app.isPro
+        active_mesh = context.object and context.object.type == 'MESH'
+        baking_mod = None
+        if isPro:
+            for name in ('util.blender_extra.baking', 'blosm.util.blender_extra.baking'):
+                try:
+                    if importlib.util.find_spec(name):
+                        baking_mod = importlib.import_module(name)
+                        break
+                except Exception:
+                    continue
+        if isPro and baking_mod and active_mesh:
+            box = layout.box()
+            box.label(text="Bake: single texture")
+            box.prop(addon, "bake_image_size")
+            box.split(factor=0.5)
+            box.prop(addon, "bake_replace_active")
+            box.operator("blosm.bake_to_single_material", text="Bake")
 
 
 class BLOSM_PT_BpyProj(bpy.types.Panel):
@@ -1241,6 +1263,34 @@ class BlosmProperties(bpy.types.PropertyGroup):
         name = "Geometry Nodes setup",
         items = getGnSetups2d,
         description = "A Geometry Nodes setup applied to building footprints"
+    )
+
+    # --- Pro baking settings (3D Tiles Tools) ---
+    bake_image_size: bpy.props.IntProperty(
+        name = "Image size",
+        description = "Square bake resolution (px)",
+        subtype='PIXEL',
+        min=128, max=16384, default=4096
+    )
+    bake_margin_px: bpy.props.IntProperty(
+        name = "Bake margin (px)",
+        description = "Pixel margin for bake to avoid bleeding",
+        min=0, max=64, default=2
+    )
+    bake_uv_margin: bpy.props.FloatProperty(
+        name = "UV margin",
+        description = "UV pack margin (relative 0..1)",
+        min=0.0, max=0.05, default=0.001, precision=4
+    )
+    bake_cage_extrusion: bpy.props.FloatProperty(
+        name = "Cage extrusion",
+        description = "Cage extrusion distance for selected-to-active",
+        min=0.0, max=10.0, default=0.1, precision=3
+    )
+    bake_replace_active: bpy.props.BoolProperty(
+        name = "Replace active",
+        description = "Replace the active object with baked result",
+        default = False
     )
 
 

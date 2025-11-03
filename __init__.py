@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 bl_info = {
     "name": "Blosm",
     "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 18),
+    "version": (2, 7, 20),
     "blender": (4, 2, 0),
     "location": "Right side panel > \"Blosm\" tab",
     "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
@@ -66,7 +66,7 @@ from .defs import Keys
 blenderApp.app.setMinAssetsVersion(bl_info["blosmAssets"])
 # set addon version
 blenderApp.app.version = bl_info["version"]
-blenderApp.app.isPremium = os.path.isdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), "realistic"))
+blenderApp.app.isPro = os.path.isdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), "realistic"))
 
 
 class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
@@ -130,7 +130,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
     def draw(self, context):
         layout = self.layout
         
-        if blenderApp.app.isPremium:
+        if blenderApp.app.isPro:
             layout.box().label(text="Thank you for purchasing the premium version!")
             if self.enableExperimentalFeatures:
                 layout.row().prop(self, "screenType", expand=True)
@@ -141,7 +141,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
             layout.label(text="Directory to store downloaded OpenStreetMap and terrain files:")
             layout.prop(self, "dataDir")
             
-            if blenderApp.app.isPremium:
+            if blenderApp.app.isPro:
                 layout.label(text="Directory with assets (building_materials.blend, vegetation.blend):")
                 layout.prop(self, "assetsDir")
             
@@ -166,7 +166,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
             #layout.operator("blosm.load_extensions", text="Load extensions")
             layout.prop(self, "osmServer")
             
-            if blenderApp.app.isPremium:
+            if blenderApp.app.isPro:
                 layout.prop(self, "enableExperimentalFeatures", text="Enable experimental features")
 
 blenderApp.app.addonName = BlosmPreferences.bl_idname
@@ -752,6 +752,15 @@ def register():
     if blenderApp.app.has(Keys.mode3dRealistic):
         from .import realistic
         realistic.register()
+    # Pro-only: register optional baking tools if available
+    if blenderApp.app.isPro:
+        try:
+            from util.blender_extra import baking as _baking
+            if hasattr(_baking, 'register'):
+                _baking.register()
+        except Exception:
+            # optional module; ignore if missing
+            pass
 
 def unregister():
     for c in _classes:
@@ -759,5 +768,12 @@ def unregister():
     gui.unregister()
     ape.unregister()
     if blenderApp.app.has(Keys.mode3dRealistic):
-        from .import realistic
+        from . import realistic
         realistic.unregister()
+    if blenderApp.app.isPro:
+        try:
+            from .util.blender_extra import baking as _baking
+            if hasattr(_baking, 'unregister'):
+                _baking.unregister()
+        except Exception:
+            pass
