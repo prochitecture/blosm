@@ -37,7 +37,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
             z = footprint.roofVerticalPosition
             # the basement of the roof
             footprint.building.verts.extend(
-                Vector((v.x, v.y, z)) for innerPolygon in roofItem.innerPolygons for v in innerPolygon.verts
+                Vector((v.x, v.y, z)) for innerPolygon in footprint.innerPolygons for v in innerPolygon.verts
             )
             return
         super().extrudeInnerPolygons(footprint, roofItem)
@@ -68,7 +68,7 @@ class RoofHippedMulti(RoofMulti, RoofHipped):
     def generateRoof(self, footprint, roofItem, firstVertIndex):
         verts = footprint.element.l.genVolumes.verts
         numPolygonVerts = footprint.polygon.numEdges
-        innerPolygons = roofItem.innerPolygons
+        innerPolygons = footprint.innerPolygons
         numHoles = len(innerPolygons)
         
         roofSideIndices = []

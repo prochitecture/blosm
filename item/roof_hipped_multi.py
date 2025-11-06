@@ -5,4 +5,3 @@ class RoofHippedMulti(RoofHipped):
     
     def __init__(self, footprint, firstVertIndex):
         super().__init__(footprint)
-        self.innerPolygons = []

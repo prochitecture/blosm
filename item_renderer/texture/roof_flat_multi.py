@@ -26,7 +26,7 @@ class RoofFlatMulti(ItemRendererTexture):
         
         # treat the inner polygons
         indexOffset += polygon.numEdges
-        for polygon in roofItem.innerPolygons:
+        for polygon in roofItem.footprint.innerPolygons:
             # skipping the verts for the lower cap
             indexOffset += polygon.numEdges
             edges.extend(_getEdge(bmVerts[i]) for i in range(indexOffset, indexOffset + polygon.numEdges) )

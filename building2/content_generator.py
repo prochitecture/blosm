@@ -33,7 +33,7 @@ class MeshGenByIndices(MeshGen):
 
     def createFootprint(self, footprint):
         face = self.bm.faces.new(
-            self.bm.verts.new(vector.v1_3d) for vector in footprint.building.polygon.vectors
+            self.bm.verts.new(vector.v1_3d) for vector in footprint.bldgPart.polygon.vectors
         )
 
         # set the attribute "roof_shape" to <face>
@@ -48,6 +48,12 @@ class MeshGenByIndices(MeshGen):
         for facade in footprint.facades:
             loop.edge[bmLayer] = facade.cl
             loop = loop.link_loop_next
+
+    def createFootprintsForHoles(self, footprint):
+        for innerPolygon in footprint.innerPolygons:
+            face = self.bm.faces.new(
+                self.bm.verts.new(vector.v1_3d) for vector in innerPolygon.vectors
+            )
     
     def finalize(self):
         setBmesh(self.obj, self.bm)

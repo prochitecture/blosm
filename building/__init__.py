@@ -543,6 +543,9 @@ class Building:
     
     def addPart(self, part):
         part.polygon.building = self
+        # Set part's layer to building's layer,
+        # so its property <genVolumes> can be used for mesh generation
+        part.element.l = self.element.l
         self.parts.append(part)
     
     def addMissingPart(self, nodes, manager):

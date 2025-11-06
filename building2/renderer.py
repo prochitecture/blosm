@@ -163,9 +163,9 @@ class BuildingRendererNew(Renderer):
             for layer in self.app.layers:
                 if isinstance(layer, BuildingLayer):
                     # set a content (mesh) generator
-                    layer.gen = MeshGenByIndices(
+                    layer.genFootprints = MeshGenByIndices(
                         self.createBlenderObject(
-                            layer.name,
+                            "Building Footprints",
                             layer.location,
                             collection = self.collection,
                             parent = None
@@ -174,6 +174,8 @@ class BuildingRendererNew(Renderer):
                     if self.app.preferableResult == defs.Result.FootprintWithGn:
                         # <self.genVolumes> must be accessible from <layer>
                         layer.genVolumes = self.genVolumes
+                        # <self.genHoles> must be accessible from <layer>
+                        layer.genHoles = self.genHoles
                     layer.prepare()
     
     def finalize(self):
@@ -184,6 +186,7 @@ class BuildingRendererNew(Renderer):
             
             if self.app.preferableResult == defs.Result.FootprintWithGn:
                 self.genVolumes.finalize()
+                self.genHoles.finalize()
     
     def cleanup(self):
         for action in self.actions:
@@ -212,12 +215,15 @@ class BuildingRendererNew(Renderer):
         #if self.app.renderAfterExtrude:
         #    self.preRender(building)
         
-        if not parts or building.alsoPart:
+        if self.app.preferableResult == defs.Result.FootprintWithGn or not parts or building.alsoPart:
             # the building has no parts
             footprint = Footprint(building, building)
-            # The attribute <footprint> below may be used in calculation of the area of
-            # the building footprint or in <action.terrain.Terrain>
-            #building.footprint = footprint
+            # The attribute <footprint> below may be used:
+            # * to generate a footprint of the whole building for subsequent
+            #   builing generation with Geometry Nodes
+            # * to calculate the area of the building footprint
+            # * in <action.terrain.Terrain>
+            building.footprint = footprint
             itemStore.add(footprint)
         if parts:
             itemStore.add((Footprint(part, building) for part in parts), Footprint, len(parts))
@@ -252,9 +258,9 @@ class BuildingRendererNew(Renderer):
             layer.prepare()
         
         # render building footprint
+        if self.app.preferableResult == defs.Result.FootprintWithGn:
+            self.footprintRenderer.render(building.footprint)
         if not building.parts or building.alsoPart:
-            if self.app.preferableResult == defs.Result.FootprintWithGn:
-                self.footprintRenderer.render(building.footprint)
             if not building.footprint.doFootprintOnly:
                 self.renderExtrudedVolume(building.footprint)
         # render building parts

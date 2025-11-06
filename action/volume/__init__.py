@@ -66,12 +66,15 @@ class Volume(Action):
             if element.t is parse.multipolygon:
                 # check if the multipolygon has holes
                 if element.hasInner:
-                    footprint.doFootprintOnly = False
                     if footprint.getStyleBlockAttr("roofShape") in ("hipped", "gabled"):
-                        self.volumeGeneratorMultiHipped.do(footprint)
                         footprint.doFootprintOnly = False
+                        self.volumeGeneratorMultiHipped.do(footprint)
                     else:
-                        self.volumeGeneratorMultiFlat.do(footprint)
+                        if self.app.preferableResult == defs.Result.FootprintWithGn:
+                            self.volumeGeneratorMultiFlat.doFootprintOnly(footprint)
+                        else:
+                            footprint.doFootprintOnly = False
+                            self.volumeGeneratorMultiFlat.do(footprint)
                 else:
                     # That's a quite rare case
                     # We treat each polygon of the multipolygon as a single polygon

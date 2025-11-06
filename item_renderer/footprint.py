@@ -27,12 +27,14 @@ class Footprint:
     
     def render(self, footprint):
         # mesh generator:
-        footprint.building.element.l.gen.createFootprint(footprint)
+        footprint.building.element.l.genFootprints.createFootprint(footprint)
+        if footprint.innerPolygons:
+            footprint.building.element.l.genHoles.createFootprintsForHoles(footprint)
     
     def finalize(self, layer):
-        layer.gen.finalize()
+        layer.genFootprints.finalize()
         addGeometryNodesModifier(
-            layer.gen.obj,
+            layer.genFootprints.obj,
             self.gnBldgSingleObject if layer.singleObject else self.gnBldgSeparateObject,
             "Building Init"
-        )       
+        )

@@ -12,6 +12,7 @@ class Footprint(Item):
         # <styleBlock> is the style block within the markup definition,
         # if the footprint is generated through the markup definition
         super().__init__(None, None, None, styleBlock)
+        self.innerPolygons = None
         self.bldgPart = bldgPart
         if bldgPart:
             self.polygon = bldgPart.polygon
