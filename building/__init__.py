@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+from .. import parse
 from ..parse.osm.way import MissingBldgPartWay
 from mathutils import Vector
 from ..defs.building import Visited
@@ -496,7 +497,7 @@ class Building:
     """
     
     __slots__ = (
-        "element", "parts", "polygon", "auxIndex", "crossedEdges", "renderInfo", "footprint",
+        "element", "parts", "polygon", "innerPolygons", "auxIndex", "crossedEdges", "renderInfo", "footprint",
         "alsoPart"
     )
     
@@ -514,6 +515,8 @@ class Building:
         # used for buildings that get crossed by way-segments.
         self.crossedEdges = []
         
+        self.innerPolygons = []
+
         self.footprint = None
     
     def init(self, manager):
@@ -521,6 +524,21 @@ class Building:
         # Projection may not be available when <Building.__init__(..)> is called. So we have to
         # create <self.polygon> after the parsing is finished and the projectin is available.
         self.polygon = BldgPolygon(self.element, manager, self)
+
+        # Fill in <self.innerPolygons> for multipolygons with holes
+        if self.element.t is parse.multipolygon and self.element.hasInner:
+            for _l in self.element.ls:
+                if _l.role is manager.data.outer:
+                    continue
+                # create an inner polygon located at <minHeight>
+                innerPolygon = BldgPolygonCW(_l, manager, self)
+                if innerPolygon.numEdges < 3:
+                    continue
+                # Mark all edges of <innerPolygon> as visited,
+                # so they won't be used to create missing building parts later
+                for edge in innerPolygon.getEdges():
+                    edge.visited == Visited.noMissingPart
+                self.innerPolygons.append(innerPolygon)
     
     def resetVisInfoTmp(self):
         for vector in self.polygon.vectors:

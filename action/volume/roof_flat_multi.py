@@ -2,7 +2,6 @@ from mathutils import Vector
 from .roof_flat import RoofFlat
 from item.facade import Facade
 from item.roof_flat_multi import RoofFlatMulti as ItemRoofFlatMulti
-from blosm.building import BldgPolygonCW
 
 
 class RoofMulti:
@@ -69,21 +68,9 @@ class RoofMulti:
         roofItem = super().init(footprint)
         if not footprint.valid:
             return
-        z1 = footprint.minHeight
-        element = footprint.element
-        innerPolygons = []
         
-        for _l in element.ls:
-            if _l.role is data.outer:
-                continue
-            # create an inner polygon located at <minHeight>
-            innerPolygon = BldgPolygonCW(_l, self.volumeAction.manager, footprint.building)
-            if innerPolygon.numEdges < 3:
-                continue
-            innerPolygons.append(innerPolygon)
-        
-        if innerPolygons:
-            footprint.innerPolygons = innerPolygons
+        if footprint.building.innerPolygons:
+            footprint.innerPolygons = footprint.building.innerPolygons
         return roofItem
 
 
