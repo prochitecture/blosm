@@ -265,14 +265,13 @@ class BuildingRendererNew(Renderer):
         # render building footprint
         if self.app.preferableResult == defs.Result.FootprintWithGn:
             self.footprintRenderer.render(building.footprint)
-        if not building.parts or building.alsoPart:
-            if not building.footprint.doFootprintOnly:
-                self.renderExtrudedVolume(building.footprint)
+        if (not building.parts or building.alsoPart) and not building.footprint.doFootprintOnly:
+            self.renderExtrudedVolume(building.footprint)
         # render building parts
         for part in building.parts:
-            if part.footprint.doFootprintOnly:
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
                 self.footprintRenderer.renderPart(part.footprint)
-            else:
+            if not part.footprint.doFootprintOnly:
                 self.renderExtrudedVolume(part.footprint)
         
         self.postRender(building.element)
