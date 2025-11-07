@@ -13,6 +13,10 @@ class MeshGen:
 
 class MeshGenByIndices(MeshGen):
 
+    def initFootprintAttributes(self):
+        self.bm.faces.layers.int.new("roof_shape")
+        self.bm.edges.layers.int.new("facade_class")
+
     def createFace(self, footprint, indices):
         bm = self.bm
         renderInfo = footprint.building.renderInfo

@@ -34,10 +34,6 @@ class RealisticBuildingLayer(BuildingLayer):
 
     def prepare(self):
         super().prepare()
-
-        if self.app.preferableResult == defs.Result.FootprintWithGn:
-            self.genFootprints.bm.faces.layers.int.new("roof_shape")
-            self.genFootprints.bm.edges.layers.int.new("facade_class")
         """ FIXME: uncomment the code below to use Geometry Nodes or remove it
         elif self.app.preferMesh:
             # below is the TEMPORARY oode to place roof objects on float roofs

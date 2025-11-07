@@ -26,8 +26,13 @@ class Footprint:
         )
     
     def render(self, footprint):
-        # mesh generator:
         footprint.building.element.l.genFootprints.createFootprint(footprint)
+        if footprint.innerPolygons:
+            footprint.building.element.l.genHoles.createFootprintsForHoles(footprint)
+    
+    def renderPart(self, footprint):
+        # same as <render>, but for building parts
+        footprint.building.element.l.genPartFootprints.createFootprint(footprint)
         if footprint.innerPolygons:
             footprint.building.element.l.genHoles.createFootprintsForHoles(footprint)
     

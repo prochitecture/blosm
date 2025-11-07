@@ -119,6 +119,7 @@ class BuildingRendererNew(Renderer):
                     parent = None
                 )
             )
+            self.genPartFootprints.initFootprintAttributes()
         
         if self.app.preferMesh:
             # A key to the dictionary below is an object name as it's defined in <self.app.assetStore>.
@@ -171,11 +172,14 @@ class BuildingRendererNew(Renderer):
                             parent = None
                         )
                     )
+                    layer.genFootprints.initFootprintAttributes()
                     if self.app.preferableResult == defs.Result.FootprintWithGn:
                         # <self.genVolumes> must be accessible from <layer>
                         layer.genVolumes = self.genVolumes
                         # <self.genHoles> must be accessible from <layer>
                         layer.genHoles = self.genHoles
+                        # <self.genPartFootprints> must be accessible from <layer>
+                        layer.genPartFootprints = self.genPartFootprints
                     layer.prepare()
     
     def finalize(self):
@@ -185,6 +189,7 @@ class BuildingRendererNew(Renderer):
                     layer.finalize(self)
             
             if self.app.preferableResult == defs.Result.FootprintWithGn:
+                self.genPartFootprints.finalize()
                 self.genVolumes.finalize()
                 self.genHoles.finalize()
     
@@ -266,7 +271,7 @@ class BuildingRendererNew(Renderer):
         # render building parts
         for part in building.parts:
             if part.footprint.doFootprintOnly:
-                self.footprintRenderer.render(part.footprint)
+                self.footprintRenderer.renderPart(part.footprint)
             else:
                 self.renderExtrudedVolume(part.footprint)
         
