@@ -5,7 +5,7 @@ from mathutils import Vector
 class RoofFlat(ItemRendererTexture):
     
     def render(self, roofItem):
-        face = self.r.createFace(
+        face = roofItem.footprint.element.l.genVolumes.createFace(
             roofItem.footprint,
             range(roofItem.firstVertIndex, roofItem.firstVertIndex+roofItem.footprint.polygon.numEdges)
         )
@@ -16,6 +16,7 @@ class RoofFlat(ItemRendererTexture):
         else:
             self.renderCladding(roofItem, face, None)
 
+        """ FIXME: uncomment the code below to use Geometry Nodes or remove it
         if self.app.preferMesh:
             area = face.calc_area()
             # set attributes
@@ -28,6 +29,7 @@ class RoofFlat(ItemRendererTexture):
                     )
                 )
             ))
+        """
     
     def setCladdingUvs(self, roofItem, face, claddingTextureInfo, uvs):
         textureWidthM = claddingTextureInfo["textureWidthM"]

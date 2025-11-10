@@ -63,7 +63,7 @@ class RoofGeneratrix(ItemRendererTexture):
         gen = self.generatrix
         footprint = roofItem.footprint
         polygon = footprint.polygon
-        verts = footprint.building.element.l.gen.verts
+        verts = footprint.element.l.genVolumes.verts
         # the index of the first vertex of the polygon that defines the roof base
         firstVertIndex = roofItem.firstVertIndex
         
@@ -247,13 +247,16 @@ class RoofGeneratrix(ItemRendererTexture):
             )
     
     def createFace(self, roofItem, smooth, indices, uVec, uv0, uv1):
-        face = self.r.createFace(roofItem.footprint, indices)
+        face = roofItem.footprint.element.l.genVolumes.createFace(
+            roofItem.footprint,
+            indices
+        )
         if smooth:
             face.smooth = smooth
         
         # assign UV-coordinates
         isQuad = len(indices)==4
-        verts = roofItem.footprint.building.element.l.gen.verts
+        verts = roofItem.footprint.building.element.l.genVolumes.verts
         if isQuad:
             vec3 = verts[indices[3]]-verts[indices[0]]
             vec3 = Vector((vec3[0], vec3[1]))

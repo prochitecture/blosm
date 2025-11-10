@@ -92,16 +92,15 @@ class BuildingRendererNew(Renderer):
         self.revActions = []
     
     def prepare(self):
-        if self.app.preferableResult == defs.Result.FootprintWithGn:
-            self.genVolumes = MeshGenByIndices(
-                self.createBlenderObject(
-                    "Building Volumes",
-                    (0., 0., 0.),
-                    collection = self.collection,
-                    parent = None
-                )
+        self.genVolumes = MeshGenByIndices(
+            self.createBlenderObject(
+                "Building Volumes",
+                (0., 0., 0.),
+                collection = self.collection,
+                parent = None
             )
-
+        )
+        if self.app.preferableResult == defs.Result.FootprintWithGn:
             self.genHoles = MeshGenByIndices(
                 self.createBlenderObject(
                     "Multipolygon Holes",
@@ -163,19 +162,18 @@ class BuildingRendererNew(Renderer):
         if self.app.singleObject:
             for layer in self.app.layers:
                 if isinstance(layer, BuildingLayer):
-                    # set a content (mesh) generator
-                    layer.genFootprints = MeshGenByIndices(
-                        self.createBlenderObject(
-                            "Building Footprints",
-                            layer.location,
-                            collection = self.collection,
-                            parent = None
-                        )
-                    )
-                    layer.genFootprints.initFootprintAttributes()
+                    # <self.genVolumes> must be accessible from <layer>
+                    layer.genVolumes = self.genVolumes
                     if self.app.preferableResult == defs.Result.FootprintWithGn:
-                        # <self.genVolumes> must be accessible from <layer>
-                        layer.genVolumes = self.genVolumes
+                        layer.genFootprints = MeshGenByIndices(
+                            self.createBlenderObject(
+                                "Building Footprints",
+                                layer.location,
+                                collection = self.collection,
+                                parent = None
+                            )
+                        )
+                        layer.genFootprints.initFootprintAttributes()
                         # <self.genHoles> must be accessible from <layer>
                         layer.genHoles = self.genHoles
                         # <self.genPartFootprints> must be accessible from <layer>
@@ -188,9 +186,9 @@ class BuildingRendererNew(Renderer):
                 if isinstance(layer, BuildingLayer):
                     layer.finalize(self)
             
+            self.genVolumes.finalize()
             if self.app.preferableResult == defs.Result.FootprintWithGn:
                 self.genPartFootprints.finalize()
-                self.genVolumes.finalize()
                 self.genHoles.finalize()
     
     def cleanup(self):

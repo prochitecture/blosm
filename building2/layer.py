@@ -53,6 +53,7 @@ class RealisticBuildingLayer(BuildingLayer):
 
         if self.app.preferableResult == defs.Result.FootprintWithGn:
             globalRenderer.footprintRenderer.finalize(self)
+        """ FIXME: uncomment the code below to use Geometry Nodes or remove it
         elif self.app.preferMesh:
             gnMeshAttributes = self.gnMeshAttributes
             objGn = self.objGn
@@ -90,7 +91,6 @@ class RealisticBuildingLayer(BuildingLayer):
             
             self.attributeValuesGn.clear()
             
-            """ FIXME: uncomment the code below to use Geometry Nodes or remove it
             # create a modifier for the Geometry Nodes setup
             m = addGeometryNodesModifier(objGn, globalRenderer.gnBuilding, "Buildings")
             # <mAttrs> have the form like: 
