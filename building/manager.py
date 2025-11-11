@@ -230,6 +230,7 @@ class BuildingManager(BaseBuildingManager, Manager):
             if not edge.vectors:
                 break
         else:
+            # <partPolygon> coincides with the building footprint
             return
         
         # start from <edge> and walk in the direction <edge.id1>
