@@ -233,6 +233,7 @@ class BuildingManager(BaseBuildingManager, Manager):
             return
         
         # start from <edge> and walk in the direction <edge.id1>
+        # print(f"[DEBUG_BLDG_PART][processBldgPartEdges:id1] edge_id={edge.id} node_id={edge.id1}")
         self.processBldgPartEdge(
             edge,
             edge.id1,
@@ -240,6 +241,7 @@ class BuildingManager(BaseBuildingManager, Manager):
             createMissingParts
         )
         # now walk in the direction <edge.id2>
+        # print(f"[DEBUG_BLDG_PART][processBldgPartEdges:id2] edge_id={edge.id} node_id={edge.id2}")
         self.processBldgPartEdge(
             edge,
             edge.id2,
@@ -248,12 +250,14 @@ class BuildingManager(BaseBuildingManager, Manager):
         )
     
     def processBldgPartEdge(self, edge, _id, building, createMissingParts):
+        # mark <edge> as visited
+        if not edge.visited:
+            edge.visited = Visited.buildingAssigned
+
         edges, visited = self.data.nodes[_id].bldgPartEdges
+        # print(f"[DEBUG_BLDG_PART][processBldgPartEdge] edge_id={edge.id} node_id={_id} {len(edges)} edges")
         if visited:
             return
-        
-        # mark <edge> as visited
-        edge.visited = Visited.buildingAssigned
         
         # If <visited> is <None>, it means that <edges> were not sorted in <self.traceMissingPart(..)>
         if len(edges) > 2 and visited is None:
@@ -300,7 +304,8 @@ class BuildingManager(BaseBuildingManager, Manager):
             
             self.processBldgPartEdge(
                 _edge,
-                _edge.id2 if isId1 else _edge.id1,
+                # use the other (than <_id>) node of <_edge> to go further along the building part edges
+                _edge.id2 if _id == _edge.id1 else _edge.id1,
                 building,
                 createMissingParts
             )
