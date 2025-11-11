@@ -251,7 +251,7 @@ class BuildingManager(BaseBuildingManager, Manager):
     
     def processBldgPartEdge(self, edge, _id, building, createMissingParts):
         # mark <edge> as visited
-        if not edge.visited:
+        if edge.visited != Visited.buildingAssigned:
             edge.visited = Visited.buildingAssigned
 
         edges, visited = self.data.nodes[_id].bldgPartEdges
