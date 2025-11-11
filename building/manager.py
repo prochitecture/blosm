@@ -199,6 +199,18 @@ class BuildingManager(BaseBuildingManager, Manager):
                         # if this part has one more neighbors
                         self.processBldgPartEdges(buildings[buildingIndex], part.polygon, False)
         
+        for part in self.parts:
+            for edge in part.polygon.getEdges():
+                if edge.vectors:  # shared with footprint
+                    continue
+                if (edge.partVectors12 is None) ^ (edge.partVectors21 is None):
+                    if edge.visited != Visited.noMissingPart:
+                        self.traceMissingPart(
+                            part.polygon.building,
+                            edge,
+                            edge.id1 if edge.partVectors12 else edge.id2
+                        )
+        
         for action in self.actions:
             action.do(self)
     
@@ -267,16 +279,6 @@ class BuildingManager(BaseBuildingManager, Manager):
         # mark <bldgPartEdges> as visited
         self.data.nodes[_id].bldgPartEdges = (edges, True)
         
-        isId1 = _id==edge.id1
-        
-        if createMissingParts:
-            if (isId1 and edge.partVectors21 is None) or (not isId1 and edge.partVectors12 is None):
-                # trace the candidate for a missing building part
-                self.traceMissingPart(building, edge, _id)
-            elif (isId1 and edge.partVectors12 is None) or (not isId1 and edge.partVectors21 is None):
-                # trace the candidate for a missing building part
-                self.traceMissingPart(building, edge, edge.id2 if isId1 else edge.id1)
-        
         # process each <_edge> in <edges>
         for _edge in edges:
             # The condition <_edge is edge> is already presented below
@@ -322,11 +324,8 @@ class BuildingManager(BaseBuildingManager, Manager):
         """
         _edge = edgeStart
         
-        if _edge.visited == Visited.noMissingPart:
-            return
-        else:
-            # mark the starting edge as visited to avoid tracing the same sequence of edges again and again
-            _edge.visited = Visited.noMissingPart
+        # mark the starting edge as visited to avoid tracing the same sequence of edges again and again
+        _edge.visited = Visited.noMissingPart
         
         nodes = [_id]
         # The current vector along the footprint of the whole building if tracing is needed along

@@ -595,7 +595,6 @@ class BldgPart:
     
     __slots__ = (
         "element",
-        "building",
         "wasMissing",
         "polygon",
         "footprint" 
@@ -603,7 +602,6 @@ class BldgPart:
     
     def __init__(self, element):
         self.element = element
-        self.building = None
         self.wasMissing = False
         self.footprint = None
     
