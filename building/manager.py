@@ -22,6 +22,7 @@ from .. import parse
 from ..parse.osm import Osm
 from ..util import zAxis
 from . import Building, BldgEdge, BldgPart
+from .. import defs
 from ..defs.building import Visited
 
 
@@ -402,6 +403,11 @@ class BuildingManager(BaseBuildingManager, Manager):
                     # continue tracing along building parts
                     _id = _edge.id2 if _id == _edge.id1 else _edge.id1
                     nodes.append(_id)
+    
+    def cleanup(self):
+        if self.app.preferableResult == defs.Result.FootprintWithGn:
+            for node in self.data.nodes.values():
+                node.cache = None
 
 
 class BuildingParts:

@@ -262,7 +262,7 @@ class BuildingRendererNew(Renderer):
         
         # render building footprint
         if self.app.preferableResult == defs.Result.FootprintWithGn:
-            self.footprintRenderer.render(building.footprint)
+            self.footprintRenderer.render(building.footprint, data)
         if (not building.parts or building.alsoPart) and not building.footprint.doFootprintOnly:
             self.renderExtrudedVolume(building.footprint)
         # render building parts

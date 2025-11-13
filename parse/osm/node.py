@@ -33,7 +33,8 @@ class Node:
     """
     
     __slots__ = (
-        "l", "tags", "lat", "lon", "coords", "w", "rr", "valid", "m", "bldgVectors", "bldgPartEdges"
+        "l", "tags", "lat", "lon", "coords", "w", "rr", "valid", "m", "bldgVectors", "bldgPartEdges",
+        "cache"
     )
     
     def __init__(self, lat, lon, tags):
@@ -47,6 +48,8 @@ class Node:
         self.coords = None
         self.rr = None
         self.valid = True
+        # <self.cache> is used to cache a BMVert for the node during the building footprint generation
+        self.cache = None
     
     def getData(self, osm):
         """

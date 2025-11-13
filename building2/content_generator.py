@@ -1,6 +1,25 @@
 from util.blender import getBmesh, setBmesh
 
 
+def _getCachedBMVert(vector, data, bm):
+    node = data.nodes[vector.id1]
+    if node.cache:
+        return node.cache
+    else:
+        # check if <vector.edge> is shared by two building footprints
+        if len(vector.edge.vectors) == 2:
+            # cache BMVerts for both ends of <vector>
+            if not node.cache:
+                # cache BMVert for the 1st vertex
+                node.cache = bm.verts.new(vector.v1_3d)
+            if not data.nodes[vector.id2].cache:
+                # cache BMVert for the 2nd vertex
+                data.nodes[vector.id2].cache = bm.verts.new(vector.v2_3d)
+            return node.cache
+        else:
+            return bm.verts.new(vector.v1_3d)
+
+
 class MeshGen:
 
     def __init__(self, obj):
@@ -35,10 +54,15 @@ class MeshGenByIndices(MeshGen):
         
         return bm.faces.new(bmVerts[index] for index in indices)
 
-    def createFootprint(self, footprint):
-        face = self.bm.faces.new(
-            self.bm.verts.new(vector.v1_3d) for vector in footprint.bldgPart.polygon.vectors
-        )
+    def createFootprint(self, footprint, data, shareBMVerts):
+        face =\
+            self.bm.faces.new(
+                _getCachedBMVert(vector, data, self.bm) for vector in footprint.bldgPart.polygon.getVectors()
+            )\
+            if shareBMVerts else\
+            self.bm.faces.new(
+                self.bm.verts.new(vector.v1_3d) for vector in footprint.bldgPart.polygon.getVectors()
+            )
 
         # set the attribute "roof_shape" to <face>
         # 1: flat
@@ -56,7 +80,7 @@ class MeshGenByIndices(MeshGen):
     def createFootprintsForHoles(self, footprint):
         for innerPolygon in footprint.innerPolygons:
             face = self.bm.faces.new(
-                self.bm.verts.new(vector.v1_3d) for vector in innerPolygon.vectors
+                self.bm.verts.new(vector.v1_3d) for vector in innerPolygon.getVectors()
             )
     
     def finalize(self):

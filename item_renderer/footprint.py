@@ -25,14 +25,14 @@ class Footprint:
             "Blosm Building Separate Object"
         )
     
-    def render(self, footprint):
-        footprint.building.element.l.genFootprints.createFootprint(footprint)
+    def render(self, footprint, data):
+        footprint.building.element.l.genFootprints.createFootprint(footprint, data, True)
         if footprint.innerPolygons:
             footprint.building.element.l.genHoles.createFootprintsForHoles(footprint)
     
     def renderPart(self, footprint):
         # same as <render>, but for building parts
-        footprint.building.element.l.genPartFootprints.createFootprint(footprint)
+        footprint.building.element.l.genPartFootprints.createFootprint(footprint, None, False)
         if footprint.innerPolygons:
             footprint.building.element.l.genHoles.createFootprintsForHoles(footprint)
     

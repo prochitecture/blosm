@@ -226,6 +226,10 @@ class WayManager:
                 return False
         
         return True
+    
+    def cleanup(self):
+        return
+
 
 class RailwayManager:
     """

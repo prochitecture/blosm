@@ -519,6 +519,9 @@ class BlenderApp(BaseApp):
         
         for r in self.renderers:
             r.cleanup()
+
+        for m in self.managers:
+            m.cleanup()
         
         if logger: logger.renderEnd()
     
