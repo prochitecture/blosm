@@ -92,34 +92,7 @@ class BuildingRendererNew(Renderer):
         self.revActions = []
     
     def prepare(self):
-        self.genVolumes = MeshGenByIndices(
-            self.createBlenderObject(
-                "Building Volumes",
-                (0., 0., 0.),
-                collection = self.collection,
-                parent = None
-            )
-        )
-        if self.app.preferableResult == defs.Result.FootprintWithGn:
-            self.genHoles = MeshGenByIndices(
-                self.createBlenderObject(
-                    "Multipolygon Holes",
-                    (0., 0., 0.),
-                    collection = self.collection,
-                    parent = None
-                )
-            )
-
-            self.genPartFootprints = MeshGenByIndices(
-                self.createBlenderObject(
-                    "Building Part Footprints",
-                    (0., 0., 0.),
-                    collection = self.collection,
-                    parent = None
-                )
-            )
-            self.genPartFootprints.initFootprintAttributes()
-        
+        self.meshAssets = {} # FIXME: this line is defined in the commented code below
         """ FIXME: uncomment the code below or remove it if you don't need Geometry Nodes setup for buildings
         if self.app.preferMesh:
             # A key to the dictionary below is an object name as it's defined in <self.app.assetStore>.
@@ -161,6 +134,34 @@ class BuildingRendererNew(Renderer):
         """
         
         if self.app.singleObject:
+            self.genVolumes = MeshGenByIndices(
+                self.createBlenderObject(
+                    "Building Volumes",
+                    (0., 0., 0.),
+                    collection = self.collection,
+                    parent = None
+                )
+            )
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
+                self.genHoles = MeshGenByIndices(
+                    self.createBlenderObject(
+                        "Multipolygon Holes",
+                        (0., 0., 0.),
+                        collection = self.collection,
+                        parent = None
+                    )
+                )
+
+                self.genPartFootprints = MeshGenByIndices(
+                    self.createBlenderObject(
+                        "Building Part Footprints",
+                        (0., 0., 0.),
+                        collection = self.collection,
+                        parent = None
+                    )
+                )
+                self.genPartFootprints.initFootprintAttributes()
+            
             for layer in self.app.layers:
                 if isinstance(layer, BuildingLayer):
                     # <self.genVolumes> must be accessible from <layer>
@@ -232,6 +233,8 @@ class BuildingRendererNew(Renderer):
         if parts:
             itemStore.add((Footprint(part, building) for part in parts), Footprint, len(parts))
         
+        self.preRender(building)
+
         for action in self.actions:
             action.do(building, buildingStyle, self)
             if itemStore.skip:
@@ -247,8 +250,6 @@ class BuildingRendererNew(Renderer):
             self.postRender(building.element)
     
     def renderExtrudedVolumes(self, building, data):
-        #self.preRender(building)
-        
         if not self.app.singleObject:
             renderInfo = building.renderInfo
             layer = building.element.l
@@ -286,6 +287,25 @@ class BuildingRendererNew(Renderer):
             self.facadeRenderer.render(footprint)
         
         footprint.roofRenderer.render(footprint.roofItem)
+    
+    def preRender(self, building):
+        if not self.app.singleObject:
+            layer = building.element.l
+
+            gen = MeshGenByIndices(
+                    self.createBlenderObject(
+                    self.getName(building.element),
+                    self.offsetZ if self.offsetZ else (self.offset if self.offset else layer.location),
+                    collection = layer.getCollection(self.collection),
+                    parent = layer.getParent(layer.getCollection(self.collection))
+                )
+            )
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
+                layer.genVolumes = layer.genFootprints = layer.genPartFootprints = layer.genHoles = gen
+            else:
+                layer.genVolumes = gen
+            
+            layer.prepare()
     
     def setUvs(self, face, uvs, layer, uvLayerName):
         # assign uv coordinates
