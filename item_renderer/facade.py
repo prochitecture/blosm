@@ -42,7 +42,7 @@ class Facade:
                                     # No markup, so we render cladding only.
                                     self.renderCladding(
                                         facade,
-                                        r.genVolumes.createFace(footprint, facade.indices),
+                                        footprint.element.l.genVolumes.createFace(footprint, facade.indices),
                                         facade.uvs
                                     )
                                     break

@@ -290,18 +290,22 @@ class BuildingRendererNew(Renderer):
     
     def preRender(self, building):
         if not self.app.singleObject:
+            # clean up <self.offset>
+            self.offset = None
+
             layer = building.element.l
 
             gen = MeshGenByIndices(
                     self.createBlenderObject(
                     self.getName(building.element),
-                    self.offsetZ if self.offsetZ else (self.offset if self.offset else layer.location),
+                    self.offset if self.offset else layer.location,
                     collection = layer.getCollection(self.collection),
                     parent = layer.getParent(layer.getCollection(self.collection))
                 )
             )
             if self.app.preferableResult == defs.Result.FootprintWithGn:
                 layer.genVolumes = layer.genFootprints = layer.genPartFootprints = layer.genHoles = gen
+                gen.initFootprintAttributes()
             else:
                 layer.genVolumes = gen
             

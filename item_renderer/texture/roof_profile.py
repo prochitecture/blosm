@@ -8,7 +8,7 @@ class RoofProfile(ItemRendererTexture):
         smoothFaces = roofItem.getStyleBlockAttr("faces") is smoothness.Smooth
         
         for roofSide in roofItem.roofSides:
-            face = self.r.genVolumes.createFace(
+            face = roofItem.footprint.element.l.genVolumes.createFace(
                 roofItem.footprint,
                 roofSide.indices
             )

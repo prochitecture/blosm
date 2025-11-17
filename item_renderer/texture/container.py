@@ -300,7 +300,7 @@ class Container(ItemRendererTexture):
                     #
                     # texture
                     #
-                    face = self.r.genVolumes.createFace(item.footprint, indices)
+                    face = item.footprint.element.l.genVolumes.createFace(item.footprint, indices)
                     
                     if item.materialId is None:
                         self.setMaterialId(
@@ -325,7 +325,7 @@ class Container(ItemRendererTexture):
         if not assetInfo:
             self.renderCladding(
                 item,
-                self.r.genVolumes.createFace(item.footprint, indices),
+                item.footprint.element.l.genVolumes.createFace(item.footprint, indices),
                 uvs
             )
             item.materialId = ""
