@@ -298,7 +298,8 @@ class BuildingRendererNew(Renderer):
 
         gen = building.renderInfo.gen = MeshGenByIndices()
         if self.app.preferableResult == defs.Result.FootprintWithGn:
-            layer.genVolumes = layer.genFootprints = layer.genPartFootprints = layer.genHoles = gen
+            # <layer.genPartFootprints> is not needed at this stage
+            layer.genVolumes = layer.genFootprints = layer.genHoles = gen
         else:
             layer.genVolumes = gen
     
