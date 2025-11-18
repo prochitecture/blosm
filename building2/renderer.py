@@ -28,6 +28,9 @@ from ..item.roof_side import RoofSide
 
 from .content_generator import MeshGenByIndices, MeshGenByCoords
 
+from ..util.osm import assignTags
+
+
 _itemClasses = (
         Building,
         Footprint,
@@ -55,9 +58,6 @@ class BuildingRendererNew(Renderer):
     def __init__(self, app, styleStore, itemRenderers, getStyle=None):
         self.app = app
         app.addRenderer(self)
-        
-        # offset for a Blender object created if <layer.singleObject is False>
-        self.offset = None
         
         self.styleStore = styleStore
         
@@ -217,9 +217,6 @@ class BuildingRendererNew(Renderer):
             return
         building.renderInfo.setStyleMeta(buildingStyle)
         
-        #if self.app.renderAfterExtrude:
-        #    self.preRender(building)
-        
         if self.app.preferableResult == defs.Result.FootprintWithGn or not parts or building.alsoPart:
             # the building has no parts
             footprint = Footprint(building, building)
@@ -233,7 +230,8 @@ class BuildingRendererNew(Renderer):
         if parts:
             itemStore.add((Footprint(part, building) for part in parts), Footprint, len(parts))
         
-        self.preRender(building)
+        if not self.app.renderAfterExtrude and not self.app.singleObject:
+            self.preRender(building)
 
         for action in self.actions:
             action.do(building, buildingStyle, self)
@@ -247,20 +245,26 @@ class BuildingRendererNew(Renderer):
         if itemStore.skip:
             itemStore.skip = False
         elif self.app.renderAfterExtrude:
-            self.postRender(building.element)
+            self.postRender(building)
     
     def renderExtrudedVolumes(self, building, data):
         if not self.app.singleObject:
-            renderInfo = building.renderInfo
-            layer = building.element.l
-            
-            layer.obj = self.createBlenderObject(
-                self.getName(building.element),
-                renderInfo.offsetBlenderObject,
-                collection = layer.getCollection(self.collection),
-                parent = layer.getParent( layer.getCollection(self.collection) )
+            l = building.element.l
+            gen = building.renderInfo.gen
+            gen.init(
+                self.createBlenderObject(
+                    self.getName(building.element),
+                    building.renderInfo.offsetBlenderObject,
+                    collection = l.getCollection(self.collection),
+                    parent = l.getParent(l.getCollection(self.collection))
+                )
             )
-            layer.prepare()
+            gen.initFootprintAttributes()
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
+                l.genVolumes = l.genFootprints = l.genPartFootprints = l.genHoles = gen
+            else:
+                l.genVolumes = gen
+            l.prepare()
         
         # render building footprint
         if self.app.preferableResult == defs.Result.FootprintWithGn:
@@ -274,7 +278,8 @@ class BuildingRendererNew(Renderer):
             if not part.footprint.doFootprintOnly:
                 self.renderExtrudedVolume(part.footprint)
         
-        self.postRender(building.element)
+        if not self.app.singleObject:
+            self.postRender(building)
     
     def renderExtrudedVolume(self, footprint):
         if not footprint:
@@ -289,27 +294,19 @@ class BuildingRendererNew(Renderer):
         footprint.roofRenderer.render(footprint.roofItem)
     
     def preRender(self, building):
-        if not self.app.singleObject:
-            # clean up <self.offset>
-            self.offset = None
+        layer = building.element.l
 
-            layer = building.element.l
-
-            gen = MeshGenByIndices(
-                    self.createBlenderObject(
-                    self.getName(building.element),
-                    self.offset if self.offset else layer.location,
-                    collection = layer.getCollection(self.collection),
-                    parent = layer.getParent(layer.getCollection(self.collection))
-                )
-            )
-            if self.app.preferableResult == defs.Result.FootprintWithGn:
-                layer.genVolumes = layer.genFootprints = layer.genPartFootprints = layer.genHoles = gen
-                gen.initFootprintAttributes()
-            else:
-                layer.genVolumes = gen
-            
-            layer.prepare()
+        gen = building.renderInfo.gen = MeshGenByIndices()
+        if self.app.preferableResult == defs.Result.FootprintWithGn:
+            layer.genVolumes = layer.genFootprints = layer.genPartFootprints = layer.genHoles = gen
+        else:
+            layer.genVolumes = gen
+    
+    def postRender(self, building):
+        # assign OSM tags to the blender object
+        assignTags(building.renderInfo.gen.obj, building.element.tags)
+        building.element.l.finalize()
+        building.renderInfo.gen.finalize()
     
     def setUvs(self, face, uvs, layer, uvLayerName):
         # assign uv coordinates

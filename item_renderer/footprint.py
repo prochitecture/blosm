@@ -26,7 +26,13 @@ class Footprint:
         )
     
     def render(self, footprint, data):
-        footprint.building.element.l.genFootprints.createFootprint(footprint, data, True)
+        footprint.building.element.l.genFootprints.createFootprint(
+            footprint,
+            data,
+            # The parameter <shareBMVerts> is True if buildings are generated as a single Blender object,
+            # otherwise it is False
+            self.app.singleObject
+        )
         if footprint.innerPolygons:
             footprint.building.element.l.genHoles.createFootprintsForHoles(footprint)
     

@@ -1,4 +1,5 @@
 from ..building.manager import BuildingParts, BuildingRelations
+from .. import defs
 
 
 def conditionsSkipWays(tags, e):
@@ -360,8 +361,11 @@ class SetupBlender(Setup):
         app = self.app
         osm = self.osm
         
+        # Projection on terrain will be done with Geometry Nodes if
+        # <app.preferableResult == defs.Result.FootprintWithGn>,
+        # so the <Terrain> action is not needed in this case.
         # <app.terrain> isn't yet set at this pooint, so we use the string <app.terrainObject> instead
-        if app.terrainObject:
+        if not app.preferableResult == defs.Result.FootprintWithGn and app.terrainObject:
             from ..action.terrain import Terrain
             buildingRenderer.actions.append( Terrain(app, osm, buildingRenderer.itemStore) )
         if not app.singleObject:
