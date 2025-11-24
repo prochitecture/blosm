@@ -3,7 +3,6 @@ import bpy
 
 from ..util.blender import loadMaterialsFromFile, linkObjectFromFile
 from .util import getFilepath
-from ..util.blender_extra.material import createMaterialFromTemplate, setImage
 
 _materialTemplateFilename = "building_material_templates.blend"
 

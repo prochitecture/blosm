@@ -54,7 +54,7 @@ class Facade:
                         # Use style of <footprint> to render cladding for <facade>
                         self.renderCladding(
                             footprint,
-                            r.createFace(footprint, facade.indices),
+                            footprint.element.l.genVolumes.createFace(footprint, facade.indices),
                             facade.uvs
                         )
         else:

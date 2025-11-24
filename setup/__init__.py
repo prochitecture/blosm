@@ -318,7 +318,6 @@ class SetupBlender(Setup):
             )
         else:
             from ..item_renderer.texture.base import\
-                Facade as FacadeRenderer,\
                 Div as DivRenderer,\
                 Level as LevelRenderer,\
                 Top as TopRenderer,\
@@ -327,10 +326,19 @@ class SetupBlender(Setup):
                 Corner as CornerRenderer,\
                 RoofFlat as RoofFlatRenderer,\
                 RoofFlatMulti as RoofFlatMultiRenderer,\
-                RoofProfile as RoofProfileRenderer,\
                 RoofGeneratrix as RoofGeneratrixRenderer,\
-                RoofPyramidal as RoofPyramidalRenderer,\
-                RoofHipped as RoofHippedRenderer
+                RoofPyramidal as RoofPyramidalRenderer
+            
+            if self.app.preferableResult == defs.Result.FootprintWithGn:
+                from ..item_renderer.gn import\
+                    Facade as FacadeRenderer,\
+                    RoofBase as RoofProfileRenderer
+                RoofHippedRenderer = RoofProfileRenderer
+            else:
+                from ..item_renderer.texture.base\
+                    import Facade as FacadeRenderer,\
+                    RoofProfile as RoofProfileRenderer,\
+                    RoofHipped as RoofHippedRenderer
             
             itemRenderers = dict(
                 Footprint = FootprintRenderer(),
