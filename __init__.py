@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 bl_info = {
     "name": "Blosm",
     "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 21),
+    "version": (2, 7, 22),
     "blender": (4, 2, 0),
     "location": "Right side panel > \"Blosm\" tab",
     "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
@@ -56,17 +56,18 @@ _checkPath()
 
 import bpy, bmesh, blf
 
-from .renderer import Renderer
-from .parse.osm import Osm
-from . import gui, ape
 from .app import blender as blenderApp
-from .defs import Keys
-
+# Important: <blenderApp.app> attributes must be set before importing gui, since <app.isPro> is used there
 # set the minimum version for BLOSM assets
 blenderApp.app.setMinAssetsVersion(bl_info["blosmAssets"])
 # set addon version
 blenderApp.app.version = bl_info["version"]
 blenderApp.app.isPro = os.path.isdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), "realistic"))
+
+from .renderer import Renderer
+from .parse.osm import Osm
+from . import gui, ape
+from .defs import Keys
 
 
 class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
@@ -207,6 +208,20 @@ class BLOSM_OT_GetGoogleMapsApiKey(bpy.types.Operator):
     bl_options = {'INTERNAL'}
     
     url = "https://developers.google.com/maps/documentation/tile/get-api-key"
+    
+    def execute(self, context):
+        import webbrowser
+        webbrowser.open_new_tab(self.url)
+        return {'FINISHED'}
+
+
+class BLOSM_OT_GetProVersion(bpy.types.Operator):
+    bl_idname = "blosm.get_pro_version"
+    bl_label = ""
+    bl_description = "Get the Pro version of Blosm"
+    bl_options = {'INTERNAL'}
+    
+    url = "https://prochitecture.com/blosm/pro/"
     
     def execute(self, context):
         import webbrowser
@@ -471,6 +486,19 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         addon = context.scene.blosm
         google3dTiles = addon.threedTilesSource == "google"
+
+        if not blenderApp.app.isPro and google3dTiles and addon.lodOf3dTiles == "lod6":
+            def _draw_pro_popup(self, context):
+                self.layout.label(text="This level of detail is available in the Pro version")
+                self.layout.separator()
+                self.layout.operator("blosm.get_pro_version", text="Get the Pro version!")
+
+            bpy.context.window_manager.popup_menu(
+                _draw_pro_popup,
+                title="Blosm",
+                icon='INFO'
+            )
+            return {'CANCELLED'}
         
         renderer = BlenderRenderer(
             "Google 3D Tiles" if google3dTiles else "3D Tiles",
@@ -739,6 +767,7 @@ _classes = (
     BLOSM_OT_GetArcgisToken,
     BLOSM_OT_GetMapboxToken,
     BLOSM_OT_GetGoogleMapsApiKey,
+    BLOSM_OT_GetProVersion,
     #BLOSM_OT_LoadExtensions,
     BLOSM_OT_ImportData,
     BLOSM_OT_ControlOverlay
