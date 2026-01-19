@@ -6,9 +6,26 @@ from operator import itemgetter
 import sys
 
 import bpy
-from mathutils import Matrix
+from mathutils import Vector, Matrix
 
-from util.blender import createEmptyObject, createCollection
+from util.blender import createCollection
+
+from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+
+
+def find_layer_collection(layer_col: bpy.types.LayerCollection, target_col: bpy.types.Collection):
+    """
+    Recursively searches for the LayerCollection that corresponds to the given <target_col> of type <bpy.types.Collection>
+    within the hierarchy starting from <layer_col> of type <bpy.types.LayerCollection>
+    Returns the found LayerCollection or None if not found.
+    """
+    if layer_col.collection == target_col:
+        return layer_col
+    for child in layer_col.children:
+        found = find_layer_collection(child, target_col)
+        if found:
+            return found
+    return None
 
 
 class BlenderRenderer:
@@ -17,7 +34,8 @@ class BlenderRenderer:
         self.threedTilesName = threedTilesName
         self.join3dTilesObjects = join3dTilesObjects
         self.instanceName = instanceName
-        self.importedObjects = []
+        # imported top level objects (without parent)
+        self.top_level_objects = []
         
         self.calculateHeightOffset = False
         self.heightOffset = 0.
@@ -33,21 +51,39 @@ class BlenderRenderer:
         self._select_imported_objects = None
     
     def prepare(self, manager):
+        self.num_imported_tiles = 0
+
         self.collection = createCollection(self.threedTilesName)
+        # <self.collection_import> is used to import the objects first, then they are moved to <self.collection>.
+        # The reason for this is to isolatede the imported objects from other objects in the scene during the import process.
+        self.collection_import = createCollection(self.threedTilesName + "_import")
+        # LayerCollection corresponding to <self.collection_import>
+        self.layer_collection_import = find_layer_collection(
+            bpy.context.view_layer.layer_collection,
+            self.collection_import
+        )
+        # set the active LayerCollection to <self.layer_collection_import>
+        bpy.context.view_layer.active_layer_collection = self.layer_collection_import
         
         self.centerCoords = manager.fromGeographic(manager.centerLat, manager.centerLon, 0.)
         
-        if "io_scene_gltf2" in sys.modules:
-            self.patchGltfImporter()
+        # Blender's glTF importer will be patched by default. A position offset will be applied during the import.
+        glTFImporter._patch_convert_functions = True
+        # the check <if "io_scene_gltf2" in sys.modules> is performed in <blosm.app>
+        self.patchGltfImporter()
     
     def finalize(self, manager):
-        if not self.importedObjects:
+        bpy.data.collections.remove(self.collection_import)
+        self.collection_import = None
+        self.layer_collection_import = None
+
+        if not self.top_level_objects:
+            bpy.data.collections.remove(self.collection)
             self.collection = None
 
             if self._gltfImporterPatched:
                 self.cleanupGltfImporterPatching()
-            
-            return
+            return 0
         
         #
         # tranformation matrix
@@ -58,7 +94,7 @@ class BlenderRenderer:
         # Rotate the mesh, so it will point to the north pole. The rotations are around Z and X axes
         matrix = Matrix.Rotation(lat-pi/2., 4, 'X') @ Matrix.Rotation(radians(-90. - manager.centerLon), 4, 'Z')
         
-        locationsAfterRotation = [(matrix @ obj.location) for obj in self.importedObjects]
+        locationsAfterRotation = [(matrix @ obj.location) for obj in self.top_level_objects]
         
         # find the lowest Z-coordinate if <self.calculateHeightOffset>
         heightOffset = min(location[2] for location in locationsAfterRotation)\
@@ -67,9 +103,9 @@ class BlenderRenderer:
         if self.calculateHeightOffset:
             self.heightOffset = heightOffset
         
-        # select the imported objects
+        # select the imported top level objects
         bpy.ops.object.select_all(action='DESELECT')
-        for obj in self.importedObjects:
+        for obj in self.top_level_objects:
             obj.select_set(True)
         
         # apply possible rotation after Blender's glTF importer
@@ -84,7 +120,7 @@ class BlenderRenderer:
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
             bpy.context.scene.cursor.location = _cursorLocation
             
-            joinedObject = self.importedObjects[-1]
+            joinedObject = self.top_level_objects[-1]
             #location = locationsAfterRotation[-1]
             #location[2] -= heightOffset
             joinedObject.matrix_local = matrix#Matrix.Translation(location) @ matrix
@@ -92,7 +128,7 @@ class BlenderRenderer:
             if not self._gltfImporterPatched:
                 # rotate the vector <centerCoords>
                 centerCoords = matrix @ centerCoords
-            for obj, location in zip(self.importedObjects, locationsAfterRotation):
+            for obj, location in zip(self.top_level_objects, locationsAfterRotation):
                 if not self._gltfImporterPatched:
                     location[2] -= centerCoords[2]
                 obj.matrix_local = Matrix.Translation(location) @ matrix
@@ -108,67 +144,60 @@ class BlenderRenderer:
                 )
             )
         )
-        
-        numImportedTiles = len(self.importedObjects)
-        
-        self.importedObjects.clear()
-        self.collection = None
-        
+
         if self._gltfImporterPatched:
             self.cleanupGltfImporterPatching()
         
-        return numImportedTiles
+        self.top_level_objects.clear()
+        self.collection = None
+        
+        return self.num_imported_tiles
     
     def renderGlb(self, manager, uri, path, cacheContent):
         context = bpy.context
         
-        filePath = joinStrings(
+        filepath = joinStrings(
             manager.tilesDir,
             basename(path) if cacheContent else ("current_file_" + self.instanceName + ".glb" if self.instanceName else "current_file.glb")
         )
         
         if cacheContent:
-            if not pathExists(filePath):
+            if not pathExists(filepath):
                 fileContent = manager.download(uri)
-                with open(filePath, 'wb') as f:
+                with open(filepath, 'wb') as f:
                     f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filePath)
+            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
         else:
             fileContent = manager.download(uri)
+
             # check if <fileContent> contains copyright information
             match = re.search(self.licenseRePattern, fileContent)
             if match:
                 self.processCopyrightInfo(match.group(1).decode('utf-8'))
-            with open(filePath, 'wb') as f:
+            
+            with open(filepath, 'wb') as f:
                 f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filePath)
-            removeFile(filePath)
-        
-        importedObject = context.object
-        # unlink <importedObject> from its collection, there can be more than one colection
-        for collection in importedObject.users_collection:
-            collection.objects.unlink(importedObject)
-        # link <importedObject> to <self.collection>
-        self.collection.objects.link(importedObject)
-        self.importedObjects.append(importedObject)
+            
+            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+
+            if self.collection_import.objects:
+                self.finalize_glb_import(filepath)
 
     def renderB3dm(self, manager, uri, path, cacheContent):
         import numpy
         from .py3dtiles.tileset.content.tile_content_reader import read_array
         
-        context = bpy.context
-        
-        filePath = joinStrings(
+        filepath = joinStrings(
             manager.tilesDir,
             basename(path)[:-4] + "glb" if cacheContent else ("current_file_" + self.instanceName + ".glb" if self.instanceName else "current_file.glb")
         )
         
         if cacheContent:
-            if not pathExists(filePath):
+            if not pathExists(filepath):
                 fileContent = manager.download(uri)
-                with open(filePath, 'wb') as f:
+                with open(filepath, 'wb') as f:
                     f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filePath)
+            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
         else:
             fileContent = manager.download(uri)
             # check if <fileContent> contains copyright information
@@ -181,30 +210,22 @@ class BlenderRenderer:
                 raise Exception("The file doesn't contain a valid data.")
             
             gltfContent = b3dmContent.body.gltf
+            # RTC means "Relative To Center"
             rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
-            
-            # set position
             if rtc_center:
-                gltfContent.header["nodes"] = [
-                    dict(
-                        mesh = 0,
-                        translation = (rtc_center[0], rtc_center[2], -rtc_center[1])
-                    )
-                ]
+                from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+                # No need to patch Blender's glTF importer if the property <RTC_CENTER> is provided.
+                glTFImporter._patch_convert_functions = False
             
-            with open(filePath, 'wb') as f:
+            with open(filepath, 'wb') as f:
                 f.write(gltfContent.to_array())
             
-            bpy.ops.import_scene.gltf(filepath=filePath)
-            removeFile(filePath)
-        
-        importedObject = context.object
-        # unlink <importedObject> from its collection, there can be more than one colection
-        for collection in importedObject.users_collection:
-            collection.objects.unlink(importedObject)
-        # link <importedObject> to <self.collection>
-        self.collection.objects.link(importedObject)
-        self.importedObjects.append(importedObject)
+            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+            
+            if self.collection_import.objects or self.collection_import.children:
+                if rtc_center:
+                    self.process_rtc(rtc_center)
+                self.finalize_glb_import(filepath)
     
     def processCopyrightInfo(self, info):
         for copyrightHolder in info.split(';'):
@@ -213,10 +234,52 @@ class BlenderRenderer:
                 self.copyrightHolders[copyrightHolder] = 0
             self.copyrightHolders[copyrightHolder] += 1
     
+    def process_rtc(self, rtc_center):
+        rtc_center = Vector(rtc_center)
+
+        # Find Blender collection where the imported objects are located
+        collection = self.collection_import
+        if self.collection_import.children:
+            # Find the first non-excluded child collection using the property <exclude> of <LayerCollection>
+            # Why only the first? The other appear to be a phatom collection with the property <exclude> set to True.
+            collection = next((c for c in self.layer_collection_import.children if not c.exclude)).collection
+        
+        for obj in collection.objects:
+            # only top level objects are adjusted
+            if not obj.parent:
+                obj.location += rtc_center - self.centerCoords
+    
+    def finalize_glb_import(self, filepath):
+        removeFile(filepath)
+
+        # Find Blender collection where the imported objects are located
+        collection = self.collection_import
+        if self.collection_import.children:
+            # Find the first non-excluded child collection using the property <exclude> of <LayerCollection>
+            # Why only the first? The other appear to be a phatom collection with the property <exclude> set to True.
+            collection = next((c for c in self.layer_collection_import.children if not c.exclude)).collection
+
+        # append top level objects (without parent) to <self.top_level_objects>
+        self.top_level_objects.extend(
+            obj for obj in collection.objects if not obj.parent
+        )
+
+        # Move all objects from <collection> to the main collection
+        for obj in collection.objects:
+            collection.objects.unlink(obj)
+            self.collection.objects.link(obj)
+        
+        if self.collection_import.children:
+            # Remove all child collections from <self.collection_import>
+            for collection in self.collection_import.children:
+                bpy.data.collections.remove(collection)
+        
+        self.num_imported_tiles += 1
+
     def joinObjects(self):
-        if len(self.importedObjects) > 1:
+        if len(self.top_level_objects) > 1:
             bpy.ops.object.join()
-        joinedObject = self.importedObjects[-1]
+        joinedObject = self.top_level_objects[-1]
         joinedObject.name = self.threedTilesName
         bpy.context.view_layer.objects.active = joinedObject
         bpy.ops.object.mode_set(mode='EDIT')
@@ -229,7 +292,6 @@ class BlenderRenderer:
 
         if (bv[0] == 3 and bv[1] == 6) or (bv[0] == 4 and bv[1] <= 2):
             from .gltf_patch import set_convert_functions_4_5, select_imported_objects_4_1
-            from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
             from io_scene_gltf2.blender.imp.gltf2_blender_gltf import BlenderGlTF
             from io_scene_gltf2.blender.imp.gltf2_blender_scene import BlenderScene
 
@@ -244,7 +306,6 @@ class BlenderRenderer:
             self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
         elif (bv[0] == 4 and 3 <= bv[1]) or bv[0] > 4:
             from .gltf_patch import set_convert_functions_4_5, select_imported_objects_4_1
-            from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
             from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
             from io_scene_gltf2.blender.imp.scene import BlenderScene
             
@@ -266,6 +327,7 @@ class BlenderRenderer:
         BlenderGlTF.set_convert_functions = self._set_convert_functions
         self._set_convert_functions = None
 
+        delattr(glTFImporter, "_patch_convert_functions")
         delattr(glTFImporter, "_offset")
         
         BlenderScene.select_imported_objects = self._select_imported_objects
