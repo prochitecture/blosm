@@ -66,6 +66,7 @@ class BaseManager:
             tileset = self.getJsonFile(self.rootUri, None, False)
             self.renderTileset(tileset, self.baseUri)
         except Exception as e:
+            self.renderer.finalize(self)
             # return only a critical error
             return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
         
