@@ -69,10 +69,10 @@ class BaseManager:
             # return only a critical error
             return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
         
-        numRenderedTiles = self.renderer.finalize(self)
+        self.renderer.finalize(self)
         
         # return the number of rendered tiles and uncritical errors
-        return numRenderedTiles, self.errors
+        return self.renderer.num_imported_tiles, self.errors
     
     def renderTileset(self, tileset, baseUri):
         self.renderElement(tileset["root"], baseUri)

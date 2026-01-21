@@ -548,7 +548,7 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
                 "Imported %s 3D Tiles. %s errors occured during the import. " % (numImportedTiles, len(errors)) +\
                 "See the System Console."\
                     if errors else\
-                    "Successfully Imported %s 3D Tiles." % numImportedTiles
+                    "Successfully imported %s 3D Tiles." % numImportedTiles
             )
         else:
             self.report(

@@ -81,7 +81,7 @@ class BlenderRenderer:
 
             if self._gltfImporterPatched:
                 self.cleanupGltfImporterPatching()
-            return 0
+            return
         
         bpy.ops.object.select_all(action='DESELECT')
 
@@ -178,8 +178,6 @@ class BlenderRenderer:
             self.cleanupGltfImporterPatching()
         
         self.collection = None
-        
-        return self.num_imported_tiles
     
     def renderGlb(self, manager, uri, path, cacheContent):
         context = bpy.context
@@ -310,7 +308,7 @@ class BlenderRenderer:
         
         joinedObject = self.collection.objects[0]
         joinedObject.name = self.threedTilesName
-        
+
         # Removing doubles produces odd results in some cases, so it is disabled for now.
         #bpy.ops.object.mode_set(mode='EDIT')
         #bpy.ops.mesh.select_all(action='SELECT')
