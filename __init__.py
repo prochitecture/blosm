@@ -132,7 +132,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
         layout = self.layout
         
         if blenderApp.app.isPro:
-            layout.box().label(text="Thank you for purchasing the premium version!")
+            layout.box().label(text="Thank you for purchasing the Pro version!")
             if self.enableExperimentalFeatures:
                 layout.row().prop(self, "screenType", expand=True)
         
@@ -515,7 +515,7 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         a = blenderApp.app
         try:
-            a.init3dTiles(context, manager, "google")
+            a.init3dTiles(context, manager, '')
         except Exception as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
