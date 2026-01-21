@@ -75,7 +75,7 @@ class BaseManager:
                     try:
                         response = json.loads(response)
                         if "error" in response and "message" in response["error"]:
-                            error_message += "\nMessage from the 3D Tiles provider:\n%s" % response["error"]["message"]
+                            error_message += "\nMessage from Google Cloud:\n%s" % response["error"]["message"]
                     except json.JSONDecodeError:
                         pass
             self.renderer.finalize(self)
