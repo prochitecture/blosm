@@ -34,8 +34,6 @@ class BlenderRenderer:
         self.threedTilesName = threedTilesName
         self.join3dTilesObjects = join3dTilesObjects
         self.instanceName = instanceName
-        # imported top level objects (without parent)
-        self.top_level_objects = []
         
         self.calculateHeightOffset = False
         self.heightOffset = 0.
@@ -77,7 +75,7 @@ class BlenderRenderer:
         self.collection_import = None
         self.layer_collection_import = None
 
-        if not self.top_level_objects:
+        if not self.collection.objects:
             bpy.data.collections.remove(self.collection)
             self.collection = None
 
@@ -85,6 +83,44 @@ class BlenderRenderer:
                 self.cleanupGltfImporterPatching()
             return 0
         
+        bpy.ops.object.select_all(action='DESELECT')
+
+        # check if there are any parent-child relationships among the imported objects
+        if sum(1 for obj in self.collection.objects if obj.parent):
+            # Out task is to remove all parent-child relationships among the imported objects,
+            # i.e. flatten the hierarchy.
+
+            # Build a dictionary Object Name --> Object for the imported Mesh objects
+            mesh_objects = {obj.name: obj for obj in self.collection.objects if obj.type == 'MESH'}
+            while True:
+                num_processed_objects = 0
+                for obj in list(mesh_objects.values()):
+                    # Only bottom-level Mesh objects with a parent (i.e at the very bottom of a parent-child hierarchy)
+                    # are processed in each iteration
+                    if obj.parent and not obj.children:
+                        # get final world transform (includes all parents)
+                        mw = obj.matrix_world.copy()
+                        # clear parent
+                        obj.parent = None
+                        # apply the final world transform to the object
+                        obj.matrix_world = mw
+                        # remove <obj> from the dictionary <mesh_objects>
+                        del mesh_objects[obj.name]
+                        num_processed_objects += 1
+                if num_processed_objects == 0 or not mesh_objects:
+                    # no more Mesh objects with a parent and without children are left
+                    break
+            # remove imported Blender Empty objects
+            for obj in [obj for obj in self.collection.objects if obj.type == 'EMPTY']:
+                bpy.data.objects.remove(obj)
+        
+        # select all imported Mesh objects:
+        for obj in self.collection.objects:
+            obj.select_set(True)
+        
+        # apply possible rotation
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+
         #
         # tranformation matrix
         #
@@ -94,7 +130,7 @@ class BlenderRenderer:
         # Rotate the mesh, so it will point to the north pole. The rotations are around Z and X axes
         matrix = Matrix.Rotation(lat-pi/2., 4, 'X') @ Matrix.Rotation(radians(-90. - manager.centerLon), 4, 'Z')
         
-        locationsAfterRotation = [(matrix @ obj.location) for obj in self.top_level_objects]
+        locationsAfterRotation = [(matrix @ obj.location) for obj in self.collection.objects]
         
         # find the lowest Z-coordinate if <self.calculateHeightOffset>
         heightOffset = min(location[2] for location in locationsAfterRotation)\
@@ -103,14 +139,7 @@ class BlenderRenderer:
         if self.calculateHeightOffset:
             self.heightOffset = heightOffset
         
-        # select the imported top level objects
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in self.top_level_objects:
-            obj.select_set(True)
-        
-        # apply possible rotation after Blender's glTF importer
-        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-        
+
         if self.join3dTilesObjects:
             self.joinObjects()
             
@@ -120,15 +149,15 @@ class BlenderRenderer:
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
             bpy.context.scene.cursor.location = _cursorLocation
             
-            joinedObject = self.top_level_objects[-1]
             #location = locationsAfterRotation[-1]
             #location[2] -= heightOffset
-            joinedObject.matrix_local = matrix#Matrix.Translation(location) @ matrix
+            # set the matrix_local of the resulting Blender object
+            self.collection.objects[0].matrix_local = matrix#Matrix.Translation(location) @ matrix
         else:
             if not self._gltfImporterPatched:
                 # rotate the vector <centerCoords>
                 centerCoords = matrix @ centerCoords
-            for obj, location in zip(self.top_level_objects, locationsAfterRotation):
+            for obj, location in zip(self.collection.objects, locationsAfterRotation):
                 if not self._gltfImporterPatched:
                     location[2] -= centerCoords[2]
                 obj.matrix_local = Matrix.Translation(location) @ matrix
@@ -148,7 +177,6 @@ class BlenderRenderer:
         if self._gltfImporterPatched:
             self.cleanupGltfImporterPatching()
         
-        self.top_level_objects.clear()
         self.collection = None
         
         return self.num_imported_tiles
@@ -259,11 +287,6 @@ class BlenderRenderer:
             # Why only the first? The other appear to be a phatom collection with the property <exclude> set to True.
             collection = next((c for c in self.layer_collection_import.children if not c.exclude)).collection
 
-        # append top level objects (without parent) to <self.top_level_objects>
-        self.top_level_objects.extend(
-            obj for obj in collection.objects if not obj.parent
-        )
-
         # Move all objects from <collection> to the main collection
         for obj in collection.objects:
             collection.objects.unlink(obj)
@@ -277,15 +300,20 @@ class BlenderRenderer:
         self.num_imported_tiles += 1
 
     def joinObjects(self):
-        if len(self.top_level_objects) > 1:
+        if self.collection.objects:
+            # If a Blender Empty object was imported and it became the active object in the course of the processing,
+            # after deleting it, Blender may not have any active object, which is required by <bpy.ops.object.join()>.
+            # Therefore, we set the active object to the first object in the collection.
+            bpy.context.view_layer.objects.active = self.collection.objects[0]
             bpy.ops.object.join()
-        joinedObject = self.top_level_objects[-1]
+        joinedObject = self.collection.objects[0]
         joinedObject.name = self.threedTilesName
         bpy.context.view_layer.objects.active = joinedObject
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.mesh.remove_doubles()
-        bpy.ops.object.mode_set(mode='OBJECT')
+        # Removing doubles produces odd results in some cases, so it is disabled for now.
+        #bpy.ops.object.mode_set(mode='EDIT')
+        #bpy.ops.mesh.select_all(action='SELECT')
+        #bpy.ops.mesh.remove_doubles()
+        #bpy.ops.object.mode_set(mode='OBJECT')
     
     def patchGltfImporter(self):
         bv = bpy.app.version
