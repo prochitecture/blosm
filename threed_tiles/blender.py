@@ -300,15 +300,17 @@ class BlenderRenderer:
         self.num_imported_tiles += 1
 
     def joinObjects(self):
-        if self.collection.objects:
-            # If a Blender Empty object was imported and it became the active object in the course of the processing,
-            # after deleting it, Blender may not have any active object, which is required by <bpy.ops.object.join()>.
-            # Therefore, we set the active object to the first object in the collection.
-            bpy.context.view_layer.objects.active = self.collection.objects[0]
+        # If a Blender Empty object was imported and it became the active object in the course of the processing,
+        # after deleting it, Blender may not have any active object, which is required by <bpy.ops.object.join()>.
+        # Therefore, we set the active object to the first object in the collection.
+        bpy.context.view_layer.objects.active = self.collection.objects[0]
+
+        if len(self.collection.objects) > 1:
             bpy.ops.object.join()
+        
         joinedObject = self.collection.objects[0]
         joinedObject.name = self.threedTilesName
-        bpy.context.view_layer.objects.active = joinedObject
+        
         # Removing doubles produces odd results in some cases, so it is disabled for now.
         #bpy.ops.object.mode_set(mode='EDIT')
         #bpy.ops.mesh.select_all(action='SELECT')
