@@ -1,10 +1,10 @@
 from math import ceil
 import bpy
-import parse
-from renderer import Renderer2d
-from renderer.layer import MeshLayer
-from util.osm import parseNumber
-from util.random import RandomWeighted
+from .. import parse
+from ..renderer import Renderer2d
+from ..renderer.layer import MeshLayer
+from ..util.osm import parseNumber
+from ..util.random import RandomWeighted
 
 
 class GnBldg2dLayer(MeshLayer):

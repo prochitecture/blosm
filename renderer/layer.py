@@ -18,10 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import math
-import bpy, bmesh
+import bmesh
 from mathutils import Vector
-from renderer import Renderer
-from util.blender import createCollection, createEmptyObject, getBmesh, setBmesh, addShrinkwrapModifier
+from . import Renderer
+from ..util.blender import createCollection, createEmptyObject, getBmesh, setBmesh, addShrinkwrapModifier
 
 
 class Layer:
