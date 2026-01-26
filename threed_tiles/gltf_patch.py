@@ -16,20 +16,32 @@ def set_convert_functions_4_5(gltf):
         #
         # Patch <convert_loc>
         #
-        def convert_loc(x): return u * Vector([x[0] - offset[0], -x[2] - offset[1], x[1] - offset[2]])
+        if gltf._patch_convert_functions:
+            def convert_loc(x): return u * Vector([x[0] - offset[0], -x[2] - offset[1], x[1] - offset[2]])
+        else:
+            def convert_loc(x): return u * Vector([x[0], -x[2], x[1]])
         def convert_quat(q): return Quaternion([q[3], q[0], -q[2], q[1]])
         def convert_scale(s): return Vector([s[0], s[2], s[1]])
 
         #
         # Patch <convert_matrix>
         #
-        def convert_matrix(m):
-            return Matrix([
-                [m[0], -m[8], m[4], (m[12] - offset[0]) * u],
-                [-m[2], m[10], -m[6], (-m[14] - offset[1]) * u],
-                [m[1], -m[9], m[5], (m[13] - offset[2]) * u],
-                [m[3] / u, -m[11] / u, m[7] / u, m[15]],
-            ])
+        if gltf._patch_convert_functions:
+            def convert_matrix(m):
+                return Matrix([
+                    [m[0], -m[8], m[4], (m[12] - offset[0]) * u],
+                    [-m[2], m[10], -m[6], (-m[14] - offset[1]) * u],
+                    [m[1], -m[9], m[5], (m[13] - offset[2]) * u],
+                    [m[3] / u, -m[11] / u, m[7] / u, m[15]],
+                ])
+        else:
+            def convert_matrix(m):
+                return Matrix([
+                    [m[0], -m[8], m[4], (m[12]) * u],
+                    [-m[2], m[10], -m[6], (-m[14]) * u],
+                    [m[1], -m[9], m[5], (m[13]) * u],
+                    [m[3] / u, -m[11] / u, m[7] / u, m[15]],
+                ])
 
         # Batch versions operate in place on a numpy array
         def convert_locs_batch(locs):

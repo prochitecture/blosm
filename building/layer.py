@@ -1,5 +1,5 @@
-from renderer.layer import MeshLayer
-from util import zeroVector
+from ..renderer.layer import MeshLayer
+from ..util import zeroVector
 
 
 class BuildingLayer(MeshLayer):

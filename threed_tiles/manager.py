@@ -1,5 +1,5 @@
 from math import radians, cos, sin, sqrt
-from urllib import request
+from urllib import request, error
 from urllib.parse import urlparse
 from os.path import splitext, basename, dirname, join as joinStrings, exists as pathExists
 import json, ssl, gzip
@@ -65,14 +65,30 @@ class BaseManager:
         try:
             tileset = self.getJsonFile(self.rootUri, None, False)
             self.renderTileset(tileset, self.baseUri)
+        except error.HTTPError as e:
+            error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
+            if self.uriServer == "https://tile.googleapis.com":
+                response = e.read()
+                if response:
+                    if isinstance(response, bytes):
+                        response = response.decode('utf-8')
+                    try:
+                        response = json.loads(response)
+                        if "error" in response and "message" in response["error"]:
+                            error_message += "\nMessage from Google Cloud:\n%s" % response["error"]["message"]
+                    except json.JSONDecodeError:
+                        pass
+            self.renderer.finalize(self)
+            return (error_message,)
         except Exception as e:
+            self.renderer.finalize(self)
             # return only a critical error
             return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
         
-        numRenderedTiles = self.renderer.finalize(self)
+        self.renderer.finalize(self)
         
         # return the number of rendered tiles and uncritical errors
-        return numRenderedTiles, self.errors
+        return self.renderer.num_imported_tiles, self.errors
     
     def renderTileset(self, tileset, baseUri):
         self.renderElement(tileset["root"], baseUri)

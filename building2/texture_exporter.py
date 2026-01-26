@@ -52,10 +52,16 @@ class TextureExporter:
     def makeCommonPreparations(self, scene, textureFilename, textureDir):
         self.verifyPath(textureDir)
         self.setTmpTextureDir(textureDir)
-        nodes = scene.node_tree.nodes
-        fileOutputNode = nodes["File Output"]
-        fileOutputNode.base_path = self.tmpTextureDir
-        fileOutputNode.file_slots[0].path, extention = os.path.splitext(textureFilename)
+        if hasattr(scene, "compositing_node_group"): # Blender 5.0.0 and higher
+            nodes = scene.compositing_node_group.nodes
+            fileOutputNode = nodes["File Output"]
+            fileOutputNode.directory = self.tmpTextureDir
+            fileOutputNode.file_output_items[0].name, extention = os.path.splitext(textureFilename)
+        else: # before Blender 5.0.0
+            nodes = scene.node_tree.nodes
+            fileOutputNode = nodes["File Output"]
+            fileOutputNode.base_path = self.tmpTextureDir
+            fileOutputNode.file_slots[0].path, extention = os.path.splitext(textureFilename)
         # Set the correct file format for rendering
         fileOutputNode.format.file_format = _renderFileFormats.get(
             extention.lower(), 'PNG'
@@ -84,13 +90,13 @@ class TextureExporter:
     
     def setScaleNode(self, nodes, nodeName, scaleX, scaleY):
         scaleInputs = nodes[nodeName].inputs
-        scaleInputs[1].default_value = scaleX
-        scaleInputs[2].default_value = scaleY
+        scaleInputs['X'].default_value = scaleX
+        scaleInputs['Y'].default_value = scaleY
     
     def setTranslateNode(self, nodes, nodeName, translateX, translateY):
         translateInputs = nodes[nodeName].inputs
-        translateInputs[1].default_value = translateX
-        translateInputs[2].default_value = translateY
+        translateInputs['X'].default_value = translateX
+        translateInputs['Y'].default_value = translateY
     
     def setImage(self, fileName, path, nodes, nodeName):
         return setImage(
