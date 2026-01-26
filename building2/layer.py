@@ -1,4 +1,4 @@
-from building.layer import BuildingLayer
+from ..building.layer import BuildingLayer
 
 
 class RealisticBuildingLayer(BuildingLayer):
