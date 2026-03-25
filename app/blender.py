@@ -54,9 +54,9 @@ class BlenderApp(BaseApp):
     ]
     
     osmServers = {
-        "overpass-api.de": "http://overpass-api.de",
+        "overpass-api.de": "https://overpass-api.de",
         "vk maps": "https://maps.mail.ru/osm/tools/overpass",
-        "kumi.systems": "http://overpass.kumi.systems"
+        "private.coffee": "https://overpass.private.coffee"
     }
     
     devOsmServer = "overpass-api.de"

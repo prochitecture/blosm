@@ -114,9 +114,9 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
     osmServer: bpy.props.EnumProperty(
         name = "OSM data server",
         items = (
-            ("overpass-api.de", "overpass-api.de: 8 cores, 128 GB RAM", "overpass-api.de: 8 cores, 128 GB RAM"),
-            ("vk maps", "VK Maps: 56 cores, 384 GB RAM", "VK Maps: 56 cores, 384 GB RAM"),
-            ("kumi.systems", "kumi.systems: 20 cores, 256 GB RAM", "kumi.systems: 20 cores, 256 GB RAM")
+            ("overpass-api.de", "overpass-api.de: 2 servers each with 16 cores, 128 GB RAM", "overpass-api.de: 2 servers each with 8 cores and 128 GB RAM"),
+            ("private.coffee", "Private.coffee: 4 servers each with 20 cores, 256 GB RAM", "Private.coffee: 4 servers each with 20 cores and 256 GB RAM"),
+            ("vk maps", "VK Maps: 2 servers each with 56 cores, 384 GB RAM", "VK Maps: 2 servers each with 56 cores and 384 GB RAM")
         ),
         description = "OSM data server if the default one is inaccessible",
         default = "overpass-api.de"
