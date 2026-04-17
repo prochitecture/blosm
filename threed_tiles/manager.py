@@ -100,7 +100,7 @@ class BaseManager:
             #if self.geometricErrorMin < geometricError <= self.geometricErrorMax:
             if geometricError <= self.geometricError:
                 if "content" in element:
-                    self.renderTile(element, baseUri, jsonOnly=False)
+                    self.renderTileContent(element, baseUri, jsonOnly=False)
                 else:
                     children = element.get("children")
                     if children:
@@ -110,14 +110,14 @@ class BaseManager:
                 if children:
                     self.renderChildren(children, baseUri)
                 elif "content" in element:
-                    self.renderTile(element, baseUri, jsonOnly=True)
+                    self.renderTileContent(element, baseUri, jsonOnly=True)
     
     def renderChildren(self, children, baseUri):
         # render children
         for tile in children:
             self.renderElement(tile, baseUri)
         
-    def renderTile(self, tile, baseUri, jsonOnly):
+    def renderTileContent(self, tile, baseUri, jsonOnly):
         content = tile["content"]
         boundingVolume = content.get("boundingVolume")
         if not boundingVolume or self.areaOverlapsWith(boundingVolume):
