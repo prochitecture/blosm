@@ -91,9 +91,9 @@ class BaseManager:
         return self.renderer.num_imported_tiles, self.errors
     
     def renderTileset(self, tileset, baseUri):
-        self.renderElement(tileset["root"], baseUri)
+        self.renderTile(tileset["root"], baseUri)
     
-    def renderElement(self, element, baseUri):
+    def renderTile(self, element, baseUri):
         # Render a tile or <tileset["root"]>
         if self.areaOverlapsWith( element["boundingVolume"] ):
             geometricError = element["geometricError"]
@@ -115,7 +115,7 @@ class BaseManager:
     def renderChildren(self, children, baseUri):
         # render children
         for tile in children:
-            self.renderElement(tile, baseUri)
+            self.renderTile(tile, baseUri)
         
     def renderTileContent(self, tile, baseUri, jsonOnly):
         content = tile["content"]
