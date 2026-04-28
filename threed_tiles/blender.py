@@ -240,13 +240,21 @@ class BlenderRenderer:
             rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
             if rtc_center:
                 from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+                _patch_convert_functions = glTFImporter._patch_convert_functions
                 # No need to patch Blender's glTF importer if the property <RTC_CENTER> is provided.
                 glTFImporter._patch_convert_functions = False
             
             with open(filepath, 'wb') as f:
                 f.write(gltfContent.to_array())
             
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+            try:
+                bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+            finally:
+                # Restore <glTFImporter._patch_convert_functions> for all possible outcomes
+                # of the import operator including any failures. Remember that the finally clause is
+                # always executed after the try block, even if an exception is raised and not handled.
+                if rtc_center:
+                    glTFImporter._patch_convert_functions = _patch_convert_functions
             
             if self.collection_import.objects or self.collection_import.children:
                 if rtc_center:
