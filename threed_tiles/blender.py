@@ -179,7 +179,7 @@ class BlenderRenderer:
         
         self.collection = None
     
-    def renderGlb(self, manager, uri, path, cacheContent):
+    def renderGlb(self, manager, uri, path, transformMatrix, cacheContent):
         context = bpy.context
         
         filepath = joinStrings(
@@ -207,9 +207,9 @@ class BlenderRenderer:
             bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
 
             if self.collection_import.objects:
-                self.finalize_glb_import(filepath)
+                self.finalize_glb_import(filepath, transformMatrix)
 
-    def renderB3dm(self, manager, uri, path, cacheContent):
+    def renderB3dm(self, manager, uri, path, transformMatrix, cacheContent):
         import numpy
         from .py3dtiles.tileset.content.tile_content_reader import read_array
         
@@ -251,7 +251,7 @@ class BlenderRenderer:
             if self.collection_import.objects or self.collection_import.children:
                 if rtc_center:
                     self.process_rtc(rtc_center)
-                self.finalize_glb_import(filepath)
+                self.finalize_glb_import(filepath, transformMatrix)
     
     def processCopyrightInfo(self, info):
         for copyrightHolder in info.split(';'):
@@ -275,7 +275,7 @@ class BlenderRenderer:
             if not obj.parent:
                 obj.location += rtc_center - self.centerCoords
     
-    def finalize_glb_import(self, filepath):
+    def finalize_glb_import(self, filepath, transformMatrix):
         removeFile(filepath)
 
         # Find Blender collection where the imported objects are located
@@ -289,6 +289,8 @@ class BlenderRenderer:
         for obj in collection.objects:
             collection.objects.unlink(obj)
             self.collection.objects.link(obj)
+            if transformMatrix:
+                obj.matrix_world = transformMatrix @ obj.matrix_world
         
         if self.collection_import.children:
             # Remove all child collections from <self.collection_import>
