@@ -290,7 +290,7 @@ class BlenderRenderer:
             collection.objects.unlink(obj)
             self.collection.objects.link(obj)
             if transformMatrix:
-                obj.matrix_world = transformMatrix @ obj.matrix_world
+                self.apply_transform_matrix(obj, transformMatrix)
         
         if self.collection_import.children:
             # Remove all child collections from <self.collection_import>
@@ -298,6 +298,17 @@ class BlenderRenderer:
                 bpy.data.collections.remove(collection)
         
         self.num_imported_tiles += 1
+    
+    def apply_transform_matrix(self, obj, transformMatrix):
+        u = 1.0 / bpy.context.scene.unit_settings.scale_length
+
+        center = u * self.centerCoords
+        m = transformMatrix.copy()
+        m.translation *= u
+
+        offset_transform = Matrix.Translation(-center) @ m @ Matrix.Translation(center)
+        obj.matrix_world = offset_transform @ obj.matrix_world
+
 
     def joinObjects(self):
         # If a Blender Empty object was imported and it became the active object in the course of the processing,
