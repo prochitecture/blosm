@@ -282,6 +282,10 @@ class BlenderRenderer:
             # only top level objects are adjusted
             if not obj.parent:
                 obj.location += rtc_center - self.centerCoords
+        
+        # Blender does not immediately refresh <obj.matrix_world> after changing <obj.location>.
+        # The line below forces this refresh, so the subsequent updates of <obj.matrix_world> will work correctly.
+        bpy.context.view_layer.update()
     
     def finalize_glb_import(self, filepath, transformMatrix):
         removeFile(filepath)
