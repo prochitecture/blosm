@@ -288,6 +288,9 @@ class BlenderRenderer:
                 # Using matrix operations instead does not require calling <bpy.context.view_layer.update()>
                 # obj.location += rtc_center - self.centerCoords
                 obj.matrix_world = Matrix.Translation(rtc_center - self.centerCoords) @ obj.matrix_world
+                #
+                # See also doc/Transforms.md
+                #
     
     def finalize_glb_import(self, filepath, transformMatrix):
         removeFile(filepath)
@@ -320,6 +323,7 @@ class BlenderRenderer:
         m = transformMatrix.copy()
         m.translation *= u
         
+        # See doc/Transforms.md
         obj.matrix_world = Matrix.Translation(-center) @ m @ Matrix.Translation(center) @ obj.matrix_world
 
 
