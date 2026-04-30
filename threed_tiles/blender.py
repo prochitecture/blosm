@@ -281,11 +281,13 @@ class BlenderRenderer:
         for obj in collection.objects:
             # only top level objects are adjusted
             if not obj.parent:
-                obj.location += rtc_center - self.centerCoords
-        
-        # Blender does not immediately refresh <obj.matrix_world> after changing <obj.location>.
-        # The line below forces this refresh, so the subsequent updates of <obj.matrix_world> will work correctly.
-        bpy.context.view_layer.update()
+                # Both lines below are identical. However Blender does not immediately
+                # refresh <obj.matrix_world> after changing <obj.location> and
+                # a call of <bpy.context.view_layer.update()> would be required to force this refresh,
+                # so the subsequent updates of <obj.matrix_world> would work correctly.
+                # Using matrix operations instead does not require calling <bpy.context.view_layer.update()>
+                # obj.location += rtc_center - self.centerCoords
+                obj.matrix_world = Matrix.Translation(rtc_center - self.centerCoords) @ obj.matrix_world
     
     def finalize_glb_import(self, filepath, transformMatrix):
         removeFile(filepath)
@@ -317,9 +319,8 @@ class BlenderRenderer:
         center = u * self.centerCoords
         m = transformMatrix.copy()
         m.translation *= u
-
-        offset_transform = Matrix.Translation(-center) @ m @ Matrix.Translation(center)
-        obj.matrix_world = offset_transform @ obj.matrix_world
+        
+        obj.matrix_world = Matrix.Translation(-center) @ m @ Matrix.Translation(center) @ obj.matrix_world
 
 
     def joinObjects(self):
