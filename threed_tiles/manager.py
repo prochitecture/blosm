@@ -128,7 +128,8 @@ class BaseManager:
         content = tile["content"]
         boundingVolume = content.get("boundingVolume")
         if not boundingVolume or self.areaOverlapsWith(boundingVolume, transformMatrix):
-            uriComponents = urlparse(content["uri"])
+            # we also support the legacy property <url>
+            uriComponents = urlparse(content.get("uri") or content.get("url"))
             
             contentExtension = splitext(uriComponents.path)[1].lower()
             
