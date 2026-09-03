@@ -165,14 +165,14 @@ class BaseApp:
         setupScript = os.path.realpath(setupScript)
         if not os.path.isfile(setupScript):
             raise Exception("The script file doesn't exist")
-        import imp
-        # remove extension from the path
-        setupScript = os.path.splitext(setupScript)[0]
-        moduleName = os.path.basename(setupScript)
+        import importlib.util
+        import sys
+        moduleName = os.path.splitext(os.path.basename(setupScript))[0]
         try:
-            _file, _pathname, _description = imp.find_module(moduleName, [os.path.dirname(setupScript)])
-            module = imp.load_module(moduleName, _file, _pathname, _description)
-            _file.close()
+            spec = importlib.util.spec_from_file_location(moduleName, setupScript)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[moduleName] = module
+            spec.loader.exec_module(module)
             return module.setup
         except Exception as e:
             raise Exception(

@@ -346,7 +346,7 @@ class Slot:
                 # Setting <vertIndex0> to <None> means that we start a new roof face in
                 # the next iteration of the <while> cycle
                 vertIndex0 = None
-            elif part[-1] != parts[index-1][1][0]:
+            elif index and part[-1] != parts[index-1][1][0]:
                 # No example for that case on the image <Main>. However the idea is completely similar to
                 # the related example in <self.trackUp(..)>.
                 # Basically, that case means that there is an island between
@@ -369,15 +369,16 @@ class Slot:
                     # So we set <reflection> to <None>
                     reflection = None
             if not destVertIndex is None:
-                if parts[index-1][1][0] == destVertIndex:
+                if part[0] == destVertIndex:
+                    # The island may have been reached at the beginning of the current part.
+                    # In that case the destination isn't located at <parts[index-1]>.
+                    # It has already been visited in the current iteration, so return the current index.
+                    # Keep the existing correction for the reflection to the right.
+                    return index+1 if reflection is True else index
+                elif index and parts[index-1][1][0] == destVertIndex:
                     # No example for that case on the image <Main>. However the idea is completely similar to
                     # the related example in <self.trackUp(..)>.
                     return index
-                elif reflection is True and part[0]==destVertIndex:
-                    # The edge case:
-                    # if there is a reflection to the right (i.e. <reflection is True>)
-                    # and <part[0]==destVertIndex>, correct the returned index
-                    return index+1
             # Proceed to the previous part downwards by decreasing <index>.
             # <True> for the reflection means reflection to the right
             # The example of case with <reflection is True> on the image <Main> for <slots[3]>:
@@ -453,7 +454,7 @@ class Slot:
                 # Setting <vertIndex0> to <None> means that we start a new roof face in
                 # the next iteration of the <while> cycle
                 vertIndex0 = None
-            elif part[-1] != parts[index+1][1][0]:
+            elif index+1 < numParts and part[-1] != parts[index+1][1][0]:
                 # The example of that case on the image <Main> for <slots[2]>:
                 # <index == 1>
                 # <part == [19, 0, 1, 20]>
@@ -463,14 +464,22 @@ class Slot:
                 # Basically, that case means that there is an island between the vertices <19> and <20>
                 # We need to process that island in line below
                 index = self.trackUp(roofIndices, index, part[-1])
-            if not destVertIndex is None and parts[index+1][1][0] == destVertIndex:
-                # The example of that case on the image <Main> for <slots[2]>:
-                # <destVertIndex == 20>
-                # <index == 3>
-                # <part == [21, 3, 22]>
-                # <parts[index+1][1] == [20, 2, 21]>
-                # <parts[index+1][1][0] == 20>
-                return index
+            if not destVertIndex is None:
+                if part[0] == destVertIndex:
+                    # The island may have been reached at the beginning of the current part.
+                    # In that case the destination isn't located at <parts[index+1]>.
+                    # It has already been visited in the current iteration. Return the previous index,
+                    # since the caller will continue with the usual <index += 2> step.
+                    # That keeps the part after the island available for the outer trace.
+                    return index-1
+                elif index+1 < numParts and parts[index+1][1][0] == destVertIndex:
+                    # The example of that case on the image <Main> for <slots[2]>:
+                    # <destVertIndex == 20>
+                    # <index == 3>
+                    # <part == [21, 3, 22]>
+                    # <parts[index+1][1] == [20, 2, 21]>
+                    # <parts[index+1][1][0] == 20>
+                    return index
             # Proceed to the next part upwards by increasing <index>.
             # <False> for the reflection means reflection to the left
             index += 1 if reflection is False else 2

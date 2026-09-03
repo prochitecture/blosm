@@ -64,7 +64,7 @@ class BaseManager:
         
         try:
             tileset = self.getJsonFile(self.rootUri, None, False)
-            self.renderTileset(tileset, self.baseUri)
+            self.renderTileset(tileset, self.baseUri, None)
         except error.HTTPError as e:
             error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
             if self.uriServer == "https://tile.googleapis.com":
@@ -90,38 +90,46 @@ class BaseManager:
         # return the number of rendered tiles and uncritical errors
         return self.renderer.num_imported_tiles, self.errors
     
-    def renderTileset(self, tileset, baseUri):
-        self.renderElement(tileset["root"], baseUri)
+    def renderTileset(self, tileset, baseUri, transformMatrix):
+        self.renderTile(tileset["root"], baseUri, transformMatrix)
     
-    def renderElement(self, element, baseUri):
-        # Render a tile or <tileset["root"]>
-        if self.areaOverlapsWith( element["boundingVolume"] ):
+    def renderTile(self, element, baseUri, transformMatrix):
+        """
+        Renders a tile or <tileset["root"]> and its children if they overlap with the area of interest
+        and if their geometric error is smaller than <self.geometricError>.
+        """
+        
+        transformMatrix = ( transformMatrix @ BaseManager.initMatrixFromTransform(element["transform"]) if transformMatrix else BaseManager.initMatrixFromTransform(element["transform"]) )\
+            if "transform" in element else transformMatrix
+
+        if self.areaOverlapsWith( element["boundingVolume"], transformMatrix ):
             geometricError = element["geometricError"]
             #if self.geometricErrorMin < geometricError <= self.geometricErrorMax:
             if geometricError <= self.geometricError:
                 if "content" in element:
-                    self.renderTile(element, baseUri, jsonOnly=False)
+                    self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=False)
                 else:
                     children = element.get("children")
                     if children:
-                        self.renderChildren(children, baseUri)
+                        self.renderChildren(children, baseUri, transformMatrix)
             else:
                 children = element.get("children")
                 if children:
-                    self.renderChildren(children, baseUri)
+                    self.renderChildren(children, baseUri, transformMatrix)
                 elif "content" in element:
-                    self.renderTile(element, baseUri, jsonOnly=True)
+                    self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=True)
     
-    def renderChildren(self, children, baseUri):
+    def renderChildren(self, children, baseUri, transformMatrix):
         # render children
         for tile in children:
-            self.renderElement(tile, baseUri)
+            self.renderTile(tile, baseUri, transformMatrix)
         
-    def renderTile(self, tile, baseUri, jsonOnly):
+    def renderTileContent(self, tile, baseUri, transformMatrix, jsonOnly):
         content = tile["content"]
         boundingVolume = content.get("boundingVolume")
-        if not boundingVolume or self.areaOverlapsWith(boundingVolume):
-            uriComponents = urlparse(content["uri"])
+        if not boundingVolume or self.areaOverlapsWith(boundingVolume, transformMatrix):
+            # we also support the legacy property <url>
+            uriComponents = urlparse(content.get("uri") or content.get("url"))
             
             contentExtension = splitext(uriComponents.path)[1].lower()
             
@@ -136,11 +144,11 @@ class BaseManager:
             try:
                 if contentExtension == ".json":
                     tileset = self.getJsonFile(uri, uriComponents.path, self.cacheJsonFiles)
-                    self.renderTileset(tileset, baseUri)
+                    self.renderTileset(tileset, baseUri, transformMatrix)
                 elif contentExtension == ".glb":
-                    self.renderer.renderGlb(self, uri, uriComponents.path, self.cache3dFiles)
+                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix, self.cache3dFiles)
                 elif contentExtension == ".b3dm":
-                    self.renderer.renderB3dm(self, uri, uriComponents.path, self.cache3dFiles)
+                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix, self.cache3dFiles)
             except Exception as e:
                 self.processError(e, uri)
     
@@ -250,6 +258,16 @@ class BaseManager:
         return response
     
     @staticmethod
+    def initMatrixFromTransform(transform):
+        # Rember that the transform is in column-major order
+        return Matrix((
+            (transform[0], transform[4], transform[8], transform[12]),
+            (transform[1], transform[5], transform[9], transform[13]),
+            (transform[2], transform[6], transform[10], transform[14]),
+            (transform[3], transform[7], transform[11], transform[15])
+        ))
+    
+    @staticmethod
     def fromGeographic(lat, lon, height):
         lat = radians(lat)
         lon = radians(lon)
@@ -275,19 +293,19 @@ class BaseManager:
         
         return scratchK + scratchN
     
-    def areaOverlapsWith(self, boundingVolume):
+    def areaOverlapsWith(self, boundingVolume, transformMatrix):
         result = False
         
         if "box" in boundingVolume:
-            result = self.areaOverlapsWithBbox(boundingVolume["box"])
+            result = self.areaOverlapsWithBbox(boundingVolume["box"], transformMatrix)
         elif "sphere" in boundingVolume:
-            result = self.areaOverlapsWithSphere(boundingVolume["sphere"])
+            result = self.areaOverlapsWithSphere(boundingVolume["sphere"], transformMatrix)
         elif "region" in boundingVolume:
             result = self.areaOverlapsWithRegion(boundingVolume["region"])
         
         return result
         
-    def areaOverlapsWithBbox(self, bbox):
+    def areaOverlapsWithBbox(self, bbox, transformMatrix):
         
         bboxCenter = Vector((bbox[0], bbox[1], bbox[2]))
         # direction and half-length for the local X-axis of <bbox>
@@ -296,6 +314,12 @@ class BaseManager:
         bboxY = Vector((bbox[6], bbox[7], bbox[8]))
         # direction and half-length for the local Z-axis of <bbox>
         bboxZ = Vector((bbox[9], bbox[10], bbox[11]))
+
+        if transformMatrix:
+            bboxCenter = transformMatrix @ bboxCenter
+            bboxX = transformMatrix.to_3x3() @ bboxX
+            bboxY = transformMatrix.to_3x3() @ bboxY
+            bboxZ = transformMatrix.to_3x3() @ bboxZ
         
         bboxOrigin = bboxCenter - bboxX - bboxY - bboxZ
         
@@ -427,8 +451,10 @@ class BaseManager:
         
         return False
     
-    def areaOverlapsWithSphere(self, sphere):
+    def areaOverlapsWithSphere(self, sphere, transformMatrix):
         sphereCenter, sphereRadius = Vector(sphere[:3]), sphere[3]
+        if transformMatrix:
+            sphereCenter = transformMatrix @ sphereCenter
         sphereRadiusSquared = sphereRadius * sphereRadius
         
         # A quick check if the spheres with the centers at <self.areaCenter> and <sphereCenter> and radii <self.areaRadius> and <sphereRadius>

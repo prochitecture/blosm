@@ -179,7 +179,7 @@ class BlenderRenderer:
         
         self.collection = None
     
-    def renderGlb(self, manager, uri, path, cacheContent):
+    def renderGlb(self, manager, uri, path, transformMatrix, cacheContent):
         context = bpy.context
         
         filepath = joinStrings(
@@ -207,9 +207,9 @@ class BlenderRenderer:
             bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
 
             if self.collection_import.objects:
-                self.finalize_glb_import(filepath)
+                self.finalize_glb_import(filepath, transformMatrix)
 
-    def renderB3dm(self, manager, uri, path, cacheContent):
+    def renderB3dm(self, manager, uri, path, transformMatrix, cacheContent):
         import numpy
         from .py3dtiles.tileset.content.tile_content_reader import read_array
         
@@ -240,18 +240,26 @@ class BlenderRenderer:
             rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
             if rtc_center:
                 from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+                _patch_convert_functions = glTFImporter._patch_convert_functions
                 # No need to patch Blender's glTF importer if the property <RTC_CENTER> is provided.
                 glTFImporter._patch_convert_functions = False
             
             with open(filepath, 'wb') as f:
                 f.write(gltfContent.to_array())
             
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+            try:
+                bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+            finally:
+                # Restore <glTFImporter._patch_convert_functions> for all possible outcomes
+                # of the import operator including any failures. Remember that the finally clause is
+                # always executed after the try block, even if an exception is raised and not handled.
+                if rtc_center:
+                    glTFImporter._patch_convert_functions = _patch_convert_functions
             
             if self.collection_import.objects or self.collection_import.children:
                 if rtc_center:
                     self.process_rtc(rtc_center)
-                self.finalize_glb_import(filepath)
+                self.finalize_glb_import(filepath, transformMatrix)
     
     def processCopyrightInfo(self, info):
         for copyrightHolder in info.split(';'):
@@ -273,9 +281,18 @@ class BlenderRenderer:
         for obj in collection.objects:
             # only top level objects are adjusted
             if not obj.parent:
-                obj.location += rtc_center - self.centerCoords
+                # Both lines below are identical. However Blender does not immediately
+                # refresh <obj.matrix_world> after changing <obj.location> and
+                # a call of <bpy.context.view_layer.update()> would be required to force this refresh,
+                # so the subsequent updates of <obj.matrix_world> would work correctly.
+                # Using matrix operations instead does not require calling <bpy.context.view_layer.update()>
+                # obj.location += rtc_center - self.centerCoords
+                obj.matrix_world = Matrix.Translation(rtc_center - self.centerCoords) @ obj.matrix_world
+                #
+                # See also doc/Transforms.md
+                #
     
-    def finalize_glb_import(self, filepath):
+    def finalize_glb_import(self, filepath, transformMatrix):
         removeFile(filepath)
 
         # Find Blender collection where the imported objects are located
@@ -289,6 +306,8 @@ class BlenderRenderer:
         for obj in collection.objects:
             collection.objects.unlink(obj)
             self.collection.objects.link(obj)
+            if transformMatrix:
+                self.apply_transform_matrix(obj, transformMatrix)
         
         if self.collection_import.children:
             # Remove all child collections from <self.collection_import>
@@ -296,6 +315,17 @@ class BlenderRenderer:
                 bpy.data.collections.remove(collection)
         
         self.num_imported_tiles += 1
+    
+    def apply_transform_matrix(self, obj, transformMatrix):
+        u = 1.0 / bpy.context.scene.unit_settings.scale_length
+
+        center = u * self.centerCoords
+        m = transformMatrix.copy()
+        m.translation *= u
+        
+        # See doc/Transforms.md
+        obj.matrix_world = Matrix.Translation(-center) @ m @ Matrix.Translation(center) @ obj.matrix_world
+
 
     def joinObjects(self):
         # If a Blender Empty object was imported and it became the active object in the course of the processing,

@@ -20,8 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 bl_info = {
     "name": "Blosm",
     "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 23),
-    "blender": (4, 2, 0),
+    "version": (2, 7, 28),
+    "blender": (4, 5, 0),
     "location": "Right side panel > \"Blosm\" tab",
     "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
     "warning": "",
@@ -32,7 +32,7 @@ bl_info = {
     "blosmAssets": "2021.05.07"
 }
 
-import os, sys, json, textwrap
+import os, sys, textwrap
 
 # force cleanup of sys.modules to avoid conflicts with the other addons for Blender
 for m in [
@@ -114,9 +114,9 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
     osmServer: bpy.props.EnumProperty(
         name = "OSM data server",
         items = (
-            ("overpass-api.de", "overpass-api.de: 8 cores, 128 GB RAM", "overpass-api.de: 8 cores, 128 GB RAM"),
-            ("vk maps", "VK Maps: 56 cores, 384 GB RAM", "VK Maps: 56 cores, 384 GB RAM"),
-            ("kumi.systems", "kumi.systems: 20 cores, 256 GB RAM", "kumi.systems: 20 cores, 256 GB RAM")
+            ("overpass-api.de", "overpass-api.de: 2 servers each with 16 cores, 128 GB RAM", "overpass-api.de: 2 servers each with 8 cores and 128 GB RAM"),
+            ("private.coffee", "Private.coffee: 4 servers each with 20 cores, 256 GB RAM", "Private.coffee: 4 servers each with 20 cores and 256 GB RAM"),
+            ("vk maps", "VK Maps: 2 servers each with 56 cores, 384 GB RAM", "VK Maps: 2 servers each with 56 cores and 384 GB RAM")
         ),
         description = "OSM data server if the default one is inaccessible",
         default = "overpass-api.de"
@@ -401,14 +401,13 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
                     "The script file doesn't exist"
                 )
             return None
-        import imp
-        # remove extension from the path
-        setupScript = os.path.splitext(setupScript)[0]
-        moduleName = os.path.basename(setupScript)
+        import importlib.util
+        moduleName = os.path.splitext(os.path.basename(setupScript))[0]
         try:
-            _file, _pathname, _description = imp.find_module(moduleName, [os.path.dirname(setupScript)])
-            module = imp.load_module(moduleName, _file, _pathname, _description)
-            _file.close()
+            spec = importlib.util.spec_from_file_location(moduleName, setupScript)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[moduleName] = module
+            spec.loader.exec_module(module)
             return module.setup
         except Exception:
             self.report({'ERROR'},
