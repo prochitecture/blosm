@@ -777,6 +777,9 @@ def register():
         bpy.utils.register_class(c)
     gui.register()
     ape.register()
+    if bpy.app.version >= (5, 2, 0):
+        from .way.gn import editable_input
+        editable_input.register()
     if blenderApp.app.has(Keys.mode3dRealistic):
         from .import realistic
         realistic.register()
@@ -791,6 +794,9 @@ def register():
             pass
 
 def unregister():
+    if bpy.app.version >= (5, 2, 0):
+        from .way.gn import editable_input
+        editable_input.unregister()
     for c in _classes:
         bpy.utils.unregister_class(c)
     gui.unregister()

@@ -113,6 +113,22 @@ class Street(Item):
             
     def getCategory(self):
         return self.head.getCategory()
+
+    def iterCenterlineVertices(self):
+        """Traverse Section controls, removing only adjacent duplicate seams.
+
+        A repeated nonconsecutive point represents a return to that location;
+        in particular the last point of a closed Street must not be discarded.
+        Return the original vectors, without altering the authored Sections.
+        """
+        previous = None
+        for item in self.iterItems():
+            if isinstance(item, Section):
+                for vertex in item.centerline:
+                    key = tuple(vertex)
+                    if key != previous:
+                        yield vertex
+                        previous = key
     
     def setStyleForItems(self):
         style = self.style

@@ -26,6 +26,8 @@ class NetSection():
         self.forward = True
         self.category = category
         self.tags = tags
+        self.sourceWayIds = frozenset()
+        self.sourceSegments = ()
         self.geomLength = (self.t-self.s).length
         if length:
             self.length = length
@@ -47,6 +49,8 @@ class NetSection():
         self.forward = other.forward
         self.category = other.category
         self.tags = other.tags
+        self.sourceWayIds = other.sourceWayIds
+        self.sourceSegments = other.sourceSegments
         self.geomLength = other.geomLength
         self.length = other.length
         self.path = other.path        # includes source and target
@@ -55,6 +59,8 @@ class NetSection():
 
     def join(self, segment):
         assert self.category == segment.category, "segment to join must have same category"
+        self.sourceWayIds = self.sourceWayIds | segment.sourceWayIds
+        self.sourceSegments += segment.sourceSegments
         if self.t == segment.s:
             self.length += segment.length
             self.path += segment.path[1:]
@@ -75,6 +81,9 @@ class NetSection():
         rev.oneWay = -self.oneWay
         rev.forward = not self.forward
         rev.sectionId = self.sectionId
+        rev.sourceWayIds = self.sourceWayIds
+        rev.sourceSegments = tuple((way, first, last, stop, start)
+            for way, first, last, start, stop in reversed(self.sourceSegments))
         return rev
     def __eq__(self, other):
         # comparison of segments (no duplicates allowed)
@@ -204,6 +213,10 @@ class WayNetwork(dict):
     def doesWayTypeChange(category0,category1,tags0,tags1,rightHandTraffic):
         if category0 != category1: return True
         if tags0 and tags1: # category 'scene_border' has no tags
+            # Retain physical-property boundaries even when the lane count agrees.
+            for key in ('width', 'layer', 'bridge', 'tunnel', 'surface', 'railway'):
+                if tags0.get(key) != tags1.get(key):
+                    return True
             isOneWay0,fwdPattern0,bwdPattern0,_ = lanePattern(category0,tags0,rightHandTraffic)
             isOneWay1,fwdPattern1,bwdPattern1,_ = lanePattern(category1,tags1,rightHandTraffic)
             if len(fwdPattern0) != len(fwdPattern1) or len(bwdPattern0) != len(bwdPattern1) or isOneWay0 != isOneWay1:

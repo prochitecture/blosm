@@ -23,7 +23,7 @@ stopLineWidth = 0.#1.5
 cslWidth = crosswalkWidth + stopLineWidth
 
 
-class StreetRenderer:
+class LegacyStreetRenderer:
     
     def __init__(self, app, itemRenderers):
         self.app = app
@@ -926,3 +926,33 @@ def _getDirectionVector(point1, point2):
     directionVector.normalize()
     # vector perpendicular to <directionVector>
     return Vector((directionVector[1], -directionVector[0]))
+
+
+class StreetRenderer:
+    """Select a rendering backend; feature implementations own their lifecycle."""
+    def __init__(self, app, itemRenderers=None, *, backend=None, design=None,
+                 features=None, asset_loader=None):
+        self.backend = backend or getattr(app, 'streetBackend',
+            'legacy' if itemRenderers is not None else 'geometry_nodes')
+        if self.backend == 'geometry_nodes':
+            from .street_network.renderer import GeometryNodesStreetRenderer
+            self.implementation = GeometryNodesStreetRenderer(app, design=design,
+                features=features, asset_loader=asset_loader)
+        elif self.backend == 'legacy':
+            if itemRenderers is None:
+                raise ValueError('Legacy street renderer requires item renderers')
+            self.implementation = LegacyStreetRenderer(app, itemRenderers)
+        else:
+            raise ValueError('Unknown street backend: '+self.backend)
+
+    def prepare(self):
+        return self.implementation.prepare()
+
+    def render(self, manager, data):
+        return self.implementation.render(manager, data)
+
+    def finalize(self):
+        return self.implementation.finalize()
+
+    def cleanup(self):
+        return self.implementation.cleanup()

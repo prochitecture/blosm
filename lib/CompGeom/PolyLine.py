@@ -461,7 +461,6 @@ class PolyLine():
     def localCurvature(self, step):
         if len(self.verts) < 3:
             return 0.0
-        from debug import plt, plotEnd
         s = list( accumulate([0]+[(v2-v1).length for v1,v2 in pairs(self.verts[self.view])]) )
         x = [v[0] for v in self.verts[self.view]]
         y = [v[1] for v in self.verts[self.view]]

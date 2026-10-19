@@ -193,8 +193,19 @@ class BlenderApp(BaseApp):
         else:
             self.mode = BaseApp.twoD
         
-        if self.mode is BaseApp.realistic:
+        experimental = prefs[addonName].preferences.enableExperimentalFeatures if addonName in prefs else True
+        native_streets = (experimental and self.mode is BaseApp.realistic
+                          and getattr(self, 'streetBackend', 'legacy') == 'geometry_nodes')
+        bundled_streets_only = (native_streets and self.highways and not self.buildings
+                                and not self.forests and not self.aviation)
+        # Native street preparation has numeric built-in styles. This also
+        # clears paths left over from a previous legacy import in the session.
+        if native_streets:
+            self.pmlFilepathStreet = None
+        if self.mode is BaseApp.realistic and not bundled_streets_only:
             assetsDir = self.validateAssetsDirContent(context)
+        elif bundled_streets_only:
+            self.assetsDir = ''
         
         basePath = self.basePath
         self.op = op
@@ -226,7 +237,7 @@ class BlenderApp(BaseApp):
         else:
             self.enableExperimentalFeatures = False
         
-        if self.enableExperimentalFeatures and self.mode is BaseApp.realistic:
+        if self.enableExperimentalFeatures and self.mode is BaseApp.realistic and not bundled_streets_only:
             # Check the version of the assets. It must be equal or greater than <self.minAssetsVersion>
             try:
                 with open(os.path.join(assetsDir, "version.txt"), 'r') as _file:

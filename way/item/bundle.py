@@ -264,6 +264,22 @@ class StreetGroup():
         if doEnd:
             plotEnd()
 
+def bundleCenterline(street):
+    """Return an open, non-revisiting candidate, or None for a cyclic path.
+
+    The current Bundle preparation orders members between two distinct ends.
+    Closed loops and paths returning to a previous control need another
+    treatment; converting them to open paths by global deduplication invents
+    parallel membership. This eligibility check does not remove the Street.
+    Segment crossings are handled separately; this is not a simplicity proof.
+    """
+    vertices = list(street.iterCenterlineVertices())
+    locations = {tuple(vertex[:2]) for vertex in vertices}
+    if len(vertices) < 2 or len(locations) != len(vertices):
+        return None
+    return PolyLine(vertices)
+
+
 def parallelToSample(sampleStreet, neighborStreet, clipper=None):
 
     def categoryOfStreet(street):
@@ -273,35 +289,23 @@ def parallelToSample(sampleStreet, neighborStreet, clipper=None):
         return item.category
 
 
-    def centerlineOfStreet(street):
-        # Find the centerline of the whole street.
-        centerlineVerts = []
-        for item in street.iterItems():
-            if isinstance(item, Section):
-                centerlineVerts.extend( item.centerline)
-
-        # Remove duplicates and create polyLine
-        centerlineVerts = list(dict.fromkeys(centerlineVerts))
-        centerline = PolyLine(centerlineVerts)
-        return centerline, centerlineVerts
-
-    sampleCenterline, _ = centerlineOfStreet(sampleStreet)
+    sampleCenterline = bundleCenterline(sampleStreet)
+    neighCenterline = bundleCenterline(neighborStreet)
+    if sampleCenterline is None or neighCenterline is None:
+        return False
     sampleCategory = categoryOfStreet(sampleStreet)
     # Create buffer polygon around the sample street with a width according
     # to the category of the sample street.
     bufferWidth = searchDist[sampleCategory]
-    bufferPoly = sampleCenterline.buffer(bufferWidth,bufferWidth)
-
-    if not clipper:
+    if clipper is None:
         # Create a line clipper using this polygon.
+        bufferPoly = sampleCenterline.buffer(bufferWidth,bufferWidth)
         clipper = LinePolygonClipper(bufferPoly.verts)
-
-    neighCenterline, neighCenterlineVerts = centerlineOfStreet(neighborStreet)
 
     # If the centerline of this neighbor is longer than a minimal length, ...
     if neighCenterline.length() > minNeighborLength:
         # ... then clip it with the buffer polygon
-        inLine, inLineLength, nrOfON = clipper.clipLine(neighCenterlineVerts)
+        inLine, inLineLength, nrOfON = clipper.clipLine(neighCenterline[:])
 
         if inLineLength/neighCenterline.length() < 0.1:
             return False # discard short inside lines. At least 10% must be inside.
@@ -414,9 +418,13 @@ def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
                 
                 # If the arriving street has not yet been processed
                 if arriving not in replacedStreets:
+                    # Only the first member supplies the outer start connector.
+                    # Later predecessors belong to junctions inside the chain;
+                    # using one here also turns a genuine free start into a link.
+                    if longStreet.head is None:
+                        longStreet.pred = arriving.pred
                     # Insert it at the end of the long street
                     longStreet.insertStreetEnd(arriving)
-                    longStreet.pred = arriving.pred
                     replacedStreets.add(arriving)
 
                     # If there is an intersection at the end of the arriving street,
@@ -435,7 +443,6 @@ def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
                         # If the last pair of streets is reached, the leaving street is inserted.
                         if i >= len(chain) - 2:
                             longStreet.insertStreetEnd(leaving)
-                            longStreet.pred = leaving.pred
                             replacedStreets.add(leaving)
                             break
                     else:
@@ -625,8 +632,50 @@ def removeSplittingStreets(streetGenerator,gIndex, streetGroup, groupIntersectio
 
     return wasSplit, [srcGroup, dstGroup], splittingStreets
 
+def _bundleContinuationLocations(streetGroup):
+    """Identify internal directed joins, not additional lateral members.
+
+    A Street can stop at another Bundle's junction while its carriageway
+    continues through this group. The original major intersection must remain,
+    but it is neither end of this Bundle. Use exact source incidences, never
+    nearby coordinates. Branches, hairpins, changes of the existing Bundle
+    direction and cyclic components keep their existing terminal treatment.
+    """
+    incident = defaultdict(list)
+    for street in streetGroup:
+        incident[street.src].append((street, True))
+        incident[street.dst].append((street, False))
+    candidates = set()
+    for point, ends in incident.items():
+        if len(ends) != 2 or ends[0][0] is ends[1][0] or ends[0][1] == ends[1][1]:
+            continue
+        arriving = next(street for street, leaving in ends if not leaving)
+        leaving = next(street for street, leaving in ends if leaving)
+        if (not isHairpinBend(arriving, leaving) and
+                forwardOrder(arriving.src, arriving.dst) == forwardOrder(leaving.src, leaving.dst)):
+            candidates.add(point)
+    # A closed component has no distinct Bundle terminals. Do not manufacture
+    # an arbitrary cut in it or let the head/tail sorter receive empty lists.
+    unseen = set(incident)
+    while unseen:
+        todo = [next(iter(unseen))]; component = set(); component_streets = set()
+        while todo:
+            point = todo.pop()
+            if point in component:
+                continue
+            component.add(point)
+            for street, _ in incident[point]:
+                component_streets.add(street)
+                todo.extend(p for p in (street.src, street.dst) if p not in component)
+        unseen.difference_update(component)
+        if len(component_streets) >= len(component):
+            candidates.difference_update(component)
+    return candidates
+
+
 def orderHeadTail(streetGroup):
     streetEnds, _, hairpins = locationsInGroup(streetGroup)
+    continuations = _bundleContinuationLocations(streetGroup)
 
     def removeOutliers(firstEnds):
         if len(firstEnds) < 2:
@@ -651,9 +700,9 @@ def orderHeadTail(streetGroup):
     for street in streetGroup:
         fwd = forwardOrder(street.src,street.dst)
         h, t = (street.src, street.dst) if fwd else (street.dst, street.src)
-        if len(streetEnds[h])<3 or hairpins[h]:  
+        if h not in continuations and (len(streetEnds[h])<3 or hairpins[h]):
                 head.append({'street':street, 'firstVert':h, 'lastVert':t, 'fwd':fwd})
-        if len(streetEnds[t])<3 or hairpins[t]:  
+        if t not in continuations and (len(streetEnds[t])<3 or hairpins[t]):
                 tail.append({'street':street, 'firstVert':t, 'lastVert':h, 'fwd':fwd})
     # print('head',[h['street'].id for h in head])
     # print('tail',[h['street'].id for h in tail])
@@ -669,7 +718,10 @@ def orderHeadTail(streetGroup):
             removeInTail = []
             for startT in tail:
                 if endH['lastVert'] == startT['firstVert']:
-                    streetGroup.group.remove(endH['street'])
+                    # More than one tail may share this location. Remove the
+                    # outlying Street once while processing all affected ends.
+                    if endH['street'] in streetGroup.group:
+                        streetGroup.group.remove(endH['street'])
                     removeInTail.append(startT)
             for startT in removeInTail:
                 if startT in newTail:
@@ -683,11 +735,12 @@ def orderHeadTail(streetGroup):
             removeInHead = []
             for startH in head:
                 if endT['lastVert'] == startH['firstVert']:
-                    streetGroup.group.remove(endT['street'])
+                    if endT['street'] in streetGroup.group:
+                        streetGroup.group.remove(endT['street'])
                     removeInHead.append(startH)
-            for startT in removeInHead:
+            for startH in removeInHead:
                 if startH in newHead:
-                    newHead.remove(startT)
+                    newHead.remove(startH)
         tail = newTail
 
     # print('head',[h['street'].id for h in head])
@@ -732,8 +785,10 @@ def orderHeadTail(streetGroup):
     # perp is perpendicular to forwardVector, turned to the right
     perp = Vector((forwardVector[1],-forwardVector[0])) 
 
-    # sort streats along perp from left to right
-    sortedIndices = sorted( (i for i in range(len(tail))),  key=lambda i: ( tail[i]['lastVert'] - p0).dot(perp) )
+    # Tail records store the local endpoint in firstVert. Projecting lastVert
+    # would sort the remote heads in this tail frame; a curved Bundle can then
+    # acquire a false change of lateral order despite non-crossing members.
+    sortedIndices = sorted( (i for i in range(len(tail))),  key=lambda i: ( tail[i]['firstVert'] - p0).dot(perp) )
     tail = [tail[i] for i in sortedIndices]
 
     return head, tail
@@ -1362,6 +1417,26 @@ def multiBundleIntersection(streetGenerator,involvedBundles):
         elif end in streetGenerator.minorIntersections:
             del streetGenerator.minorIntersections[end]
 
+def _bundleEndConnectors(intersection, member, location):
+    """Walk the original ring from this member, independent of its start node.
+
+    Concatenating several circular lists requires a common reference: the
+    Bundle incidence, not each Intersection's arbitrary startConnector. Keep
+    both incidences of a returning Street and leave the original ring intact.
+    If the member no longer has one exact incidence, retain the existing order;
+    the provenance adapter must still report that unresolved connection.
+    """
+    ring = tuple(intersection)
+    ends = [leaving for leaving, point in ((True, member.src), (False, member.dst))
+            if point == location]
+    anchors = [i for i, connector in enumerate(ring)
+               if connector.item is member and connector.leaving in ends]
+    if len(ends) != 1 or len(anchors) != 1:
+        return ring
+    start = anchors[0] + 1
+    return ring[start:] + ring[:start]
+
+
 def endBundleIntersection(streetGenerator, bundle):
     if not bundle.pred:
         externalStreets = set()
@@ -1397,17 +1472,25 @@ def endBundleIntersection(streetGenerator, bundle):
 
             # A counter-clockwise rotation of the intersections starts
             # with the leftmost end in the bundle.
-            for end in bundle.headLocs:
+            inserted = set()
+            for end, member in zip(bundle.headLocs, bundle.streetsHead):
                 if end in streetGenerator.majorIntersections:
                     endIsect = streetGenerator.majorIntersections[end]
-                    # The iterator of Intersection runs counter-clockwise
-                    for intSec in endIsect:
+                    for intSec in _bundleEndConnectors(endIsect, member, end):
                         if not isinstance(intSec.item,Street):
                             continue
                         if intSec.item not in bundle.streetsHead and not intSec.item.bundle:
+                            # Two members may reference the same original
+                            # endpoint Intersection. Copy its Street incidence
+                            # once; opposite ends of a looping Street remain
+                            # separate incidences even at one logical junction.
+                            key = (intSec.item, intSec.leaving)
+                            if key in inserted:
+                                continue
+                            inserted.add(key)
                             connector = IntConnector(intersection)
                             connector.item = intSec.item
-                            connector.leaving = intSec.item.src==end
+                            connector.leaving = intSec.leaving
                             if connector.leaving:
                                 intSec.item.pred = connector
                             else:
@@ -1464,15 +1547,21 @@ def endBundleIntersection(streetGenerator, bundle):
             # with the leftmost end in the bundle. Because this is a 
             # bundle tail, this is the rightmost in the bundle.
             # Therefore reverse the locations.
-            for end in bundle.tailLocs[::-1]:
+            inserted = set()
+            for end, member in zip(bundle.tailLocs[::-1], bundle.streetsTail[::-1]):
                 if end in streetGenerator.majorIntersections:
                     endIsect = streetGenerator.majorIntersections[end]
-                    # The iterator of Intersection runs counter-clockwise
-                    for intSec in endIsect:
-                        if intSec.item not in bundle.streetsHead and not intSec.item.bundle:
+                    for intSec in _bundleEndConnectors(endIsect, member, end):
+                        if not isinstance(intSec.item, Street):
+                            continue
+                        if intSec.item not in bundle.streetsTail and not intSec.item.bundle:
+                            key = (intSec.item, intSec.leaving)
+                            if key in inserted:
+                                continue
+                            inserted.add(key)
                             connector = IntConnector(intersection)
                             connector.item = intSec.item
-                            connector.leaving = intSec.item.src==end
+                            connector.leaving = intSec.leaving
                             if connector.leaving:
                                 intSec.item.pred = connector
                             else:

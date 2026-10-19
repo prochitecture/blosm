@@ -22,6 +22,7 @@ import os, math, webbrowser, importlib.util, importlib
 from bpy.app.handlers import persistent
 from ..app.blender import app
 from ..defs import Keys
+from .asset_libraries import classes as asset_library_classes
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
@@ -505,7 +506,25 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             box = layout.box()
             box.box().prop(addon, "buildings")
 
-            box.box().prop(addon, "highways")
+            streets_box = box.box()
+            streets_box.prop(addon, "highways")
+            if addon.highways:
+                streets_box.prop(addon, "streetBackend")
+                if addon.streetBackend == 'geometry_nodes':
+                    streets_box.label(text="Experimental: flat-ground carriageways")
+                    streets_box.prop(addon, "streetConstruction")
+                    if addon.streetConstruction == 'original_spans':
+                        streets_box.label(text="Preview: incomplete coverage; smooth inputs only")
+                    streets_box.prop(addon, "streetProfileRise")
+                    streets_box.prop(addon, "streetCellSize")
+                    streets_box.prop(addon, "streetResolution")
+                    streets_box.prop(addon, "streetExaggeration")
+                    streets_box.prop(addon, "streetAssetFile")
+                    library_box = streets_box.box()
+                    library_box.prop(addon, "assetLibraryMode")
+                    if addon.assetLibraryMode != 'APPEND':
+                        library_box.prop(addon, "assetLibraryDirectory")
+                        library_box.label(text="Keep retained libraries when moving a project")
             box.box().prop(addon, "railways")
             
             box = box.box()
@@ -881,6 +900,32 @@ class BlosmProperties(bpy.types.PropertyGroup):
         description = "Import roads and paths",
         default = True
     )
+
+    streetBackend: bpy.props.EnumProperty(
+        name="Street backend",
+        items=(('geometry_nodes', 'Geometry Nodes (experimental)', 'Shared editable flat-ground street solver'),
+               ('legacy', 'Legacy', 'Previous street renderer')),
+        default='geometry_nodes')
+    streetProfileRise: bpy.props.FloatProperty(name="Crown rise", default=.08, min=0., subtype='DISTANCE')
+    streetConstruction: bpy.props.EnumProperty(name="Street construction",
+        items=(('current','Current','Established experimental carriageway and Bundle construction'),
+               ('original_spans','Connected junctions (preview)',
+                'New shared connected-junction construction; incomplete coverage and no managed topology edits yet')),
+        default='current')
+    streetCellSize: bpy.props.FloatProperty(name="Mesh cell size", default=.7, min=.05, subtype='DISTANCE')
+    streetResolution: bpy.props.IntProperty(name="Mesh resolution", default=1, min=1, max=4)
+    streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=10., min=0.)
+    streetAssetFile: bpy.props.StringProperty(name="Street library", subtype='FILE_PATH',
+        description="Optional compatible external .blend library; empty uses the bundled street library")
+
+    assetLibraryMode: bpy.props.EnumProperty(name="Asset storage",
+        items=(('AUTO', 'Automatic', 'Retain certified library revisions to reduce scene storage; embed other assets'),
+               ('APPEND', 'Embed in scene', 'Copy assets into the scene so it has no linked library dependency'),
+               ('RETAINED', 'Retain library revisions', 'Link certified immutable libraries; report an error for uncertified libraries')),
+        default='AUTO')
+    assetLibraryDirectory: bpy.props.StringProperty(name="Retained libraries", subtype='DIR_PATH',
+        description="Durable directory shared by all Blosm asset features. Empty uses Blender user data/blosm/libraries. "
+                    "Retain this folder with projects that reference it; addon updates do not replace old revisions")
     
     railways: bpy.props.BoolProperty(
         name = "Import railways",
@@ -1297,6 +1342,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
 
 _classes = (
+    *asset_library_classes,
     BLOSM_UL_DefaultLevels,
     BlosmDefaultLevelsEntry,
     BLOSM_OT_ReloadAssetPackageList,

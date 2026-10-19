@@ -149,7 +149,8 @@ class BaseApp:
                 raise Exception("%s isn't a valid path for the asset info file" % assetInfoFilepath)
             self.assetInfoFilepath = assetInfoFilepath
         
-        if self.highways or self.railways or self.aviation:
+        if ((self.highways or self.railways or self.aviation)
+                and getattr(self, 'streetBackend', 'legacy') != 'geometry_nodes'):
             pmlFilepath = os.path.join(assetPackageDir, "style/street/main.pml")
             if not os.path.isfile(pmlFilepath):
                 raise Exception("%s isn't a valid path for the PML file" % pmlFilepath)

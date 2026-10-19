@@ -12,7 +12,12 @@ class WayManager:
         self.id = "ways"
         self.data = data
         self.app = app
-        self.styleStore = StyleStore(app.pmlFilepathStreet, app.assetsDir, styles=None)
+        filepath = getattr(app, 'pmlFilepathStreet', None)
+        if not filepath and getattr(app, 'streetBackend', 'legacy') == 'geometry_nodes':
+            from .street_network.defaults import styles
+            self.styleStore = StyleStore(None, '', styles=styles())
+        else:
+            self.styleStore = StyleStore(filepath, app.assetsDir, styles=None)
         self.getStyle = getStyle
         
         # no layers for this manager
@@ -36,6 +41,12 @@ class WayManager:
         self.transitionSideLanes = []
         self.streets = dict()
         self.bundles = dict()
+        # Immutable physical endpoint rings retained across logical Bundle
+        # aggregation. Feature providers can own a shared physical site once.
+        self.junctionOrigins = None
+        # Original Street objects may be absorbed by logical Bundle aggregation.
+        # Keep them available for physical-site providers after post-processing.
+        self.physicalStreets = {}
         # street sections and clusters
         self.waymap = WayMap()
         self.waySectionLines = dict()
@@ -50,6 +61,7 @@ class WayManager:
     def parseWay(self, element, elementId):
         # create a wrapper for the OSM way <element>
         way = Way(element, self)
+        way.source_id = str(elementId)
         self.layers[way.category].append(way)
     
     def parseRelation(self, element, elementId):
@@ -118,6 +130,9 @@ class WayManager:
     # intersections with two major ways and one or more minor ways (of categories 'footway',
     # 'cycleway' or'service').
     def iterStreetsFromWaymap(self):
+        from .minor_cycles import MinorCycleReview
+        MinorCycleReview(self).apply()
+
         def findMinorNodes(street):
             srcIsect = self.waymap.getMinorNode(street.src)
             if srcIsect:
@@ -202,10 +217,6 @@ class WayManager:
                 longStreet.setStyleBlockFromTop(streetStyle)
                 longStreet.setStyleForItems()
 
-                # Undo concatenation, if result is a circular Street
-                if longStreet.src == longStreet.dst:
-                    continue
-                
                 processedStreets = processedStreets.union(processedStreetsInLoop)
                 
                 yield longStreet
@@ -244,6 +255,7 @@ class RailwayManager:
     def parseWay(self, element, elementId):
         # create a wrapper for the OSM way <element>
         way = Railway(element, self)
+        way.source_id = str(elementId)
         self.layers[way.category].append(way)
     
     def parseRelation(self, element, elementId):

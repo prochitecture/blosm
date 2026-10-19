@@ -36,6 +36,8 @@ class Section(Item):
 
         # The following attributes are used only internally in StreetGenerator
         self.tags = net_section.tags
+        self.sourceWayIds = getattr(net_section, 'sourceWayIds', frozenset())
+        self.sourceSegments = getattr(net_section, 'sourceSegments', ())
 
         self._src = polyline[0]
         self._dst = polyline[-1]
@@ -136,6 +138,7 @@ class Section(Item):
         self.bothLanes = bothLanes
 
         width = getWidth(self.tags)
+        self.widthOrigin = 'OSM width tag' if width else 'Lane count and style/category lane width'
         self.laneWidth = width/self.totalLanes if width else props['laneWidth']
         self.width = self.totalLanes * self.laneWidth
         self.forwardWidth =  self.forwardLanes * self.laneWidth + \

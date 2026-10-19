@@ -11,11 +11,12 @@ from ..defs.way_cluster_params import minTemplateLength, minNeighborLength, sear
 from ..way.item import Intersection, IntConnector, Section, Street, SideLane, SymLane
 from ..way.item.bundle import Bundle, StreetGroup, mergePseudoMinors, removeSplittingStreets, orderHeadTail, \
                                     findInnerStreets, canBeMerged, joinBundles, mergeBundles,intersectBundles, \
-                                    endBundleIntersection, parallelToSample
+                                    endBundleIntersection, parallelToSample, bundleCenterline
 from ..way.way_network import WayNetwork, NetSection
 from ..way.way_algorithms import createSectionNetwork
 from ..way.way_properties import lanePattern
 from ..way.streetRouter import streetsOnRoute
+from ..way.dimension_policy import StreetDimensionPolicy
 
 from ..lib.SweepIntersectorLib.SweepIntersector import SweepIntersector
 
@@ -58,6 +59,7 @@ class StreetGenerator():
         self.styleStore = styleStore
         self.getStyle = getStyle
         self.doPixelCorrection = doPixelCorrection
+        self.dimensionPolicy = StreetDimensionPolicy()
         
         #
         # Debug configuration
@@ -173,11 +175,13 @@ class StreetGenerator():
         else:
             getWays = self.wayManager.getAllVehicleWays()
 
+        auditedWays = []
         for way in getWays:
             # ExcludedWayTags is defined in <defs>.
             # It is used also in createWaySectionNetwork().
             if [tag for tag in ExcludedWayTags if tag in way.category]:
                 continue
+            auditedWays.append(way)
             for segment in way.segments:
                 v1, v2 = (segment.v1[0],segment.v1[1]),  (segment.v2[0],segment.v2[1])
                 if v1 not in uniqueSegments.get(v2,[]):
@@ -187,6 +191,10 @@ class StreetGenerator():
         # SweepIntersector provides a fast implementation of a sweep intersection algorithm.
         intersector = SweepIntersector()
         self.intersectingSegments = intersector.findIntersections(cleanedSegs)
+        if getattr(self.app, 'streetBackend', 'legacy') == 'geometry_nodes':
+            from ..way.connectivity_audit import ConnectivityAudit
+            self.wayManager.streetPreparationAudit = ConnectivityAudit().read(
+                auditedWays, self.intersectingSegments)
 
 
     # Creates the network graph <self.sectionNetwork> for way-sections (ways between crossings).
@@ -198,6 +206,11 @@ class StreetGenerator():
 
         # prepare clipper for this frame of the scene
         clipper = SCClipper(self.app.minX, self.app.maxX, self.app.minY, self.app.maxY)
+        context = None
+        if getattr(self.app, 'streetBackend', 'legacy') == 'geometry_nodes':
+            from ..way.clipped_context import ClippedSourceContext
+            context = ClippedSourceContext((self.app.minX,self.app.maxX,self.app.minY,self.app.maxY),
+                source_selection='ALL_WAYS' if self.allWays else 'SURFACE_VEHICLES')
 
         # create full way network
         wayManager.networkGraph = self.networkGraph = WayNetwork(self.leftHandTraffic)
@@ -231,9 +244,26 @@ class StreetGenerator():
                 for segment in segments:
                     v1, v2 = Vector(segment[0]),Vector(segment[1])
                     accepted, v1, v2 = clipper.clip(v1,v2)
-                    if accepted:
+                    # A segment touching only a clipping corner has no length
+                    # inside the scene. Keep every nonzero interval, but do not
+                    # feed a point contact to PolyLine's distance interpolator.
+                    if accepted and v1 != v2:
                         netSeg = NetSection(v1,v2,way.category,way.element.tags,(v2-v1).length)
+                        source_id = getattr(way, 'source_id', None)
+                        netSeg.sourceWayIds = frozenset((source_id,)) if source_id is not None else frozenset()
+                        delta = waySegment.v2-waySegment.v1
+                        length_squared = delta.length_squared
+                        netSeg.sourceSegments = ((source_id, str(waySegment.id1), str(waySegment.id2),
+                            (v1-waySegment.v1).dot(delta)/length_squared,
+                            (v2-waySegment.v1).dot(delta)/length_squared),)
+                        if context is not None:
+                            context.observe(waySegment,netSeg.sourceSegments[0],(v1,v2))
                         wayManager.networkGraph.addSegment(netSeg,False)
+
+        if context is not None:
+            selected = wayManager.getAllWays() if self.allWays else wayManager.getAllVehicleWays()
+            context.finalize(way for way in selected if not any(tag in way.category for tag in ExcludedWayTags))
+        wayManager.clippedSourceContext = context
 
         # As a helper for further algorithms, add virtual segments of the category
         # 'scene_border' along the border polygon of the scene.
@@ -264,15 +294,7 @@ class StreetGenerator():
                 section.street = street
 
                 # Derive Section attributes
-                if oneway:
-                    totalNumLanesOneway = street.getStyleBlockAttr("totalNumLanesOneway")
-                    nrLanes = totalNumLanesOneway if totalNumLanesOneway else street.getStyleBlockAttr("totalNumLanes")
-                else:
-                    nrLanes = street.getStyleBlockAttr("totalNumLanes")
-                props = {
-                    'nrLanes' : nrLanes,
-                    'laneWidth' : street.getStyleBlockAttr("laneWidth")
-                }
+                props = self.dimensionPolicy.resolve(street, section.category, oneway)
                 _,fwdPattern,bwdPattern,bothLanes = lanePattern(section.category,section.tags,self.leftHandTraffic,props)
                 section.setSectionAttributes(oneway, fwdPattern, bwdPattern, bothLanes, props)
 
@@ -291,160 +313,9 @@ class StreetGenerator():
     # create longer Street objects with both streets and the SymSideLane object. Replace
     # these two streets and the intersection by the new instance of Street.
     def createSymSideLanes(self):
-        # Local method to determine, if one of the ends or both of the street
-        # is possibly a SymLane or a SideLane. Find their directions and
-        # if there are turn lanes.
-        def findSymSideIsects(street):
-            srcIsectObj = self.waymap.getNode(street.src)
-            if srcIsectObj and isinstance(srcIsectObj['object'], Intersection):
-                srcIsect = srcIsectObj['object']
-                if srcIsect:
-                    if srcIsect.order==2:   # Only intersections with two ways can be SymLanes odr SideLanes
-                        street0 = srcIsect.leaveWays[0].section.street
-                        street1 = srcIsect.leaveWays[1].section.street
-                        arriving, leaving = (street0, street1) if street0.dst == street1.src else (street1, street0)
-                        # Check directions
-                        if arriving.dst == srcIsect.location and leaving.src == srcIsect.location:
-                            hasTurns = bool( re.search(r'[^N]', leaving.head.lanePatterns[0] ) )
-                            srcIsect = {'isect':srcIsect, 'arriving':arriving, 'leaving':leaving, 'hasTurns':hasTurns}
-                        else:
-                            srcIsect = None
-                    else:
-                        srcIsect = None
-            else:
-                srcIsect = None
-
-            dstIsectObj = self.waymap.getNode(street.dst)
-            if dstIsectObj and isinstance(dstIsectObj['object'], Intersection):
-                dstIsect = dstIsectObj['object']
-                if dstIsect:
-                    if dstIsect.order==2:   # Only intersections with two ways can be SymLanes odr SideLanes
-                        street0 = dstIsect.leaveWays[0].section.street
-                        street1 = dstIsect.leaveWays[1].section.street
-                        arriving, leaving = (street0, street1) if street0.dst == street1.src else (street1, street0)
-                        # Check directions
-                        if arriving.dst == dstIsect.location and leaving.src == dstIsect.location:
-                            hasTurns = bool( re.search(r'[^N]', leaving.head.lanePatterns[0] ) )
-                            dstIsect = {'isect':dstIsect, 'arriving':arriving, 'leaving':leaving, 'hasTurns':hasTurns}
-                        else:
-                            dstIsect = None
-                    else:
-                        dstIsect = None
-            else:
-                dstIsect = None
-
-            return srcIsect, dstIsect
-
-        processedStreets = set()
-        nodesToRemove = []
-        longStreets = []
-        for _, _, _, street in self.waymap.edges(data='object',keys=True):
-            if street in processedStreets:
-                continue
-
-            # Find possible SymLane or a SideLane at source or destination
-            # of this street.
-            srcIsectInit, dstIsectInit = findSymSideIsects(street)
-            hasSymSide = srcIsectInit or dstIsectInit
-
-            if hasSymSide:
-                # Prepare a new instance of Street, which will store both steets of the SymSide intersection
-                longStreet = Street(street.src,street.dst)
-                longStreet.insertStreetEnd(street)
-                processedStreets.add(street)
-                longStreet.pred = street.pred
-
-                if srcIsectInit: # SymSide intersection at the front of this street
-                    # If there are turns, it's a SideLane, else it's a SymLane
-                    # Create it and insert it into the corresponding list.
-                    if srcIsectInit['hasTurns']:
-                        newLane = SideLane(self.doPixelCorrection, srcIsectInit['isect'].location, srcIsectInit['arriving'].head, srcIsectInit['leaving'].head)
-                        self.transitionSideLanes.append(newLane)
-                    else:
-                        newLane = SymLane(srcIsectInit['isect'].location, srcIsectInit['arriving'].head, srcIsectInit['leaving'].head)
-                        self.transitionSymLanes.append(newLane)
-                    newLane.street = longStreet
-                    longStreet.insertFront(newLane)   # insert new SymSide object
-                    nodesToRemove.append(srcIsectInit['isect'])
-                    srcIsectCurr = srcIsectInit
-                    while True: # Continue, if there are more SymSide intersections t the arriving end of this intersection
-                        prevStreet = srcIsectCurr['arriving']
-                        if prevStreet in processedStreets:
-                            break
-                        longStreet.insertStreetFront(prevStreet)
-                        processedStreets.add(prevStreet)
-                        srcIsectCurr, _ = findSymSideIsects(prevStreet)
-                        if not srcIsectCurr:
-                            break
-                        if srcIsectCurr['hasTurns']:
-                            newLane = SideLane(srcIsectCurr['isect'].location, srcIsectCurr['arriving'].head, srcIsectCurr['leaving'].head)
-                            self.transitionSideLanes.append(newLane)
-                        else:
-                            newLane = SymLane(srcIsectCurr['isect'].location, srcIsectCurr['arriving'].head, srcIsectCurr['leaving'].head)
-                            self.transitionSymLanes.append(newLane)
-                        newLane.street = longStreet
-                        longStreet.insertFront(newLane)   # insert minor intersection object
-                        nodesToRemove.append(srcIsectInit['isect'])
-
-                if dstIsectInit: # SymSide intersection at the end of this street
-                    # If there are turns, it's a SideLane, else it's a SymLane
-                    # Create it and insert it into the corresponding list.
-                    if dstIsectInit['hasTurns']:
-                        newLane = SideLane(self.doPixelCorrection, dstIsectInit['isect'].location, dstIsectInit['arriving'].head, dstIsectInit['leaving'].head)
-                        self.transitionSideLanes.append(newLane)
-                    else:
-                        newLane = SymLane(dstIsectInit['isect'].location, dstIsectInit['arriving'].head, dstIsectInit['leaving'].head)
-                        self.transitionSymLanes.append(newLane)
-                    newLane.street = longStreet
-                    longStreet.insertEnd(newLane)   # insert new lane object
-                    nodesToRemove.append(dstIsectInit['isect'])
-                    dstIsectCurr = dstIsectInit
-                    while True: # Continue, if there are more SymSide intersections at the leaving end of this intersection
-                        nextStreet = dstIsectCurr['leaving']
-                        if nextStreet in processedStreets:
-                            break
-                        longStreet.insertStreetEnd(nextStreet)
-                        processedStreets.add(nextStreet)
-
-                        dstIsectCurr, _ = findSymSideIsects(nextStreet)
-                        if not dstIsectCurr:
-                            break
-                        if dstIsectCurr['hasTurns']:
-                            newLane = SideLane(dstIsectCurr['isect'].location, dstIsectCurr['arriving'].head, dstIsectCurr['leaving'].head)
-                            self.transitionSideLanes.append(newLane)
-                        else:
-                            newLane = SymLane(dstIsectCurr['isect'].location, dstIsectCurr['arriving'].head, dstIsectCurr['leaving'].head)
-                            self.transitionSymLanes.append(newLane)
-                        newLane.street = longStreet
-                        longStreet.insertEnd(newLane)   # insert minor intersection object
-                        nodesToRemove.append(dstIsectInit['isect'])
-
-                longStreets.append(longStreet)
-
-        # At this stage, intersections do not yet have connectors. They will get them
-        # when processIntersection() is called (which occurs at self.updateIntersections).
-        # But the leaving ways structure of the intersections at the end of the new
-        # long Street needs to be updated.
-        streetIDs = [s.id for s in processedStreets]
-        for longStreet in longStreets:
-            node = self.waymap.getNode(longStreet.src)
-            if node:
-                srcIsect = node['object']
-                for way in srcIsect.leaveWays:
-                    if way.street.id in streetIDs:
-                        way.street = longStreet
-            node = self.waymap.getNode(longStreet.dst)
-            if node:
-                dstIsect = node['object']
-                for way in dstIsect.leaveWays:
-                    if way.street.id in streetIDs:
-                        way.street = longStreet
-
-        for node in nodesToRemove:
-            self.waymap.removeNode(node.location)
-
-        for longStreet in longStreets:
-            self.waymap.addEdge(longStreet)
+        from ..way.transition_chains import TransitionStreetAssembler
+        TransitionStreetAssembler(self.waymap, self.doPixelCorrection).assemble(
+            self.transitionSymLanes, self.transitionSideLanes)
 
     # Construct the connectors of the intersections
     def updateIntersections(self):
@@ -543,16 +414,8 @@ class StreetGenerator():
             return item.category
 
         def centerlineOfStreet(street):
-            # Find the centerline of the whole street.
-            centerlineVerts = []
-            for item in street.iterItems():
-                if isinstance(item, Section):
-                    centerlineVerts.extend( item.centerline)
-
-            # Remove duplicates and create polyLine
-            centerlineVerts = list(dict.fromkeys(centerlineVerts))
-            centerline = PolyLine(centerlineVerts)
-            return centerline, centerlineVerts
+            centerline = bundleCenterline(street)
+            return (centerline, centerline[:]) if centerline is not None else (None, ())
         
         debugParallelStreets = self.debugParallelStreets and self.app.type == AppType.commandLine
 
@@ -577,6 +440,11 @@ class StreetGenerator():
 
             # Find the centerline of the whole street.
             centerline, centerlineVerts = centerlineOfStreet(street)
+
+            # A loop has no distinct Bundle head/tail. Keep it in the network,
+            # but never turn it into a parallel open member by removing points.
+            if centerline is None:
+                continue
 
             # Exclude if too curvy
             ds = (centerline[0]-centerline[-1]).length / centerline.length()
@@ -1044,6 +912,14 @@ class StreetGenerator():
 
     # Finally, the intersections of bundles are constructed.
     def createBundleIntersections(self):
+        from ..way.junction_origins import JunctionOriginRecorder
+        origins = JunctionOriginRecorder()
+        physical = origins.capture(self.majorIntersections.values())
+        physical_streets = origins.retain_physical_sources(
+            self.streets.values(), physical, self.allSplittingStreets)
+        seams = origins.capture_seams(self.majorIntersections.values(), physical_streets.values())
+        free_endpoints = origins.capture_free_endpoints(physical_streets.values(), seams=seams)
+        self.wayManager.physicalStreets = physical_streets
         toBeIntersected = []
 
         endPoints = []
@@ -1112,6 +988,9 @@ class StreetGenerator():
             if not bundle.pred or not bundle.succ:
                 endBundleIntersection(self, bundle)
 
+        self.wayManager.junctionOrigins = origins.resolve(physical, self.majorIntersections.values(),
+                                                        free_endpoints=free_endpoints, seams=seams)
+
 
     def postProcessing(self):
 
@@ -1125,6 +1004,7 @@ class StreetGenerator():
                     if isinstance(item, Section):
                         item.width = width
                         item.offset = offset
+                        item.widthOrigin = 'Propagated after SideLane by Blosm preparation'
                     elif not (isinstance(item, Intersection) and item.isMinor):
                         item = None
 
@@ -1137,6 +1017,7 @@ class StreetGenerator():
                 if item:
                     if isinstance(item, Section):
                         item.width = width
+                        item.widthOrigin = 'Propagated after SymLane by Blosm preparation'
                     elif not (isinstance(item, Intersection) and item.isMinor):
                         item = None    
 
