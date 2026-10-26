@@ -25,7 +25,7 @@ def setup(app, osm):
             from ..action.generate_streets import StreetGenerator
             from ..way.renderer_streets import StreetRenderer
             
-            native = getattr(app, 'streetBackend', 'legacy') == 'geometry_nodes'
+            native = getattr(app, 'streetBackend', 'legacy') in ('geometry_nodes', 'python')
             wayManager.addAction(StreetGenerator(wayManager.styleStore,
                 getStyle=wayManager.getStyle, doPixelCorrection=not native))
             itemRenderers = None

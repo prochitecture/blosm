@@ -510,10 +510,11 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             streets_box.prop(addon, "highways")
             if addon.highways:
                 streets_box.prop(addon, "streetBackend")
-                if addon.streetBackend == 'geometry_nodes':
+                if addon.streetBackend in ('geometry_nodes', 'python'):
                     streets_box.label(text="Experimental: flat-ground carriageways")
-                    streets_box.prop(addon, "streetConstruction")
-                    if addon.streetConstruction == 'original_spans':
+                    if addon.streetBackend == 'geometry_nodes':
+                        streets_box.prop(addon, "streetConstruction")
+                    if addon.streetBackend == 'geometry_nodes' and addon.streetConstruction == 'original_spans':
                         streets_box.label(text="Preview: incomplete coverage; smooth inputs only")
                     streets_box.prop(addon, "streetProfileRise")
                     streets_box.prop(addon, "streetCellSize")
@@ -903,7 +904,8 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
     streetBackend: bpy.props.EnumProperty(
         name="Street backend",
-        items=(('geometry_nodes', 'Geometry Nodes (experimental)', 'Shared editable flat-ground street solver'),
+        items=(('python', 'Python (experimental)', 'Direct mesh generation; edit centerlines and press Update'),
+               ('geometry_nodes', 'Geometry Nodes (experimental)', 'Shared editable flat-ground street solver'),
                ('legacy', 'Legacy', 'Previous street renderer')),
         default='geometry_nodes')
     streetProfileRise: bpy.props.FloatProperty(name="Crown rise", default=.08, min=0., subtype='DISTANCE')
@@ -914,7 +916,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
         default='current')
     streetCellSize: bpy.props.FloatProperty(name="Mesh cell size", default=.7, min=.05, subtype='DISTANCE')
     streetResolution: bpy.props.IntProperty(name="Mesh resolution", default=1, min=1, max=4)
-    streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=10., min=0.)
+    streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=1., min=0.)
     streetAssetFile: bpy.props.StringProperty(name="Street library", subtype='FILE_PATH',
         description="Optional compatible external .blend library; empty uses the bundled street library")
 

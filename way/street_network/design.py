@@ -9,7 +9,7 @@ class StreetDesign:
     cell_size: float = .7
     interpolation: int = 3
     resolution: int = 1
-    exaggeration: float = 10.
+    exaggeration: float = 1.
     categories: tuple = ('motorway', 'motorway_link', 'trunk', 'trunk_link',
         'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary',
         'tertiary_link', 'residential', 'living_street', 'service', 'unclassified')
@@ -29,4 +29,4 @@ class StreetDesign:
         return cls(profile_rise=getattr(app, 'streetProfileRise', .08),
                    cell_size=getattr(app, 'streetCellSize', .7),
                    resolution=getattr(app, 'streetResolution', 1),
-                   exaggeration=getattr(app, 'streetExaggeration', 10.))
+                   exaggeration=getattr(app, 'streetExaggeration', 1.))

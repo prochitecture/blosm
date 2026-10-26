@@ -195,7 +195,7 @@ class BlenderApp(BaseApp):
         
         experimental = prefs[addonName].preferences.enableExperimentalFeatures if addonName in prefs else True
         native_streets = (experimental and self.mode is BaseApp.realistic
-                          and getattr(self, 'streetBackend', 'legacy') == 'geometry_nodes')
+                          and getattr(self, 'streetBackend', 'legacy') in ('geometry_nodes', 'python'))
         bundled_streets_only = (native_streets and self.highways and not self.buildings
                                 and not self.forests and not self.aviation)
         # Native street preparation has numeric built-in styles. This also

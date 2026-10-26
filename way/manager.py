@@ -13,7 +13,7 @@ class WayManager:
         self.data = data
         self.app = app
         filepath = getattr(app, 'pmlFilepathStreet', None)
-        if not filepath and getattr(app, 'streetBackend', 'legacy') == 'geometry_nodes':
+        if not filepath and getattr(app, 'streetBackend', 'legacy') in ('geometry_nodes', 'python'):
             from .street_network.defaults import styles
             self.styleStore = StyleStore(None, '', styles=styles())
         else:

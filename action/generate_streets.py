@@ -191,7 +191,7 @@ class StreetGenerator():
         # SweepIntersector provides a fast implementation of a sweep intersection algorithm.
         intersector = SweepIntersector()
         self.intersectingSegments = intersector.findIntersections(cleanedSegs)
-        if getattr(self.app, 'streetBackend', 'legacy') == 'geometry_nodes':
+        if getattr(self.app, 'streetBackend', 'legacy') in ('geometry_nodes', 'python'):
             from ..way.connectivity_audit import ConnectivityAudit
             self.wayManager.streetPreparationAudit = ConnectivityAudit().read(
                 auditedWays, self.intersectingSegments)
@@ -207,7 +207,7 @@ class StreetGenerator():
         # prepare clipper for this frame of the scene
         clipper = SCClipper(self.app.minX, self.app.maxX, self.app.minY, self.app.maxY)
         context = None
-        if getattr(self.app, 'streetBackend', 'legacy') == 'geometry_nodes':
+        if getattr(self.app, 'streetBackend', 'legacy') in ('geometry_nodes', 'python'):
             from ..way.clipped_context import ClippedSourceContext
             context = ClippedSourceContext((self.app.minX,self.app.maxX,self.app.minY,self.app.maxY),
                 source_selection='ALL_WAYS' if self.allWays else 'SURFACE_VEHICLES')
