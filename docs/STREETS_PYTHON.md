@@ -1,6 +1,12 @@
 # Python street generation — implementation goal
 
-Worktree: `C:/dev/workspace/streets_dev/blosm`, branch `streets_python`.
+Current source: `C:/dev/workspace/blosm`, branch `buildings_gn`.
+The dev75 [local smoothing increment](STREETS_PYTHON_LOCAL_SMOOTHING.md)
+corrects sparse centerline bows and their shared Section corners, with current scene links and
+validation scope. The original goal, dev72 qualification and development
+history below remain the earlier checkpoint.
+
+Original worktree: `C:/dev/workspace/streets_dev/blosm`, branch `streets_python`.
 The buildings checkout remains `C:/dev/workspace/blosm`, branch `buildings_gn`.
 Target: Blender 5.2. NumPy is a supported runtime dependency supplied by Blender.
 
@@ -23,29 +29,29 @@ physical slope and entrance bounds, transverse monotonicity and no drainage
 basin. [Construction and formulas](STREETS_PYTHON_GEOMETRY.md#interior-height-reconciliation-at-sharp-mixed-section-joins-dev72)
 describe the immutable residual and bounded NumPy feasibility projection.
 
-The [complete current regression](../../experiments/streets/python_v1/suite_dev72_audit_01.json)
+The [complete current regression](../../streets_dev/experiments/streets/python_v1/suite_dev72_audit_01.json)
 passes **982 tests in 114 modules** in one uninterrupted run, with no failures,
 errors or skips and unchanged source. It includes both signed turns/mode orders
 at R1/R2/R4, transformed/reversed sources, fixed geometry, drainage, local/full
 edits, furniture/query-buffer release, restoration and failure rollback. The
-earlier [93 focused checks](../../experiments/streets/python_v1/mixed_height_focused_dev72_01/focused_checks.json)
+earlier [93 focused checks](../../streets_dev/experiments/streets/python_v1/mixed_height_focused_dev72_01/focused_checks.json)
 precede the final two catalogue additions and retain their original scope.
 
-The [new 112-fixture scene](../../experiments/streets/python_v1/gallery_generated_dev72_01/python_streets_gallery.blend)
+The [new 112-fixture scene](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev72_01/python_streets_gallery.blend)
 adds `sharp_uniform_mixed_0_3` and `sharp_uniform_mixed_3_0`, with R1/E10 defaults.
 Each new join uses 768 quads; each complete fixture uses 3,872 including its
 unrelated control road. The full scene contains 726,698 direct quads. An
-[independent capture](../../experiments/streets/python_v1/gallery_capture_dev72_01/catalogue_checks.json)
+[independent capture](../../streets_dev/experiments/streets/python_v1/gallery_capture_dev72_01/catalogue_checks.json)
 proves all 110 previous source/mesh/furniture/layout sets exact. Saved
-[mesh quality](../../experiments/streets/python_v1/gallery_quality_dev72_01/import_quality_checks.json)
-and [complete bilinear gradient checks](../../experiments/streets/python_v1/slopes_gallery_dev72_01/slope_checks.json)
+[mesh quality](../../streets_dev/experiments/streets/python_v1/gallery_quality_dev72_01/import_quality_checks.json)
+and [complete bilinear gradient checks](../../streets_dev/experiments/streets/python_v1/slopes_gallery_dev72_01/slope_checks.json)
 pass; the latter retains explicit float32 uncertainty.
 
-Both [native editing cases](../../experiments/streets/python_v1/mixed_height_native_dev72_01/native_checks.json)
+Both [native editing cases](../../streets_dev/experiments/streets/python_v1/mixed_height_native_dev72_01/native_checks.json)
 pass real Edit Mode vertex/width changes, actual Update, mode removal/restoration,
 local/full meshes and furniture, remote identity, exact restoration, R2/E0 and
 R4/E10. The physical baseline correction is at most 3.527 mm. A separate
-[published-mesh check](../../experiments/streets/python_v1/mixed_height_published_dev72_02/published_checks.json)
+[published-mesh check](../../streets_dev/experiments/streets/python_v1/mixed_height_published_dev72_02/published_checks.json)
 verifies both actual float32 joins below the ordinary incoming-profile slope
 limit without subtracting an uncertainty allowance, exact zero curbs,
 transverse monotonicity and no basin. The fixed crest is retained within its
@@ -53,9 +59,9 @@ native half-ULP height rounding (2.981 nanometres at E10). The first verifier
 incorrectly demanded identical floats along that crest and is retained as a
 failed verification attempt; no runtime or physical limit changed to pass it.
 
-All [112 fresh-file Updates](../../experiments/streets/python_v1/gallery_cold_dev72_01/cold_update_checks.json)
+All [112 fresh-file Updates](../../streets_dev/experiments/streets/python_v1/gallery_cold_dev72_01/cold_update_checks.json)
 preserve saved sources, outputs, furniture, layout and object/data identities.
-The [seven-job gallery audit](../../experiments/streets/python_v1/gallery_dev72_audit_01.json)
+The [seven-job gallery audit](../../streets_dev/experiments/streets/python_v1/gallery_dev72_audit_01.json)
 reconciles generation, capture, quality, gradients, cold reconstruction, native
 edits and strict new-join publication checks. Full generation peaks at
 574,017,536 resident / 634,310,656 sampled private bytes under 0.75 GiB;
@@ -67,7 +73,7 @@ inventory, script/source hashes and terminal resources are independently
 reconciled in its audit. These are qualification timings, not a controlled
 performance comparison or a bound on every Update.
 
-The [current real-input audit](../../experiments/streets/python_v1/dev72_real_receipt_audit_01.json)
+The [current real-input audit](../../streets_dev/experiments/streets/python_v1/dev72_real_receipt_audit_01.json)
 now passes all nine fresh import/quality/reopen-edit jobs for Berlin, Canal
 Street and Nashville. All three preserve prepared identities/parameters and
 the earlier qualified mesh geometry exactly. Local Updates take 1.66 / 7.63 /
@@ -75,14 +81,14 @@ the earlier qualified mesh geometry exactly. Local Updates take 1.66 / 7.63 /
 restore exactly. Peak sampled private usage is 715,980,800 bytes under 0.75 GiB.
 These are scoped measurements, not a universal responsiveness guarantee.
 
-All [31 native asset tests](../../experiments/streets/python_v1/native_assets_dev72_01/native_asset_checks.json)
+All [31 native asset tests](../../streets_dev/experiments/streets/python_v1/native_assets_dev72_01/native_asset_checks.json)
 pass Base/Pro/external loading, multiple datablock kinds and exact-revision saved
-library recovery on current source. The [five native interaction jobs](../../experiments/streets/python_v1/native_closure_dev72_checks_01.json)
+library recovery on current source. The [five native interaction jobs](../../streets_dev/experiments/streets/python_v1/native_closure_dev72_checks_01.json)
 pass the saved editing bootstrap, injected late-publication rollback, Undo/Redo,
 cache lifecycle/no observer and grouping-independent semantic identity.
 
-The [24 MB dev72 ZIP](../../experiments/streets/python_v1/packages/dev72_01/blosm_streets_python_dev72.zip)
-now passes [isolated installed-copy qualification](../../experiments/streets/python_v1/package_dev72_qualification_01.json):
+The [24 MB dev72 ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev72_01/blosm_streets_python_dev72.zip)
+now passes [isolated installed-copy qualification](../../streets_dev/experiments/streets/python_v1/package_dev72_qualification_01.json):
 13 serial native jobs, 43 installed fixture checks, actual ZIP installation,
 full registration/unregistration, both backend choices, external materials,
 normal OSM import, mesh quality and reopening/edit/full/restoration. The audit
@@ -91,10 +97,10 @@ origins; no development modules are used and original preferences are not saved.
 Archive SHA256:
 `25a7b4891bc119b285191e5eafa67bab5e97f4fc4d4c61b344d4a710b6ca0aa6`.
 
-An additional [actual registered Import-operator check](../../experiments/streets/python_v1/installed_ui_import_dev72_01/operator_import_checks.json)
+An additional [actual registered Import-operator check](../../streets_dev/experiments/streets/python_v1/installed_ui_import_dev72_01/operator_import_checks.json)
 uses experimental/3D-realistic/file/Python street settings with no external
-building assets. Its [published mesh check](../../experiments/streets/python_v1/installed_ui_quality_dev72_01/import_quality_checks.json)
-and [native reopening/edit check](../../experiments/streets/python_v1/installed_ui_reopen_dev72_01/import_reopen_checks.json)
+building assets. Its [published mesh check](../../streets_dev/experiments/streets/python_v1/installed_ui_quality_dev72_01/import_quality_checks.json)
+and [native reopening/edit check](../../streets_dev/experiments/streets/python_v1/installed_ui_reopen_dev72_01/import_reopen_checks.json)
 pass. This distinct UI-input run has 21,838 quads: UI float-property precision
 differs slightly from the direct-pipeline settings, which produce 21,818. Both
 are checked against their own actual inputs; no exact predecessor comparison
@@ -116,29 +122,29 @@ The source-only task-graph predicate now detects that frame mismatch and
 dispatches the existing certified mixed polynomial construction. Collinear
 mixed seams and same-mode dispatch retain their previous behavior.
 
-[Eight new tests](../../experiments/streets/python_v1/uniform_focused_dev71_03/focused_checks.json)
+[Eight new tests](../../streets_dev/experiments/streets/python_v1/uniform_focused_dev71_03/focused_checks.json)
 pass 28 signed-turn/length/order variants, complete mouth profiles, source
 polynomial loci, constant crown height, source reversal/rotation/datum,
 R1/R2/R4, mode changes that remove and restore owned joins, vertex/width edits,
 local/full anchors, remote identity, neighboring-junction clearance and both
 separated/overlapping Bundle branches. The
-[focused audit](../../experiments/streets/python_v1/uniform_focus_dev71_audit_01.json)
+[focused audit](../../streets_dev/experiments/streets/python_v1/uniform_focus_dev71_audit_01.json)
 reconciles 76 distinct passing test IDs using these checks and the preceding
 regression on byte-identical production code. It is combined evidence, not one
 green 76-test run; earlier verifier errors remain recorded.
 
-The [fresh 110-fixture scene](../../experiments/streets/python_v1/gallery_generated_dev71_01/python_streets_gallery.blend)
+The [fresh 110-fixture scene](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev71_01/python_streets_gallery.blend)
 adds `uniform_mixed_dimensional_0_3`, `uniform_mixed_dimensional_3_0`,
 `uniform_mixed_bundle` and `uniform_mixed_bundle_overlap`. It contains 718,954
 quads across the complete scene, generated from authored inputs with no saved
 output meshes imported. The new Bundle examples distinguish separate
 pavements and grass from a single physical pavement where carriageways overlap.
-All [four native editing examples](../../experiments/streets/python_v1/uniform_native_dev71_01/native_checks.json)
+All [four native editing examples](../../streets_dev/experiments/streets/python_v1/uniform_native_dev71_01/native_checks.json)
 pass actual Edit Mode vertex/width changes, Update, interpolation changes that
 remove and restore the join, local/full mesh and furniture equality, remote
 identity, exact restoration, R2/E0 and R4/E10. Peak sampled private memory is
 356,368,384 bytes under 0.5 GiB, one numerical thread and the same 1 GiB reserve.
-The [complete gallery audit](../../experiments/streets/python_v1/gallery_dev71_audit_01.json)
+The [complete gallery audit](../../streets_dev/experiments/streets/python_v1/gallery_dev71_audit_01.json)
 verifies authored generation, strict preservation of all 106 prior
 source/mesh/furniture/layout sets, actual saved mesh quality, independent
 bilinear slopes with float32 uncertainty, all 110 real cold Updates with
@@ -147,7 +153,7 @@ The separated Bundle itself uses 4,392 quads including grass; the overlapping
 Bundle uses 3,712 pavement quads. Those counts exclude each fixture's unrelated
 1,856-quad control road. They are not whole-scene or universal Bundle limits.
 
-The [initial primitive probe](../../experiments/streets/python_v1/uniform_mixed_probe_dev70_01/probe_checks.json)
+The [initial primitive probe](../../streets_dev/experiments/streets/python_v1/uniform_mixed_probe_dev70_01/probe_checks.json)
 retains four failed short/sharp cases (30 m legs, signed 110-degree source
 turns, both mode orders). Their slope/quad-grading limits are unchanged. This
 increment does not establish arbitrary-angle or route-spanning support.
@@ -167,20 +173,20 @@ Mixed transition curbs retain the source polynomial parameter inside each
 piece. Furniture stations are metric distances and must first be converted
 through the source path's arc-length inverse. Mapping their distance linearly
 into the transition interval misplaced Smooth-leg anchors by up to 53.3 mm
-in the [independent diagnostic](../../experiments/streets/python_v1/mixed_anchor_station_dev69_01/anchor_station_checks.json).
+in the [independent diagnostic](../../streets_dev/experiments/streets/python_v1/mixed_anchor_station_dev69_01/anchor_station_checks.json).
 The corrected conversion now follows the stored source piece and orientation;
 carriageway construction and the existing physical guards are unchanged.
 
 The new permanent regression fails before the runtime fix. The
-[64 focused checks](../../experiments/streets/python_v1/anchor_focused_dev70_01/focused_checks.json)
+[64 focused checks](../../streets_dev/experiments/streets/python_v1/anchor_focused_dev70_01/focused_checks.json)
 now pass mixed/Exact/fitted transitions, core dependencies and dimensional
 Bundles. The regression covers both interpolation orders, reversed source
 storage, both sides, endpoint/interior stations, unchanged meshes, local/full
 anchors and queries after numerical buffers are released. Repeating the
-[unchanged independent diagnostic](../../experiments/streets/python_v1/mixed_anchor_station_dev70_01/anchor_station_checks.json)
+[unchanged independent diagnostic](../../streets_dev/experiments/streets/python_v1/mixed_anchor_station_dev70_01/anchor_station_checks.json)
 now gives zero XY error in its six interior Smooth-leg cases.
 
-The [native saved-file upgrade and editing check](../../experiments/streets/python_v1/anchor_native_dev70_03/native_checks.json)
+The [native saved-file upgrade and editing check](../../streets_dev/experiments/streets/python_v1/anchor_native_dev70_03/native_checks.json)
 passes all three mixed examples, including nonzero offsets and unequal rises.
 Every mesh and authored source remains exact during the version upgrade; only
 the Smooth-source `placement:85` changes. The check measures anchor XY against
@@ -193,24 +199,24 @@ their semantic keys. The source scene is not saved or modified.
 Peak sampled private memory is 346,828,800 bytes under 0.5 GiB, one numerical
 thread and the same 1 GiB system reserve.
 
-The [fresh dev70 gallery](../../experiments/streets/python_v1/gallery_generated_dev70_01/python_streets_gallery.blend)
+The [fresh dev70 gallery](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev70_01/python_streets_gallery.blend)
 contains all 106 authored fixtures and 699,522 quads across the complete scene.
-The [saved capture](../../experiments/streets/python_v1/gallery_capture_dev70_01/catalogue_checks.json)
+The [saved capture](../../streets_dev/experiments/streets/python_v1/gallery_capture_dev70_01/catalogue_checks.json)
 verifies every source, mesh buffer and gallery matrix against dev69, with only
 `mixed_dimensional_3_0 / placement:85` corrected. All source/mesh/furniture sets
 from the earlier 103-fixture checkpoint remain exact. The
-[saved quality comparison](../../experiments/streets/python_v1/gallery_quality_dev70_01/import_quality_checks.json)
+[saved quality comparison](../../streets_dev/experiments/streets/python_v1/gallery_quality_dev70_01/import_quality_checks.json)
 passes all convex direct quads, ratio 8, crown envelope and overlap guards.
-The [independent saved-gradient audit](../../experiments/streets/python_v1/slopes_gallery_dev70_01/slope_checks.json)
+The [independent saved-gradient audit](../../streets_dev/experiments/streets/python_v1/slopes_gallery_dev70_01/slope_checks.json)
 passes the complete bilinear bounds with explicit float32 uncertainty; this
 does not assert a strict measured global 10% bound without that allowance.
-All [106 actual cold Updates](../../experiments/streets/python_v1/gallery_cold_dev70_01/cold_update_checks.json)
+All [106 actual cold Updates](../../streets_dev/experiments/streets/python_v1/gallery_cold_dev70_01/cold_update_checks.json)
 now pass with exact saved source/mesh/furniture/layout and retained Blender
-object/data identities. The [complete gallery audit](../../experiments/streets/python_v1/gallery_dev70_audit_01.json)
+object/data identities. The [complete gallery audit](../../streets_dev/experiments/streets/python_v1/gallery_dev70_audit_01.json)
 reconciles authored generation, independent saved captures, mesh quality,
 gradient checks and cold reconstruction against the same source and scene.
 
-The [preceding complete regression audit](../../experiments/streets/python_v1/suite_dev69_audit_01.json)
+The [preceding complete regression audit](../../streets_dev/experiments/streets/python_v1/suite_dev69_audit_01.json)
 verifies all 968 tests in 112 modules in one uninterrupted green run on dev69,
 with unchanged source, no failures/errors/skips, one numerical thread, a
 0.25 GiB process cap and the unchanged 1 GiB reserve. This is dev69 evidence;
@@ -229,7 +235,7 @@ quintic width/offset blending produces polynomial curbs. Bernstein orientation
 and curve-error proofs, direct quads, complete mouth copies, the crown ceiling,
 physical slopes and the 3% entrance guard remain mandatory.
 
-The [37 focused tests](../../experiments/streets/python_v1/mixed_transitions_focused_dev69_04/focused_checks.json)
+The [37 focused tests](../../streets_dev/experiments/streets/python_v1/mixed_transitions_focused_dev69_04/focused_checks.json)
 pass both interpolation orders, signed turns, exact centerline loci, whole mouth
 profiles, independent dense curve sampling, reversed source storage, rotation,
 translated datum, resolutions 1/2/4, E0, offsets/unequal rises and actual numerical
@@ -244,18 +250,18 @@ sharp layouts can still fail physical slope or grading limits. Compatible
 same-profile bent seams and route-spanning mixed transitions remain open.
 The complete gallery now has 106 authored inputs: the previous 102, the formerly
 separate translated corner regression and three mixed dimensional examples.
-The [fresh 106-fixture scene](../../experiments/streets/python_v1/gallery_generated_dev69_02/python_streets_gallery.blend)
+The [fresh 106-fixture scene](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev69_02/python_streets_gallery.blend)
 has now generated on this source. Its
-[saved quality check](../../experiments/streets/python_v1/gallery_quality_dev69_02/import_quality_checks.json)
+[saved quality check](../../streets_dev/experiments/streets/python_v1/gallery_quality_dev69_02/import_quality_checks.json)
 passes all 699,522 quads and preserves every position and quad of all 634 previous
 mesh parts exactly. Only the three named mixed networks are added. The
-[fresh native edit check](../../experiments/streets/python_v1/mixed_native_dev69_01/native_checks.json)
+[fresh native edit check](../../streets_dev/experiments/streets/python_v1/mixed_native_dev69_01/native_checks.json)
 passes all three cases: cold object/data identity, real Edit Mode vertex/width
 edits, the Update button, moving furniture, local/full equality, restoration,
 R2/E0 and R4/E10. The saved scene is unchanged. Peak sampled private usage is
 360,062,976 bytes under 0.5 GiB for the edit checks; full-gallery jobs use
 0.75 GiB with the same one thread and 1 GiB system reserve.
-The [968-test broad regression](../../experiments/streets/python_v1/suite_dev69_audit_01.json)
+The [968-test broad regression](../../streets_dev/experiments/streets/python_v1/suite_dev69_audit_01.json)
 is now terminal PASS, with every ordered test ID reconciled. Real-input,
 complete cold-gallery and installed-copy checks on this source remain separate.
 The install-qualified
@@ -288,7 +294,7 @@ selected by a typed grading failure and geometry eligibility, never fixture
 names or IDs. It is restricted to one compatible ordinary exterior; it does
 not replace the other accepted intersection/Bundle providers.
 
-The [45 focused tests](../../experiments/streets/python_v1/corner_seed_focused_dev68_02/focused_checks.json)
+The [45 focused tests](../../streets_dev/experiments/streets/python_v1/corner_seed_focused_dev68_02/focused_checks.json)
 pass on this source, including physical, E0 and E10 views, complete float32
 interfaces, crown/slope limits, independent whole-edge entrance bounds,
 drainage, width editing, local/full equality, exact restoration and unrelated
@@ -298,7 +304,7 @@ maximum ratio about 7.747, full-quad physical gradient below 9%, maximum entranc
 bound 2.205%, and zero graph drainage fill after reconciliation. That proof is
 not an installer qualification of dev68.
 
-The [22-case normal-backend matrix](../../experiments/streets/python_v1/normal_merged_matrix_dev68_01/matrix_checks.json)
+The [22-case normal-backend matrix](../../streets_dev/experiments/streets/python_v1/normal_merged_matrix_dev68_01/matrix_checks.json)
 now passes **22/22**, including R2/R4, both modes, translated datum, reversed
 storage, unequal widths/crowns, T/skew/five-arm inputs and both exact baseline
 restorations. This matrix belongs to the immediately preceding dev68 source
@@ -313,27 +319,27 @@ rounded coordinates and could invent a seam overlap. Both sides now use
 unchanged. Rebuilt stored meshes must also pass convexity and ratio 8 before
 publication. This changes validation, not generated vertex coordinates.
 
-Open the [combined 103-fixture Blender scene](../../experiments/streets/python_v1/corner_seed_native_dev68_04/python_streets_corner_seed.blend).
+Open the [combined 103-fixture Blender scene](../../streets_dev/experiments/streets/python_v1/corner_seed_native_dev68_04/python_streets_corner_seed.blend).
 `Regression / translated Exact corner seed` is appended below the previous
 102 fixtures. Junction 210 is selected; the case saves R1/E10 and includes
 Arrow 905 anchored to original Section 117. The
-[native check](../../experiments/streets/python_v1/corner_seed_native_dev68_04/native_corner_seed_checks.json)
+[native check](../../streets_dev/experiments/streets/python_v1/corner_seed_native_dev68_04/native_corner_seed_checks.json)
 passes actual Update, width editing, moving furniture, local/full equality and
 restoration. Its parent gallery freshly regenerated all 102 original fixtures
 on dev68; appending the new fixture preserves those source/mesh/furniture/object
 sets exactly. The
-[independent saved-mesh check](../../experiments/streets/python_v1/corner_seed_quality_dev68_02/import_quality_checks.json)
+[independent saved-mesh check](../../streets_dev/experiments/streets/python_v1/corner_seed_quality_dev68_02/import_quality_checks.json)
 passes all **688,258 quads in 103 networks**, no overlaps, ratio 8 and the crown
 envelope; all 618 old mesh parts remain exact. The
-[fresh-file reopening check](../../experiments/streets/python_v1/corner_seed_reopen_dev68_02/reopen_checks.json)
+[fresh-file reopening check](../../streets_dev/experiments/streets/python_v1/corner_seed_reopen_dev68_02/reopen_checks.json)
 passes cold object identity, the same width/furniture edit, local/full equality
 and exact restoration without changing the scene file or other 102 fixtures.
 
-The [complete current regression audit](../../experiments/streets/python_v1/suite_dev68_reconciled_audit_01.json)
+The [complete current regression audit](../../streets_dev/experiments/streets/python_v1/suite_dev68_reconciled_audit_01.json)
 now accounts for passing evidence for **all 960 test IDs in 111 modules**.
 The full run has 950 passes and ten asset statuses caused by WinError 5 when
 the sandbox's default temporary directory rejects atomic renames. The
-[isolated diagnostic](../../experiments/streets/python_v1/asset_test_temp_dev68_01/asset_temp_checks.json)
+[isolated diagnostic](../../streets_dev/experiments/streets/python_v1/asset_test_temp_dev68_01/asset_temp_checks.json)
 reproduces that filesystem error and passes all 21 asset-module tests with the
 standard workspace temporary directory. Original failures remain recorded.
 This is complete combined coverage, not one uninterrupted green run; no asset
@@ -341,16 +347,16 @@ implementation was changed to accommodate the test environment.
 
 All **102 authored fixtures** have now regenerated on current dev68, with exact
 source records, mesh buffers and furniture against the independent capture.
-The [saved-gallery audit](../../experiments/streets/python_v1/gallery_dev68_saved_audit_01.json)
+The [saved-gallery audit](../../streets_dev/experiments/streets/python_v1/gallery_dev68_saved_audit_01.json)
 also verifies all 618 mesh parts / 677,596 quads, independent actual float32
 quality, all102 fresh cold Updates, object/data identity and optional-panel
-behavior. The [current combined 103-fixture scene](../../experiments/streets/python_v1/corner_seed_native_dev68_04/python_streets_corner_seed.blend)
+behavior. The [current combined 103-fixture scene](../../streets_dev/experiments/streets/python_v1/corner_seed_native_dev68_04/python_streets_corner_seed.blend)
 uses this regenerated gallery as its parent and appends the repaired case.
-Its [saved quality](../../experiments/streets/python_v1/corner_seed_quality_dev68_02/import_quality_checks.json)
-and [fresh reopening](../../experiments/streets/python_v1/corner_seed_reopen_dev68_02/reopen_checks.json)
+Its [saved quality](../../streets_dev/experiments/streets/python_v1/corner_seed_quality_dev68_02/import_quality_checks.json)
+and [fresh reopening](../../streets_dev/experiments/streets/python_v1/corner_seed_reopen_dev68_02/reopen_checks.json)
 pass without changing source data, accepted geometry or furniture.
 
-The [nine fresh real-input jobs](../../experiments/streets/python_v1/dev68_real_receipt_audit_01.json)
+The [nine fresh real-input jobs](../../streets_dev/experiments/streets/python_v1/dev68_real_receipt_audit_01.json)
 also pass on this source. All prepared data and saved geometry remain exact
 against the qualified reference, excluding newly assigned network UUIDs.
 Both components are READY for each input; coverage is COMPLETE and GN modifiers
@@ -360,17 +366,17 @@ Canal Street and Nashville. The largest private peak is 712,732,672 bytes under
 0.75 GiB, one numerical thread and the unchanged 1 GiB reserve. Individual
 timings are not a controlled speedup comparison or a universal network promise.
 
-[Five native interaction checks](../../experiments/streets/python_v1/native_closure_dev68_checks_01.json)
+[Five native interaction checks](../../streets_dev/experiments/streets/python_v1/native_closure_dev68_checks_01.json)
 pass optional-panel behavior, publication-failure rollback, Undo/Redo, cache
 lifetime and grouped/per-Street/mixed inputs. History/publication tests load
 their one target fixture rather than copying all102 into Undo history; every
-test assertion is retained. The [31 native asset tests](../../experiments/streets/python_v1/native_assets_dev68_01/native_asset_checks.json)
+test assertion is retained. The [31 native asset tests](../../streets_dev/experiments/streets/python_v1/native_assets_dev68_01/native_asset_checks.json)
 pass multiple datablock kinds, Base/Pro access, external libraries and actual
 saved-scene exact-revision recovery.
 
-The [installed-copy audit](../../experiments/streets/python_v1/package_dev68_qualification_01.json)
+The [installed-copy audit](../../streets_dev/experiments/streets/python_v1/package_dev68_qualification_01.json)
 now passes all twelve serial native jobs using the actual
-[dev68 addon ZIP](../../experiments/streets/python_v1/packages/dev68_01/blosm_streets_python_dev68.zip).
+[dev68 addon ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev68_01/blosm_streets_python_dev68.zip).
 The addon installs and registers in an isolated Blender profile; both backend
 choices, shared/external materials and the actual Update button pass. All 34
 selected compound/angular/multi-Section/merged/translated fixtures pass using
@@ -389,7 +395,7 @@ The ZIP's immutable build manifest still says installation was unqualified at
 build time; this separate post-build audit records completed qualification.
 Documentation edits after packaging do not change that archive's payloads.
 
-The [independent physical-slope audit](../../experiments/streets/python_v1/slopes_gallery_dev68_01/slope_checks.json)
+The [independent physical-slope audit](../../streets_dev/experiments/streets/python_v1/slopes_gallery_dev68_01/slope_checks.json)
 now checks all **103 networks / 634 mesh parts / 688,258 quads** in the current
 combined scene. It independently evaluates four-corner gradients and the
 complete bilinear bound, with explicit float32 uncertainty. All recorded policy
@@ -398,25 +404,25 @@ not a claim that every measured stored gradient is strictly below 10% without
 quantization allowance; the incoming-profile-dependent policy also permits
 higher crossfalls for narrow, high-crown approaches.
 
-The [current Canal profiling run](../../experiments/streets/python_v1/canal_seam_profile_dev68_01/profile_checks.json)
+The [current Canal profiling run](../../streets_dev/experiments/streets/python_v1/canal_seam_profile_dev68_01/profile_checks.json)
 observes 7.414 and 7.251 seconds for the same seam edit, with exact repeated
 buffers, local/full equality, restoration and unrelated component identity.
 Its profiled run takes 8.219 seconds. Fixed-rim shape improvement accounts for
 5.116 seconds; quad-gradient evaluation accounts for 2.154 seconds, while both
 overlap checks together take about 0.194 seconds. These cumulative categories
 overlap and must not be added. The
-[reusable-gradient experiment](../../experiments/streets/python_v1/gradient_benchmark_dev68_01/benchmark_checks.json)
+[reusable-gradient experiment](../../streets_dev/experiments/streets/python_v1/gradient_benchmark_dev68_01/benchmark_checks.json)
 preserves exact gradients and published meshes, but ABBA timing shows no speed
 benefit: original mean 7.237 seconds, candidate mean 7.352 seconds. It remains an
 external experiment and is not integrated into the addon. The current Python
 source fingerprint and qualified package are unchanged.
 The older dev67 results below retain their original source scope.
 
-The [source and receipt audit](../../experiments/streets/python_v1/corner_seed_integration_dev68_audit_01.json)
+The [source and receipt audit](../../streets_dev/experiments/streets/python_v1/corner_seed_integration_dev68_audit_01.json)
 verifies all 21 previously passing matrix array payloads remain exact, and
 reconstructs the preceding matrix source from the current source plus the
 explicit publication-only delta. The other 1,229 dev67 Python files are exact.
-The [verified recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev68_01/checkpoint_checks.json)
+The [verified recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev68_01/checkpoint_checks.json)
 preserves all 1,239 current Python files, documentation, assets, the review scene
 and scoped evidence. Its 32,520,587-byte archive has SHA256
 `08dd72957213857a666d726721e619576ed06aaf6aa7bdf05855bba3cc6547e4`.
@@ -477,19 +483,19 @@ physical rims are retained independently of inspection exaggeration, including
 zero exaggeration. Furniture keeps its original station/side/offset; actual
 footprint containment resolves near-mouth height ownership.
 
-The first [normal-backend checks](../../experiments/streets/python_v1/merged_backend_dev67_01/preparation_checks.json)
+The first [normal-backend checks](../../streets_dev/experiments/streets/python_v1/merged_backend_dev67_01/preparation_checks.json)
 pass both interpolation modes, whole float32 interfaces, connected topology,
 source preservation, combined edits, local/full mesh and furniture equality,
 exact restoration, unrelated identity and E0. They belong to source
 `58d5ea01db56b18d3c3215974b30e6781576e36306301c38a7f1f38a5f16f2d8`.
-The [native Update proof](../../experiments/streets/python_v1/merged_native_dev67_01/native_merged_entrance_checks.json)
+The [native Update proof](../../streets_dev/experiments/streets/python_v1/merged_native_dev67_01/native_merged_entrance_checks.json)
 on that source also passes both cases and retains all previous 100 fixture
 source/mesh/furniture sets exactly. Updates take 4.15 / 7.46 s (Exact / Smooth)
 in this bounded worker; those are fixture measurements, not a general-network
 responsiveness claim. Peak sampled private usage is 498,216,960 bytes under
 0.75 GiB, one numerical thread and the unchanged 1 GiB system reserve.
 
-Open the [freshly authored 102-fixture editable gallery](../../experiments/streets/python_v1/gallery_generated_dev67_01/python_streets_gallery.blend).
+Open the [freshly authored 102-fixture editable gallery](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev67_01/python_streets_gallery.blend).
 Its four-column layout keeps fixture bounds separate. The final collections
 `attached_angular_overlap_0_internal` and
 `attached_angular_overlap_3_internal` support
@@ -498,13 +504,13 @@ The authored catalogue now includes these two cases for fresh generation.
 Further source hardening adds certified member-centerline disjointness and
 order-independent port ownership/signatures. The original consumed centreline
 must also stay inside the actual physical exterior. The
-[37-test regression](../../experiments/streets/python_v1/merged_regression_dev67_01/preparation_checks.json)
+[37-test regression](../../streets_dev/experiments/streets/python_v1/merged_regression_dev67_01/preparation_checks.json)
 passes source order/aliases, normal merged dispatch, existing conditions/ports,
 internal unions and the six-family uncached-reference comparison on source
 `8abf8a098fb5921642d20dc0c4d5e14f05000c04b85d65f6859cc1cc896fc9eb`.
 The final source adds the two-line consumed-support guard.
 
-The [final normal-dispatch matrix](../../experiments/streets/python_v1/normal_merged_matrix_dev67_01/matrix_checks.json)
+The [final normal-dispatch matrix](../../streets_dev/experiments/streets/python_v1/normal_merged_matrix_dev67_01/matrix_checks.json)
 passes 21/22 with both baseline restorations exact. It includes R2/R4, reversed
 storage, unequal widths/crowns and T/skew/five-arm layouts. Its only failure is
 the same ordinary outer junction 210 after Exact translated controls are
@@ -514,7 +520,7 @@ terminates with exit 1 for that retained defect. E1 baseline Bundle counts are
 separate 1,600-quad control road. Peak sampled private usage is 147,873,792 bytes
 under 0.5 GiB with the same reserve/thread limits.
 
-The [fresh-file native reopening](../../experiments/streets/python_v1/merged_reopen_dev67_01/native_merged_entrance_checks.json)
+The [fresh-file native reopening](../../streets_dev/experiments/streets/python_v1/merged_reopen_dev67_01/native_merged_entrance_checks.json)
 also passes on the final source: it selectively loads the two new collections
 from the 102-fixture scene, cold-updates without changing saved buffers or
 identities, repeats edits/local/full/furniture/restoration and leaves the scene
@@ -522,7 +528,7 @@ file unchanged. This is a selective two-case reopening proof; the complete
 authored regeneration and saved-mesh checks are recorded separately below.
 Broader reopening, real-input/performance and installer gates remain required.
 
-The [authored-regeneration audit](../../experiments/streets/python_v1/gallery_dev67_regeneration_audit_01.json)
+The [authored-regeneration audit](../../streets_dev/experiments/streets/python_v1/gallery_dev67_regeneration_audit_01.json)
 now verifies all **102** cases, with no saved output mesh imported: source
 records, coordinates, connectivity and furniture equal the independent saved
 capture exactly, including the original 100 reference cases. The gallery has
@@ -532,7 +538,7 @@ Generation peaks at 560,672,768 resident / 636,633,088 private bytes under
 0.75 GiB, one numerical thread and the unchanged 1 GiB reserve. Runtime caches
 are released between fixtures.
 
-The [independent saved-mesh audit](../../experiments/streets/python_v1/gallery_quality_dev67_01/import_quality_checks.json)
+The [independent saved-mesh audit](../../streets_dev/experiments/streets/python_v1/gallery_quality_dev67_01/import_quality_checks.json)
 reads the actual float32 Blender buffers and checks every published part.
 All cells are convex quads, no cells exceed edge ratio 8 (maximum 7.99635),
 all heights stay within the global incoming crown envelope, and no self- or
@@ -540,30 +546,30 @@ inter-part overlaps occur. Every reference part retains exact positions and
 connectivity. This audit is a mesh-quality check, not a full independent
 physical-gradient or fresh editing qualification.
 
-The [independent source/receipt audit](../../experiments/streets/python_v1/merged_integration_dev67_audit_01.json)
+The [independent source/receipt audit](../../streets_dev/experiments/streets/python_v1/merged_integration_dev67_audit_01.json)
 verifies ten added and nine changed Python files against the dev66 checkpoint;
 the other 1,217 Python files remain exact. It also checks the terminal workers,
 scene hash, separate branches and empty index. The
-[verified dev67 recovery](../../experiments/streets/python_v1/checkpoints/dev67_01/checkpoint_checks.json)
+[verified dev67 recovery](../../streets_dev/experiments/streets/python_v1/checkpoints/dev67_01/checkpoint_checks.json)
 contains the complete source, documentation, review scene and scoped evidence.
 It is a continuation archive, not an installer or completed release.
 
-The [complete regression coverage audit](../../experiments/streets/python_v1/suite_dev67_resumed_audit_01.json)
+The [complete regression coverage audit](../../streets_dev/experiments/streets/python_v1/suite_dev67_resumed_audit_01.json)
 now verifies passing evidence for **all 953 ordered test IDs in 109 modules**
 on the final source, without missing/duplicate evidence IDs, failures, errors
 or skips. The first worker stopped at the system-memory reserve after
 545 observed passes; the terminal resumed suffix passes the remaining 408.
-The [partial evidence](../../experiments/streets/python_v1/suite_dev67_01/partial_evidence.json)
+The [partial evidence](../../streets_dev/experiments/streets/python_v1/suite_dev67_01/partial_evidence.json)
 and per-test suffix events remain separate. This is complete combined coverage,
 not one uninterrupted full-suite run. The largest private peak is 190,189,568
 bytes; the resumed worker uses a 0.25 GiB cap. Both retain one numerical thread
 and the unchanged 1 GiB system reserve. The
-[gallery capture plan](../../experiments/streets/python_v1/gallery_dev67_capture_plan_01.json)
+[gallery capture plan](../../streets_dev/experiments/streets/python_v1/gallery_dev67_capture_plan_01.json)
 pins all 102 saved fixtures, retaining the independent prior 100-case reference.
-The [real-input check plan](../../experiments/streets/python_v1/real_dev67_check_plan_01.json)
+The [real-input check plan](../../streets_dev/experiments/streets/python_v1/real_dev67_check_plan_01.json)
 pins three unchanged independent OSM samples and nine serial import/quality/
 reopening checks. All nine have now completed, with the
-[independent receipt/source audit](../../experiments/streets/python_v1/dev67_real_receipt_audit_01.json)
+[independent receipt/source audit](../../streets_dev/experiments/streets/python_v1/dev67_real_receipt_audit_01.json)
 checking terminal resources, actual saved-mesh quality, exact prior geometry,
 and complete prepared source identities/parameters (excluding each fresh
 import's new network UUID).
@@ -590,7 +596,7 @@ broader gallery reopening/editing and the stated construction work remain open.
 The new construction joins the shared profiled intersection, both complete
 curved Bundle runs, dynamic grass islands, actual rounded external caps,
 outer junctions and ordinary roads. The
-[complete-network matrix](../../experiments/streets/python_v1/merged_network_matrix_final_dev66_01/matrix_checks.json)
+[complete-network matrix](../../streets_dev/experiments/streets/python_v1/merged_network_matrix_final_dev66_01/matrix_checks.json)
 passes **21 of 22** captured variants, including both interpolation modes,
 width/control edits, unequal crowns, reversed storage, T/skew/five-arm layouts
 and the finer resolutions. Both baseline restorations are exact. The one
@@ -608,14 +614,14 @@ with its entire XYZ rim fixed. The matrix terminates with test failure for the
 one retained case; it is not an all-pass receipt. Peak sampled private usage is
 159,428,608 bytes under 0.5 GiB, one numerical thread and a 1 GiB reserve.
 
-The [Blender review scene](../../experiments/streets/python_v1/merged_network_review_dev66_02/python_streets_merged_runs_geometry_review.blend)
+The [Blender review scene](../../streets_dev/experiments/streets/python_v1/merged_network_review_dev66_02/python_streets_merged_runs_geometry_review.blend)
 retains all 100 existing editable fixtures unchanged and adds two **frozen
 geometry proofs**, Exact and Smooth, with exaggeration 10. Their source
 references are locked because normal addon Update is not connected to this
 new construction yet. The
-[native review check](../../experiments/streets/python_v1/merged_network_review_dev66_02/review_checks.json)
+[native review check](../../streets_dev/experiments/streets/python_v1/merged_network_review_dev66_02/review_checks.json)
 verifies the old source attributes, mesh buffers and furniture poses exactly.
-The [integration continuation notes](../../experiments/streets/python_v1/MERGED_RUN_INTEGRATION_NEXT.md)
+The [integration continuation notes](../../streets_dev/experiments/streets/python_v1/MERGED_RUN_INTEGRATION_NEXT.md)
 describe the pending early preparation, ownership aliases, dependency and
 furniture mappings. The helpers are external prototypes, not normal dispatch.
 
@@ -641,7 +647,7 @@ curb derivative rather than differentiating the clipped zero exterior. Peaks
 and plateaus have zero gradient. Existing crown values and curve sampling are
 unchanged.
 
-The [22 focused checks](../../experiments/streets/python_v1/profile_gradients_dev66_02/gradient_checks.json)
+The [22 focused checks](../../streets_dev/experiments/streets/python_v1/profile_gradients_dev66_02/gradient_checks.json)
 pass eight new differential/API tests and fourteen existing condition/work-reuse
 tests. They include independent height differences, Exact/Smooth, unequal
 widths, moving peaks/plateaus, rigid transforms, reversed source storage, exact
@@ -649,7 +655,7 @@ legacy arithmetic, singular-frame diagnostics and the six-family comparison
 with the uncached reference. Peak resident/private usage is 59,674,624/
 75,669,504 bytes under 0.25 GiB, one numerical thread and a 1 GiB reserve.
 
-The [new 22-case surface matrix](../../experiments/streets/python_v1/combined_dynamic_matrix_dev66_02/dynamic_matrix_checks.json)
+The [new 22-case surface matrix](../../streets_dev/experiments/streets/python_v1/combined_dynamic_matrix_dev66_02/dynamic_matrix_checks.json)
 passes the same combined-entrance variants with the actual dynamic gradient
 forwarded through the production compound boundary API. Every recorded
 boundary-gradient error is zero. The original 2 m round corners, zero exposed
@@ -659,7 +665,7 @@ The terminal worker takes 60.74 s and peaks at 80,486,400 resident / 98,410,496
 sampled private bytes under 0.25 GiB. This proves gradient consumption by the
 surface kernel; it does not select the combined-entrance provider in the addon.
 
-A separate [22-case connector experiment](../../experiments/streets/python_v1/combined_bridges_dev66_01/bridge_checks.json)
+A separate [22-case connector experiment](../../streets_dev/experiments/streets/python_v1/combined_bridges_dev66_01/bridge_checks.json)
 now attaches two whole-profile road strips to those saved junction meshes.
 Every mouth vertex and complete shared edge is retained exactly. The strips
 use the same changing crown field up to prepared body cuts; they do not sweep
@@ -670,7 +676,7 @@ angular longitudinal bound is 0.348%, and the checked entrance bound is 0.048%,
 both below 3%. The worker peaks at 44,212,224 resident / 65,961,984 sampled
 private bytes under 0.25 GiB and the same reserve/thread policy.
 
-An [independent saved-buffer check](../../experiments/streets/python_v1/combined_joined_publication_dev66_01/publication_checks.json)
+An [independent saved-buffer check](../../streets_dev/experiments/streets/python_v1/combined_joined_publication_dev66_01/publication_checks.json)
 also passes all 22 joined meshes: full float32 quad/slope checks, global
 non-overlap and the actual merged connector curbs. The largest measured Smooth
 connector outline error is 3.573 mm, within the existing 5 mm budget. It
@@ -687,7 +693,7 @@ not an actual Update or furniture proof for merged entrances. The
 [formulas and scope](STREETS_PYTHON_GEOMETRY.md#physical-profile-gradients-and-merged-mouth-strips-dev66)
 identify what is implemented and what remains.
 
-The [fresh Blender 5.2 regression](../../experiments/streets/python_v1/profile_gradient_native_dev66_01/generation_checks.json)
+The [fresh Blender 5.2 regression](../../streets_dev/experiments/streets/python_v1/profile_gradient_native_dev66_01/generation_checks.json)
 also passes nine existing fixtures through the actual Update operator: all six
 core families, the compound divided crossing and both previously supported
 internal-overlap modes. Every authored source record, published mesh buffer
@@ -698,13 +704,13 @@ scene is a selective regression artifact; the complete inspection gallery
 remains the preserved 100-fixture file below. It does not demonstrate normal
 Update for the new combined-entrance branch.
 
-The [source/scope audit](../../experiments/streets/python_v1/profile_gradients_dev66_audit_01.json)
+The [source/scope audit](../../streets_dev/experiments/streets/python_v1/profile_gradients_dev66_audit_01.json)
 verifies the four terminal construction/native jobs, their source/script and
 resource fingerprints, the empty Git index and separate branches. Relative to
 the dev65 recovery source, only four Python files changed and two test modules
 were added; all other 1,220 Python files are exact. The subsequent independent
 saved-buffer and drawing checks have their own receipts. The
-[dev66 recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev66_01/checkpoint_checks.json)
+[dev66 recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev66_01/checkpoint_checks.json)
 preserves the source, external prototype consumers, saved arrays and scoped
 evidence for continuation. It is not an installer or a completed goal.
 
@@ -716,7 +722,7 @@ The maintained-gallery tooling checkpoint fingerprint is
 `d4535b48695b0f4d594c2720229e7fc80175fe50bf91e47ca6769eca2a3a9546`:
 it adds only the complete fixture catalogue and its generator. All 1,222
 previous Python files, including the runtime and regression definitions, are
-byte-exact. The [promotion record](../../experiments/streets/python_v1/gallery_tooling_promotion_dev65_01.json)
+byte-exact. The [promotion record](../../streets_dev/experiments/streets/python_v1/gallery_tooling_promotion_dev65_01.json)
 distinguishes this tooling addition from the completed numerical run. The
 maintained generator's native reproduction proof is recorded separately below.
 The addon now partitions an overlapping curved Bundle at its declared interior
@@ -725,7 +731,7 @@ runs to the actual physical junction mouths. Explicit domain, pattern-sampling
 and cap policies replace the disposable probe's method substitutions. Existing
 separated construction remains selected when the run interiors do not overlap.
 
-The [25 focused runtime tests](../../experiments/streets/python_v1/internal_unions_dev65_03/remaining_suite_checks.json)
+The [25 focused runtime tests](../../streets_dev/experiments/streets/python_v1/internal_unions_dev65_03/remaining_suite_checks.json)
 pass Exact and Smooth construction, source-ribbon Boolean-union footprint/area
 checks, full float32 bilinear slope bounds, exact whole separator interfaces,
 four grass components and one connected filled network without cracks. They
@@ -736,11 +742,11 @@ The Bundle replacements stay below 8,000 quads. Source and Street 800 identities
 are unchanged. Peak resident usage is 134,504,448 bytes under a 0.25 GiB cap
 and the 1 GiB reserve.
 
-Open the [100-fixture Blender scene](../../experiments/streets/python_v1/internal_unions_native_dev65_01/python_streets_internal_unions.blend).
+Open the [100-fixture Blender scene](../../streets_dev/experiments/streets/python_v1/internal_unions_native_dev65_01/python_streets_internal_unions.blend).
 `attached_angular_multiple_0_internal` and `_3_internal` sit below the previous
 98 without overlapping; all previous saved source/mesh/furniture sets remain
-exact. The [actual Update checks](../../experiments/streets/python_v1/internal_unions_native_dev65_01/native_internal_union_checks.json)
-and [fresh selective reopening](../../experiments/streets/python_v1/internal_unions_reopen_dev65_01/native_internal_union_checks.json)
+exact. The [actual Update checks](../../streets_dev/experiments/streets/python_v1/internal_unions_native_dev65_01/native_internal_union_checks.json)
+and [fresh selective reopening](../../streets_dev/experiments/streets/python_v1/internal_unions_reopen_dev65_01/native_internal_union_checks.json)
 pass combined edits, unchanged meshes before Update, exact local/full/furniture,
 restoration, unrelated object identity, the consumed-interior anchor and cold
 reconstruction. The two earlier separated internal fixtures also retain their
@@ -751,40 +757,40 @@ Observed combined edits take 3.54/6.25 s, not a universal latency guarantee.
 Native private usage peaks at 505,831,424 bytes under 0.75 GiB; selective
 reopening peaks at 330,760,192 under 0.5 GiB. Both retain the 1 GiB reserve.
 
-The [independent saved-buffer audit](../../experiments/streets/python_v1/internal_unions_published_dev65_01/published_mesh_checks.json)
+The [independent saved-buffer audit](../../streets_dev/experiments/streets/python_v1/internal_unions_published_dev65_01/published_mesh_checks.json)
 finds one connected pavement with four holes, four grass disks closing those
 holes exactly, and one filled disk without cracks. All 504/574 grass edges are
 identical whole float32 paving edges. Original visible-ribbon union contours
 and areas agree; full physical bilinear slopes stay below 9.059%, with the
 incoming crown ceiling retained. A separate
-[longitudinal cone bound](../../experiments/streets/python_v1/internal_unions_longitudinal_dev65_01/longitudinal_checks.json)
+[longitudinal cone bound](../../streets_dev/experiments/streets/python_v1/internal_unions_longitudinal_dev65_01/longitudinal_checks.json)
 on the actual saved Bundle paving is at most 2.882%, below 3%. Neither audit
 regenerates a mesh. The
-[drawing](../../experiments/streets/python_v1/internal_unions_drawing_dev65_01/drawing_checks.json)
+[drawing](../../streets_dev/experiments/streets/python_v1/internal_unions_drawing_dev65_01/drawing_checks.json)
 uses those saved buffers; [formulas](STREETS_PYTHON_GEOMETRY.md#overlapping-curved-runs-around-an-interior-crossing)
 remain editable text. Full current-gallery/real-network/installer gates remain
 separate; the goal is incomplete.
 
 ![Actual overlapping internal runs and quad detail](images/python_internal_unions.svg)
 
-The [source/receipt audit](../../experiments/streets/python_v1/dev65_internal_audit_01.json)
+The [source/receipt audit](../../streets_dev/experiments/streets/python_v1/dev65_internal_audit_01.json)
 verifies all six scoped successes, exact native/reopened buffers, script and
 resource fingerprints, local document links, branch separation and an empty
 Git index. Against the dev64 recovery source, 1,212 Python files are exact, six
 changed and four were added, giving 1,222 in total. The existing angular body,
 curve certificates, profiles and intersection builders remain byte-exact.
 
-The [verified recovery archive](../../experiments/streets/python_v1/checkpoints/dev65_01/checkpoint_checks.json)
+The [verified recovery archive](../../streets_dev/experiments/streets/python_v1/checkpoints/dev65_01/checkpoint_checks.json)
 preserves all 1,222 Python files, the 100-fixture preview, documents, drawings,
 resume tools and scoped evidence. All 1,309 payloads and the reconstructed
 source fingerprint pass verification. Archive size is 32,101,634 bytes,
 SHA-256 `6df8ef2fb0309f6761ccbdd7f76ff793fa0c771085910733c543ee013bb411fc`.
 This is a recovery checkpoint, not an installer; later document edits do not
 alter it. The separate
-[938-test/105-module regression](../../experiments/streets/python_v1/suite_dev65_01/suite_checks.json)
+[938-test/105-module regression](../../streets_dev/experiments/streets/python_v1/suite_dev65_01/suite_checks.json)
 has completed successfully in one process: 938 passes, no failures, errors or
 skips, and unchanged source before/after. The
-[independent coverage audit](../../experiments/streets/python_v1/suite_dev65_audit_01.json)
+[independent coverage audit](../../streets_dev/experiments/streets/python_v1/suite_dev65_audit_01.json)
 verifies every recorded test exactly once in the declared order, the current
 module catalogue, all 1,222 Python sources and terminal resource receipts.
 The run took 3,271.73 s, peaking at 175,550,464 bytes resident and 191,934,464
@@ -794,7 +800,7 @@ The dev64 933-test proof below remains historical.
 
 ### Release preparation and complete fixture reproduction
 
-The [metadata-only preflight](../../experiments/streets/python_v1/qualification_inputs_dev65_01.json)
+The [metadata-only preflight](../../streets_dev/experiments/streets/python_v1/qualification_inputs_dev65_01.json)
 checks the 100 unique gallery IDs (including all six requested families), saved
 scene fingerprints, parser flags, fresh output paths and the three real OSM
 input hashes. It prepares 21 selective gallery jobs at 0.5 GiB and nine
@@ -802,30 +808,30 @@ fresh-import/quality/reopened-edit jobs at 0.75 GiB. The 660,979 expected galler
 quads are the total across 100 fixtures, not a per-Bundle count. The preflight
 runs no qualification job and is not a substitute for their terminal receipts.
 
-A [catalogue inspection](../../experiments/streets/python_v1/catalogue_gap_dev65_01.json)
+A [catalogue inspection](../../streets_dev/experiments/streets/python_v1/catalogue_gap_dev65_01.json)
 found that the original `tests/check_python_street_scene.py` creates 86 named
 fixtures while the published preview contains 100. The new
 [authored catalogue](../tests/_python_street_catalogue.py) includes the later
 island/attached/internal cases and the canonical saved chain widths. The
 original 86-fixture check remains unchanged for its existing regression work.
 The candidate's
-[parameter-only check](../../experiments/streets/python_v1/catalogue_candidate_dev65_01.json)
+[parameter-only check](../../streets_dev/experiments/streets/python_v1/catalogue_candidate_dev65_01.json)
 preserves all 86 raw legacy definitions exactly and isolates the twelve saved
 chain-width variants. The separate
-[native candidate run](../../experiments/streets/python_v1/gallery_generate_candidate_dev65_01/generation_checks.json)
+[native candidate run](../../streets_dev/experiments/streets/python_v1/gallery_generate_candidate_dev65_01/generation_checks.json)
 has now regenerated all 100 through the actual Update operator, matching every
 captured source record, mesh buffer and furniture pose exactly. It constructs
 660,979 direct quads across the whole gallery, imports no saved output mesh,
 releases caches between fixtures and lays out their actual bounds without
 overlap. The
 [maintained generator](../tests/generate_python_street_gallery.py) now passes
-its own [fresh native run](../../experiments/streets/python_v1/gallery_generated_dev65_01/generation_checks.json):
+its own [fresh native run](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev65_01/generation_checks.json):
 all 100 captured source records, mesh buffers and furniture poses remain exact.
-Open its [reproduced gallery](../../experiments/streets/python_v1/gallery_generated_dev65_01/python_streets_gallery.blend).
+Open its [reproduced gallery](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev65_01/python_streets_gallery.blend).
 It supplies pavement/grass preview materials, an optional editing-panel script
 and a layout without overlaps. This closes the catalogue/generation portion
 of the reproducibility gap. Its
-[fresh saved-panel check](../../experiments/streets/python_v1/gallery_bootstrap_dev65_01/bootstrap_checks.json)
+[fresh saved-panel check](../../streets_dev/experiments/streets/python_v1/gallery_bootstrap_dev65_01/bootstrap_checks.json)
 passes optional registration, repeated execution, respect for an already
 registered addon panel, cold Update and exact source/mesh/furniture/object
 identity preservation for a T-junction and the Smooth overlapping internal
@@ -833,14 +839,14 @@ crossing. The original file remains byte-exact. Generation peaks at
 624,881,664 sampled private bytes under a 0.75 GiB cap; reopening peaks at
 318,083,072 under 0.5 GiB. Both keep one numerical thread and the 1 GiB reserve.
 
-The [reproduction/source audit](../../experiments/streets/python_v1/gallery_reproduction_dev65_audit_01.json)
+The [reproduction/source audit](../../streets_dev/experiments/streets/python_v1/gallery_reproduction_dev65_audit_01.json)
 verifies both terminal jobs, all 100 exact reference comparisons, the two
 added tools and all 1,222 unchanged qualified Python files. The 938-test run
 belongs to the preserved geometry fingerprint; the two tooling additions have
 their own native proof. This closes gallery reproduction, not complete current
 gallery-quality/real-network/installer or broader construction qualification.
 
-The [source capture](../../experiments/streets/python_v1/catalogue_capture_dev65_01/catalogue_checks.json)
+The [source capture](../../streets_dev/experiments/streets/python_v1/catalogue_capture_dev65_01/catalogue_checks.json)
 has completed for all 100 fixtures, one at a time, after the numerical run.
 It reads existing source records and saved-buffer fingerprints without Update
 or backend preparation, and retains the original scene's hash. It peaks at
@@ -850,21 +856,21 @@ fingerprint and scoped dev65 successes remain preserved; the two tooling
 additions have the separate current fingerprint recorded above.
 
 The next construction direction is recorded with the
-[original tight-entrance failure references](../../experiments/streets/python_v1/next_bundle_entrance_dev65_notes.json).
+[original tight-entrance failure references](../../streets_dev/experiments/streets/python_v1/next_bundle_entrance_dev65_notes.json).
 Independent physical footprints are currently requested before the shared
 ownership plan. A short internal Section can therefore fail an individual
 corner solve before a merged exterior is available. The next prototype must
 prepare the actual combined Bundle entrance profile early, retain the original
 half-profile semantics and identities, and preserve strict radii on exposed
 corners. This is a design direction requiring validation, not a solved case.
-The [fresh current-source probe](../../experiments/streets/python_v1/combined_entrance_probe_dev65_01/entrance_probe.json)
+The [fresh current-source probe](../../streets_dev/experiments/streets/python_v1/combined_entrance_probe_dev65_01/entrance_probe.json)
 reproduces the contact failure in both Exact and Smooth: the requested 2 m
 corner reaches a 4 m internal approach at physical junction 500. It also
 partitions the six original exterior ends into two paired Bundle entrances and
 two independent cross-street entrances using incidence alone. This verifies
 the input inventory, not the combined profile's geometry or a new surface.
 
-The [reproduction recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev65_02/checkpoint_checks.json)
+The [reproduction recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev65_02/checkpoint_checks.json)
 preserves the current 1,224 Python files, reproduced 100-fixture scene, guides,
 drawings, regression/reproduction receipts and resume helpers. All 1,342
 payloads and the reconstructed source fingerprint pass verification. Archive
@@ -875,7 +881,7 @@ entrance probe are separate evidence; they do not alter that immutable archive.
 
 ### Combined Bundle entrances: standalone construction proof (24 October)
 
-The [22-case compound-kernel experiment](../../experiments/streets/python_v1/combined_compound_matrix_dev65_01/compound_matrix_checks.json)
+The [22-case compound-kernel experiment](../../streets_dev/experiments/streets/python_v1/combined_compound_matrix_dev65_01/compound_matrix_checks.json)
 now passes all eleven variants in Exact and Smooth modes: the base crossing,
 control/width edit, unequal widths, unequal crowns, translated datum, reversed
 source storage, resolutions 2 and 4, T-junction, skew crossing and five-arm
@@ -909,7 +915,7 @@ The [construction and formulas](STREETS_PYTHON_GEOMETRY.md#combined-entrances-fo
 distinguish these remaining tasks from the passing standalone proof.
 
 The first integration attempt's
-[32-test receipt](../../experiments/streets/python_v1/internal_unions_dev65_02/remaining_suite_checks.json)
+[32-test receipt](../../streets_dev/experiments/streets/python_v1/internal_unions_dev65_02/remaining_suite_checks.json)
 caught two existing free-ended separator cases: a missing attached port was
 incorrectly treated as a construction error. The explicit eligibility check
 now delegates those inputs to the existing separator provider, retaining their
@@ -932,26 +938,26 @@ continuation runs only after ordinary block charts fail. The new angular chart
 tries longitudinal blocks first for long thin regions and validates the mapped
 physical quads at the unchanged limit eight.
 
-The [25 focused tests](../../experiments/streets/python_v1/internal_angular_core_dev64_01/island_chain_checks.json)
+The [25 focused tests](../../streets_dev/experiments/streets/python_v1/internal_angular_core_dev64_01/island_chain_checks.json)
 pass both Exact and Smooth separated internal crossings: complete float32
 interfaces, combined control/width edits, exact local/full/restoration,
 source-relative furniture, unrelated outputs and translated-datum E0.
 The earlier inventory-only and failed chart probes remain historical evidence;
 the integrated construction now passes their separated family.
 
-Open the [98-fixture Blender scene](../../experiments/streets/python_v1/internal_angular_native_dev64_02/python_streets_internal_crossings.blend).
+Open the [98-fixture Blender scene](../../streets_dev/experiments/streets/python_v1/internal_angular_native_dev64_02/python_streets_internal_crossings.blend).
 The two new examples, `attached_angular_separated_0_internal` and
 `attached_angular_separated_3_internal`, sit below the previous 96 without
 overlap. All previous source/mesh/furniture sets are exact. Resolution is 1 and
-Exaggeration 10. [Actual Update operations](../../experiments/streets/python_v1/internal_angular_native_dev64_02/native_internal_checks.json)
-and [fresh selective reopening](../../experiments/streets/python_v1/internal_angular_reopen_dev64_01/native_internal_checks.json)
+Exaggeration 10. [Actual Update operations](../../streets_dev/experiments/streets/python_v1/internal_angular_native_dev64_02/native_internal_checks.json)
+and [fresh selective reopening](../../streets_dev/experiments/streets/python_v1/internal_angular_reopen_dev64_01/native_internal_checks.json)
 pass combined edits, full equality/restoration, furniture (including an anchor
 on the consumed interior Section 301), unrelated object identity and cold
 reconstruction. The first native harness attempt incorrectly passed flat
 buffers to the slope checker; the corrected test reshapes the same buffers.
 That failure remains recorded and required no addon change.
 
-The [independent published-buffer audit](../../experiments/streets/python_v1/internal_published_dev64_01/published_mesh_checks.json)
+The [independent published-buffer audit](../../streets_dev/experiments/streets/python_v1/internal_published_dev64_01/published_mesh_checks.json)
 finds one connected pavement with two holes, two separator disks closing those
 holes exactly, and one connected filled surface without cracks. It checks
 556/652 identical whole float32 grass edges and full bilinear slope bounds,
@@ -967,12 +973,12 @@ Both use the unchanged 1 GiB system-reserve configuration.
 See the [construction and formulas](STREETS_PYTHON_GEOMETRY.md#angular-separator-charts-at-internal-physical-junctions).
 The 933-test/104-module run at `suite_dev64_01` stopped at the configured system
 reserve after **517 passing tests**, with no test failures. Its
-[partial evidence](../../experiments/streets/python_v1/suite_dev64_01/partial_evidence.json)
+[partial evidence](../../streets_dev/experiments/streets/python_v1/suite_dev64_01/partial_evidence.json)
 retains those exact test IDs and the interrupted case. The
-[bounded continuation](../../experiments/streets/python_v1/suite_dev64_resume_01/resume_checks.json)
+[bounded continuation](../../streets_dev/experiments/streets/python_v1/suite_dev64_resume_01/resume_checks.json)
 runs only the remaining 416 cases, in batches of 16 under a 192 MiB process cap
 and the same 1 GiB system reserve. All 26 batches are now terminal and pass.
-The [independent coverage audit](../../experiments/streets/python_v1/suite_dev64_audit_01.json)
+The [independent coverage audit](../../streets_dev/experiments/streets/python_v1/suite_dev64_audit_01.json)
 matches current test discovery to the original list and verifies that all 933
 tests passed exactly once across the prefix and batches, with zero failures,
 errors or skips and an unchanged dev64 source. It rechecks script and resource
@@ -982,13 +988,13 @@ Broader overlapping-member internal junctions still need pavement-union
 construction; the tight central overlap's requested-radius contact solve also
 remains open. Current full-gallery, real-import, installer and performance
 gates remain separate. The goal is incomplete.
-The [current source/receipt audit](../../experiments/streets/python_v1/dev64_internal_audit_01.json)
+The [current source/receipt audit](../../streets_dev/experiments/streets/python_v1/dev64_internal_audit_01.json)
 checks all five terminal successes, exact scripts/source, branch separation,
 resource caps and document links. Against the verified dev63 checkpoint, 1,210
 Python files are exact, six changed and two were added. The existing angular
 pavement bridges, profiles and intersection builders remain byte-exact.
-The [dev64 recovery archive](../../experiments/streets/python_v1/checkpoints/dev64_01/streets_python_dev64_recovery.zip)
-and [verification](../../experiments/streets/python_v1/checkpoints/dev64_01/checkpoint_checks.json)
+The [dev64 recovery archive](../../streets_dev/experiments/streets/python_v1/checkpoints/dev64_01/streets_python_dev64_recovery.zip)
+and [verification](../../streets_dev/experiments/streets/python_v1/checkpoints/dev64_01/checkpoint_checks.json)
 preserve all 1,218 repository Python files, the 98-fixture preview, diagrams and
 selected resume/evidence files. All 1,294 payloads and the reconstructed source
 fingerprint are verified. The archive is 30,959,232 bytes, SHA-256
@@ -1005,13 +1011,13 @@ junctions may belong to one physical compound; that shared owner supplies the
 actual profile samples, stations and uninterrupted separator curb. Replacing
 these by the two unmerged junction layouts would create a different boundary.
 
-The [incidence checks](../../experiments/streets/python_v1/visible_runs_dev64_02/run_inventory_checks.json)
+The [incidence checks](../../streets_dev/experiments/streets/python_v1/visible_runs_dev64_02/run_inventory_checks.json)
 cover both interpolation modes, reversed storage, a compatible multi-Section
 run and invalid adjacency/order. The
-[parameter checks](../../experiments/streets/python_v1/visible_parameters_dev64_01/profile_parameter_checks.json)
+[parameter checks](../../streets_dev/experiments/streets/python_v1/visible_parameters_dev64_01/profile_parameter_checks.json)
 retain all original nonuniform transverse samples and leave the shared pattern
 cache immutable. The
-[compound API checks](../../experiments/streets/python_v1/visible_compound_metadata_dev64_02/compound_metadata_checks.json)
+[compound API checks](../../streets_dev/experiments/streets/python_v1/visible_compound_metadata_dev64_02/compound_metadata_checks.json)
 exercise the actual `CompoundProduct` methods on small prescribed arrays:
 distinct logical sites resolve to one physical owner, profile heights decode
 correctly at exaggerations 1, 10 and 0, and a cap cannot cross another mouth.
@@ -1019,8 +1025,8 @@ Consumed mouths are rejected. These are metadata/parameter checks, **not a
 generated overlap surface or Update qualification**. The compound check peaks
 at 36,831,232 resident bytes under a 0.125 GiB cap and the 1 GiB reserve.
 
-The [separated control](../../experiments/streets/python_v1/compound_runs_dev64_01/compound_run_checks.json)
-and [overlapping Exact/Smooth probe](../../experiments/streets/python_v1/compound_runs_dev64_02/compound_run_checks.json)
+The [separated control](../../streets_dev/experiments/streets/python_v1/compound_runs_dev64_01/compound_run_checks.json)
+and [overlapping Exact/Smooth probe](../../streets_dev/experiments/streets/python_v1/compound_runs_dev64_02/compound_run_checks.json)
 subsequently pass on the exact dev64 source. The latter replaces the four
 member road meshes with 4,450/5,475 paving-and-grass quads. Original compound
 mouths, complete float32 grass interfaces, full physical slope/crown bounds,
@@ -1049,10 +1055,10 @@ needed, it retains mandatory Exact curb corners or more accurate Smooth samples
 using the existing direct-quad patterns. A captured 20 m-radius example had
 48.0 mm Exact / 6.23 mm Smooth rim errors. The bounded prototype corrected those
 to numerical precision / 3.27 mm and retained both older 40 m examples' buffers
-[exactly](../../experiments/streets/python_v1/angular_source_bridge_preservation_dev63_01.json).
+[exactly](../../streets_dev/experiments/streets/python_v1/angular_source_bridge_preservation_dev63_01.json).
 The integrated tighter-bend regression is part of the current qualification.
 
-The [13 focused tests](../../experiments/streets/python_v1/angular_attached_core_dev63_02/island_chain_checks.json)
+The [13 focused tests](../../streets_dev/experiments/streets/python_v1/angular_attached_core_dev63_02/island_chain_checks.json)
 pass whole published-precision interfaces and mouths, one/three/two-island
 Updates, incremental/full equality, restoration, reversed source direction,
 resolution 2, translated zero-exaggeration queries and tighter source curbs.
@@ -1060,7 +1066,7 @@ They also fix the unnecessary opposite-member anchor rebuild found by the
 complete dev62 regression: a placement consumes the separator digest only when
 its plan requires the completed separator height query.
 
-The [combined Blender scene](../../experiments/streets/python_v1/angular_states_native_dev63_02/python_streets_separator_states.blend)
+The [combined Blender scene](../../streets_dev/experiments/streets/python_v1/angular_states_native_dev63_02/python_streets_separator_states.blend)
 contains **96 fixtures**, preserving the previous 90 saved source/mesh/furniture
 sets. Its six new examples are the Exact/Smooth `attached_angular_separated`,
 `attached_angular_multiple` and `attached_angular_270_*_radius_20` cases.
@@ -1077,8 +1083,8 @@ Junctions, crossroad Sections and unrelated control roads are excluded.
 
 ![Actual saved meshes of the six new examples](images/python_separator_states.svg)
 
-[Native Update checks](../../experiments/streets/python_v1/angular_states_native_dev63_02/native_states_checks.json)
-and [fresh-process selective reopening](../../experiments/streets/python_v1/angular_states_reopen_dev63_01/native_states_checks.json)
+[Native Update checks](../../streets_dev/experiments/streets/python_v1/angular_states_native_dev63_02/native_states_checks.json)
+and [fresh-process selective reopening](../../streets_dev/experiments/streets/python_v1/angular_states_reopen_dev63_01/native_states_checks.json)
 pass all six examples, including combined width/control edits and actual
 one/three/two-region button-driven updates, full equality and restoration,
 furniture, remote identity on each incremental edit, and cold reconstruction.
@@ -1090,23 +1096,23 @@ No geometry or quality limit was relaxed. Native resident/private peaks are
 394,932,224/447,352,832 bytes under a 0.75 GiB cap and unchanged 1 GiB reserve.
 Fresh selective reopening uses a 0.5 GiB cap.
 
-The [independent saved-buffer audit](../../experiments/streets/python_v1/angular_states_physical_dev63_01/published_states_checks.json)
+The [independent saved-buffer audit](../../streets_dev/experiments/streets/python_v1/angular_states_physical_dev63_01/published_states_checks.json)
 passes physical and longitudinal slopes, the crown ceiling, whole grass edges,
 and two-way footprint/area/topology checks against the Boolean union of original
 visible carriageway ribbons. It never regenerates meshes. Exact published-rim
 errors are at most 2.56 micrometres; Smooth errors at most 3.83 mm. A 20-micrometre
 publication allowance is separate from the original 5 mm Smooth curve budget.
 The highest longitudinal bound is 2.99684%, within the existing 3% limit.
-The [illustration](../../experiments/streets/python_v1/angular_states_drawing_dev63_03/drawing_checks.json)
+The [illustration](../../streets_dev/experiments/streets/python_v1/angular_states_drawing_dev63_03/drawing_checks.json)
 also reads the actual saved float32 buffers.
 
-The complete [926-test/103-module regression](../../experiments/streets/python_v1/suite_dev63_01/suite_checks.json)
+The complete [926-test/103-module regression](../../streets_dev/experiments/streets/python_v1/suite_dev63_01/suite_checks.json)
 now passes with zero failures/errors/skips and unchanged source before/after.
 It peaks at 176,381,952 resident and 191,303,680 private bytes under a 0.25 GiB
 process cap and the unchanged 1 GiB reserve. This includes the separated-member
 anchor-dependency regression that failed the older dev62 run.
-The [serial 96-fixture Blender queue](../../experiments/streets/python_v1/gallery_dev63_qualification_01.json)
-has now completed successfully. The [independent receipt audit](../../experiments/streets/python_v1/dev63_gallery_receipt_audit_01.json)
+The [serial 96-fixture Blender queue](../../streets_dev/experiments/streets/python_v1/gallery_dev63_qualification_01.json)
+has now completed successfully. The [independent receipt audit](../../streets_dev/experiments/streets/python_v1/dev63_gallery_receipt_audit_01.json)
 checks all 20 terminal jobs and all 96 cold/forced-full reconstructions against
 saved source, mesh and furniture buffers. Published convexity, crown bounds,
 overlap and ratio checks pass for 620,608 quads across the complete gallery;
@@ -1118,12 +1124,12 @@ current independent real-import and installer gates, broader internal/attached/c
 topologies, profile changes, mixed bent joins and costly Updates remain open.
 
 See [construction and formulas](STREETS_PYTHON_GEOMETRY.md#source-preserving-entrance-samples-and-cap-parity).
-The [increment audit](../../experiments/streets/python_v1/dev63_increment_audit_01.json)
+The [increment audit](../../streets_dev/experiments/streets/python_v1/dev63_increment_audit_01.json)
 verifies all six terminal jobs and exact scripts/source, resource
 limits, document links, branch separation and the empty index. Against dev62,
 1,206 Python files are exact, eight changed and two were added, all within the
 backend/tests. The older angular surface and island builders remain byte-exact.
-The [verified recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev63_03/checkpoint_checks.json)
+The [verified recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev63_03/checkpoint_checks.json)
 preserves 1,342 payloads, all 1,216 repository Python files, documentation,
 corrected UTF-8 drawings, the 96-fixture preview, full-regression/gallery
 receipts and resume tools. It is 29,326,260 bytes, SHA-256
@@ -1141,7 +1147,7 @@ Bundle body, merges overlapping pavement and fills the separated ends with
 grass adjoining the original rounded junction/crossroad boundaries. Source
 controls, radii, widths and persistent entity IDs remain authoritative.
 
-The [90-fixture Blender scene](../../experiments/streets/python_v1/angular_attached_native_dev62_01/python_streets_attached_angular.blend)
+The [90-fixture Blender scene](../../streets_dev/experiments/streets/python_v1/angular_attached_native_dev62_01/python_streets_attached_angular.blend)
 adds `attached_angular_270_0` (Exact) and `attached_angular_270_3` (Smooth) below
 the previous 88 fixtures, preserving all their saved source, mesh and furniture
 data. The new Bundle pavement plus grass uses **3,884/4,867 quads**, excluding
@@ -1151,34 +1157,34 @@ islands, Resolution 1 and Exaggeration 10.
 
 ![Actual saved meshes and rounded junction details](images/python_attached_angular.svg)
 
-The [six focused tests](../../experiments/streets/python_v1/angular_attached_core_dev62_01/attached_core_checks.json)
+The [six focused tests](../../streets_dev/experiments/streets/python_v1/angular_attached_core_dev62_01/attached_core_checks.json)
 pass both modes, all whole float32 separator and entrance edges, reversed
 source direction, resolution 2, vertex/width incremental-full equality and
 restoration, remote identity/furniture preservation, and zero exaggeration on
 a translated datum. Furniture tasks now declare their Bundle separator as a
 dependency so cap height queries are ready before placement evaluation.
 
-The [actual Blender Update checks](../../experiments/streets/python_v1/angular_attached_native_dev62_01/native_attached_checks.json)
-and [fresh-process selective reopening](../../experiments/streets/python_v1/angular_attached_reopen_dev62_01/native_attached_checks.json)
+The [actual Blender Update checks](../../streets_dev/experiments/streets/python_v1/angular_attached_native_dev62_01/native_attached_checks.json)
+and [fresh-process selective reopening](../../streets_dev/experiments/streets/python_v1/angular_attached_reopen_dev62_01/native_attached_checks.json)
 pass combined vertex/width edits, exact full rebuilding, restoration and cold
 reconstruction. Measured native edits take 0.901/1.279 seconds; reopening edits
 take 0.931/1.177 seconds. These are scoped observations, not a universal latency
 claim. Peak native resident/private usage is 374,603,776/450,011,136 bytes under
 a 0.5 GiB process cap and unchanged 1 GiB system reserve.
 
-The [independent saved-buffer audit](../../experiments/streets/python_v1/angular_attached_slopes_dev62_01/published_slope_checks.json)
+The [independent saved-buffer audit](../../streets_dev/experiments/streets/python_v1/angular_attached_slopes_dev62_01/published_slope_checks.json)
 passes the physical slope/crown limits, 2.946%/2.578% angular longitudinal
 bounds and 328/380 exact whole grass/pavement edges without regenerating any
-mesh. The [drawing](../../experiments/streets/python_v1/angular_attached_drawing_dev62_01/drawing_checks.json)
+mesh. The [drawing](../../streets_dev/experiments/streets/python_v1/angular_attached_drawing_dev62_01/drawing_checks.json)
 likewise reads the actual saved float32 buffers.
-The [increment audit](../../experiments/streets/python_v1/dev62_increment_audit_01.json)
+The [increment audit](../../streets_dev/experiments/streets/python_v1/dev62_increment_audit_01.json)
 verifies all five terminal jobs, exact source/script fingerprints, resource
 limits, document links, preserved branches and an empty staging index. Against
 the dev61 checkpoint, 1,205 Python files are exact; four changes and five
 additions are confined to backend/tests. The old angular surface/island builders
 remain byte-exact.
 
-The complete [dev62 regression](../../experiments/streets/python_v1/suite_dev62_01/suite_checks.json)
+The complete [dev62 regression](../../streets_dev/experiments/streets/python_v1/suite_dev62_01/suite_checks.json)
 is terminal: 923 tests, one failure, zero errors, on unchanged source. It exposed
 the unnecessary opposite-member anchor rebuild corrected in dev63 above.
 That run is not a passing release gate. The previous
@@ -1194,7 +1200,7 @@ an overlap. Internal junctions, compound-consumed mouths, broader island/contact
 topologies, profile changes and mixed bent joins remain construction work.
 See the [construction and formulas](STREETS_PYTHON_GEOMETRY.md#curved-bundles-attached-to-real-junctions).
 
-The [verified recovery archive](../../experiments/streets/python_v1/checkpoints/dev62_01/checkpoint_checks.json)
+The [verified recovery archive](../../streets_dev/experiments/streets/python_v1/checkpoints/dev62_01/checkpoint_checks.json)
 preserves the exact source, documentation/drawings, 90-fixture preview, resume
 helpers and selected receipts. It is 27,031,945 bytes with SHA-256
 `189db5ff4b22ba2975d7e78b3df20647811dd13a0c922243fe7d1491d444ebf3`.
@@ -1217,35 +1223,35 @@ the same construction instead of forcing an unnecessarily dense whole body.
 No triangle mesh, source reshaping, relaxed quality limit or increased memory
 budget is involved. Existing zero/single-island inputs retain their old builder.
 
-The [19 focused tests](../../experiments/streets/python_v1/angular_island_core_dev61_01/island_chain_checks.json)
+The [19 focused tests](../../streets_dev/experiments/streets/python_v1/angular_island_core_dev61_01/island_chain_checks.json)
 pass on unchanged source, with zero failures/errors and 84,320,256 peak resident
 bytes. They cover Exact/Smooth float32 publication, complete physical grass
 interfaces, one connected pavement and separate islands, two/three/four islands,
 reversed source storage, vertex and width edits, incremental/full equality,
 exact restoration and unchanged remote meshes/anchors, plus the union/index
 regressions. The four-island Smooth Bundle now uses
-[8,383 quads](../../experiments/streets/python_v1/angular_four_islands_dev61_02/multi_island_checks.json),
+[8,383 quads](../../streets_dev/experiments/streets/python_v1/angular_four_islands_dev61_02/multi_island_checks.json),
 versus the earlier 13,669 on the identical source layout. Both numerical runs
 retain the original quality/crown/slope/overlap checks; this is a density
 improvement, not a controlled execution-time benchmark.
 
-The [combined Blender preview](../../experiments/streets/python_v1/angular_island_native_dev61_03/python_streets_island_chains.blend)
+The [combined Blender preview](../../streets_dev/experiments/streets/python_v1/angular_island_native_dev61_03/python_streets_island_chains.blend)
 now contains **88 fixtures**: the previous 86 retain exact saved source,
 meshes and furniture; the two new three-island examples use Exact/Smooth and
 default R1/E10. Their Bundle surfaces contain 7,886/8,386 quads respectively,
 excluding each unrelated 1,600-quad control road. Actual Update-button edits,
 full rebuilding, restoration, remote identity and cold reconstruction
-[pass](../../experiments/streets/python_v1/angular_island_native_dev61_03/native_island_checks.json),
-as does [fresh-process reopening](../../experiments/streets/python_v1/angular_island_reopen_dev61_01/native_island_checks.json).
+[pass](../../streets_dev/experiments/streets/python_v1/angular_island_native_dev61_03/native_island_checks.json),
+as does [fresh-process reopening](../../streets_dev/experiments/streets/python_v1/angular_island_reopen_dev61_01/native_island_checks.json).
 The largest native worker uses 359,743,488 resident / 411,897,856 private bytes,
 below the unchanged cap/reserve. The previous 86 are preserved, not claimed as
 a new complete dev61 regeneration audit.
 
-The [independent saved-float32 slope audit](../../experiments/streets/python_v1/angular_island_published_slopes_dev61_01/published_slope_checks.json)
+The [independent saved-float32 slope audit](../../streets_dev/experiments/streets/python_v1/angular_island_published_slopes_dev61_01/published_slope_checks.json)
 also passes: longitudinal bounds are 2.983%/2.754%, physical slopes stay under
 their 10% limit, the crown ceiling is retained and all 510/474 grass boundary
 edges are exact whole pavement edges. It does not regenerate the meshes.
-The [density boundary audit](../../experiments/streets/python_v1/angular_island_density_boundaries_dev61_01/density_boundary_checks.json)
+The [density boundary audit](../../streets_dev/experiments/streets/python_v1/angular_island_density_boundaries_dev61_01/density_boundary_checks.json)
 proves both directions of complete physical polygon coverage for the four-island
 comparison, with identical grass buffers. These are separate from final whole
 suite, fresh real-import and installer gates. Higher resolutions of the new
@@ -1253,17 +1259,17 @@ long island-chain examples are not qualified by these R1 checks.
 The remaining construction work
 includes attached Street ports and internal junctions, broader island topology,
 further junction profile changes, mixed bent interpolation and costly Updates.
-The [increment audit](../../experiments/streets/python_v1/dev61_increment_audit_01.json)
+The [increment audit](../../streets_dev/experiments/streets/python_v1/dev61_increment_audit_01.json)
 checks exact source fingerprints, six successful bounded jobs, the unchanged
 legacy single-island surface builder, local document links and preserved Git
 branches. The complete current regression is a separate run; no whole-goal or
 installer completion is claimed by this increment.
-The [verified recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev61_01/checkpoint_checks.json)
+The [verified recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev61_01/checkpoint_checks.json)
 preserves the current Python source, combined preview, resume helpers and
 selected receipts. It remains separate from an installer or completed release.
 
 The current complete regression attempt stopped at the system-wide memory
-reserve after [687 of 917 tests](../../experiments/streets/python_v1/suite_dev61_01/partial_evidence.json)
+reserve after [687 of 917 tests](../../streets_dev/experiments/streets/python_v1/suite_dev61_01/partial_evidence.json)
 completed without recorded failures. The worker used 172,810,240 resident
 bytes; 230 tests remain, including the interrupted case. A subsequent
 remaining-tests attempt was rejected by memory preflight before any child
@@ -1276,14 +1282,14 @@ completed prefix, recording each finished test separately.
 
 The authored Exact/Smooth example has two curved, overlapping Bundle members
 and four real three-arm endpoint junctions. Original paths pass continuous
-separation and regularity checks, and [actual mouth preparation](../../experiments/streets/python_v1/attached_angular_ports_dev61_01/attached_port_checks.json)
-passes. The [production baseline](../../experiments/streets/python_v1/attached_angular_baseline_dev61_01/attached_angular_checks.json)
+separation and regularity checks, and [actual mouth preparation](../../streets_dev/experiments/streets/python_v1/attached_angular_ports_dev61_01/attached_port_checks.json)
+passes. The [production baseline](../../streets_dev/experiments/streets/python_v1/attached_angular_baseline_dev61_01/attached_angular_checks.json)
 still rejects the complete separator construction. This is a valid input that
 needs a construction branch, not a reason to weaken input or mesh checks.
 
-Outside the addon, [four entrance connectors per mode](../../experiments/streets/python_v1/angular_bridge_candidate_dev61_01/angular_bridge_checks.json)
+Outside the addon, [four entrance connectors per mode](../../streets_dev/experiments/streets/python_v1/angular_bridge_candidate_dev61_01/angular_bridge_checks.json)
 now retain exact mouths, full profiles, direct quads and accepted slope bounds.
-The [two open-ended grass body pieces per mode](../../experiments/streets/python_v1/angular_open_candidate_dev61_01/open_island_checks.json)
+The [two open-ended grass body pieces per mode](../../streets_dev/experiments/streets/python_v1/angular_open_candidate_dev61_01/open_island_checks.json)
 also pass source-curb, quad-quality and overlap checks, at 42,536,960 peak
 resident bytes with the unchanged system reserve. The pavement body and actual
 rounded junction caps still need to be assembled with those pieces, integrated
@@ -1300,10 +1306,10 @@ limit, a conservative spatial index selects candidate edge pairs before the
 same intersection arithmetic. Queries, repeated bucket entries and candidate
 comparisons remain bounded; curves, epsilon and segment limits are unchanged.
 
-The [14 focused tests](../../experiments/streets/python_v1/region_pair_core_dev60_02/region_pair_checks.json)
+The [14 focused tests](../../streets_dev/experiments/streets/python_v1/region_pair_core_dev60_02/region_pair_checks.json)
 pass, including exact buffer/provenance comparisons, self-contact diagnostics,
 candidate completeness and work-budget checks. The
-[Smooth multi-island diagnostic](../../experiments/streets/python_v1/angular_multi_spatial_dev60_02/multi_island_checks.json)
+[Smooth multi-island diagnostic](../../streets_dev/experiments/streets/python_v1/angular_multi_spatial_dev60_02/multi_island_checks.json)
 now prepares 4,128 boundary samples into one outer loop and three holes. It
 still fails at the explicit missing multi-island surface decomposition; this
 is preparation progress, not support for that Bundle's final mesh. The worker
@@ -1321,29 +1327,29 @@ gallery checkpoint; its results do not qualify the new source automatically.
 The dev59 source is `0.1.0.dev59`, fingerprint
 `c04f837fc5a81a841a6d421cdcd66cdcc9bd1f08fc3f4e51bde510a61b162f9c`.
 The dev58 numerical suite below passed, but its next Blender resolution gate
-captured an [Exact180 R4 separator failure](../../experiments/streets/python_v1/angular_selective_resolution_01_dev58_01/failure.txt).
+captured an [Exact180 R4 separator failure](../../streets_dev/experiments/streets/python_v1/angular_selective_resolution_01_dev58_01/failure.txt).
 Uniform subdivision of a tapered valid parent quad can make its smaller cells
 less uniform: four separator cells exceed ratio eight, with a maximum 9.53067.
 
-The [native fixed-boundary experiment](../../experiments/streets/python_v1/refined_separator_native_01/refinement_checks.json)
+The [native fixed-boundary experiment](../../streets_dev/experiments/streets/python_v1/refined_separator_native_01/refinement_checks.json)
 reduces the maximum to 7.58145 in float64 / 7.58178 after float32 conversion.
 It keeps all boundary XYZ and face indices, leaves the separator exactly flat,
 and adds no vertices or faces. Dev59 applies the existing bounded
 `ProfiledQuadCorrection` only to a refined separator that fails the original
 ratio limit, before constructing queries and auditing pavement interfaces.
-The [12-test focused regression](../../experiments/streets/python_v1/separator_refinement_core_dev59_01/refinement_core_checks.json)
+The [12-test focused regression](../../streets_dev/experiments/streets/python_v1/separator_refinement_core_dev59_01/refinement_core_checks.json)
 now passes on unchanged source, including both selected R4 islands, shared
 interfaces, publication float32 quality, profile correction and subdivision
 contracts. Peak resident usage is 141,787,136 bytes. The
-[actual Blender resolution retry](../../experiments/streets/python_v1/angular_selective_resolution_01_dev59_01/case_checks.json)
+[actual Blender resolution retry](../../streets_dev/experiments/streets/python_v1/angular_selective_resolution_01_dev59_01/case_checks.json)
 now passes R2/E0 and R4/E10, exact full-build comparison, source/mesh/furniture
 restoration, baseline version-upgrade equivalence and the unchanged remote
 network. The delivery scene stays untouched. Peak resident/private usage is
 409,124,864/474,464,256 bytes. The
-[Smooth225 resolution sequence](../../experiments/streets/python_v1/angular_selective_resolution_02_dev59_01/case_checks.json)
+[Smooth225 resolution sequence](../../streets_dev/experiments/streets/python_v1/angular_selective_resolution_02_dev59_01/case_checks.json)
 also passes, with 430,051,328/483,631,104 peak resident/private bytes.
 
-The [complete selective gallery check](../../experiments/streets/python_v1/gallery_selective_dev59_qualification_02.json)
+The [complete selective gallery check](../../streets_dev/experiments/streets/python_v1/gallery_selective_dev59_qualification_02.json)
 now passes all 86 saved fixtures on this source. Workers load one reference
 and one delivery fixture in turn, then release their datablocks. All 74
 unmodified fixtures retain their exact reference source/mesh/furniture; the
@@ -1358,7 +1364,7 @@ their separate control roads. Maximum edge ratio is 7.99635. Peak gallery reside
 usage is 281,169,920/341,639,168 bytes. The first trial stopped on a test-helper
 tuple/list comparison mismatch; canonicalizing snapshots fixed the comparison
 without changing source values or geometry guards. That failed receipt is kept.
-The [receipt audit](../../experiments/streets/python_v1/dev59_gallery_receipt_audit_01.json)
+The [receipt audit](../../streets_dev/experiments/streets/python_v1/dev59_gallery_receipt_audit_01.json)
 checks all eighteen completed worker receipts, both selected resolution
 sequences, script hashes, source fingerprint and the unchanged scene hashes.
 The full current 905-test suite, fresh real imports, installer and broader
@@ -1376,34 +1382,34 @@ all physical/cut boundary XYZ and connectivity remain exact, and moved heights
 are evaluated from the same profile field. Original ratio, crown and slope
 limits still apply. No extra faces or relaxed limits are introduced.
 
-The [native diagnostic](../../experiments/streets/python_v1/angular_edit_slopes_native_01/diagnostic_checks.json)
+The [native diagnostic](../../streets_dev/experiments/streets/python_v1/angular_edit_slopes_native_01/diagnostic_checks.json)
 reproduces the captured +0.1 m Exact270 edit in a fresh build, ruling out the
 initial incremental-cache suspicion. One local quad reaches 12.2625% despite
 an underlying field of about 2.8%. The
-[scoped repair](../../experiments/streets/python_v1/angular_edit_shape_native_01/diagnostic_checks.json)
+[scoped repair](../../streets_dev/experiments/streets/python_v1/angular_edit_shape_native_01/diagnostic_checks.json)
 reduces that quad to 4.5688% with exact boundary XYZ and unchanged connectivity.
-The [integrated native edit/recovery](../../experiments/streets/python_v1/angular_selective_edit_10_dev58_02/case_checks.json)
+The [integrated native edit/recovery](../../streets_dev/experiments/streets/python_v1/angular_selective_edit_10_dev58_02/case_checks.json)
 now passes the captured case, including actual vertex and width Update,
 exact local/full buffers and furniture, restoration, cold reconstruction and
 remote-output preservation. The saved target and unrelated fixture also retain
 their exact source/mesh/furniture during version upgrade. Peak resident/private
 usage is 292,651,008/361,639,936 bytes. The separate
-[Smooth270 edit sequence](../../experiments/streets/python_v1/angular_selective_edit_11_dev58_01/case_checks.json)
+[Smooth270 edit sequence](../../streets_dev/experiments/streets/python_v1/angular_selective_edit_11_dev58_01/case_checks.json)
 also passes all those contracts, with 295,870,464/364,388,352 peak
 resident/private bytes. The first dev58 trial reached publication
 but its test assumed the old version manifest would not invalidate remote
 outputs. The corrected helper upgrades first and independently proves saved
 buffer equivalence before measuring incremental edits; the failed receipt is
-retained. The [source-pinned serial queue](../../experiments/streets/python_v1/profile_shape_dev58_qualification_01.json)
-now passes [all 904 numerical regressions](../../experiments/streets/python_v1/suite_dev58_01/suite_checks.json)
+retained. The [source-pinned serial queue](../../streets_dev/experiments/streets/python_v1/profile_shape_dev58_qualification_01.json)
+now passes [all 904 numerical regressions](../../streets_dev/experiments/streets/python_v1/suite_dev58_01/suite_checks.json)
 in 100 modules, zero failures/errors, on unchanged source. Peak resident/private
 usage is 165,425,152/187,260,928 bytes under the 1 GiB cap/reserve. Ten other
 native edits and three selected R2/R4 checks continue. Saved quality/reopening and final release gates remain
 separate.
 
-The [dev58 recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev58_01/streets_python_dev58_source_checkpoint.zip)
+The [dev58 recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev58_01/streets_python_dev58_source_checkpoint.zip)
 preserves this exact Python source, runtime assets, guides and nine validation/
-resume helpers. Its [verification record](../../experiments/streets/python_v1/checkpoints/dev58_01/checkpoint_checks.json)
+resume helpers. Its [verification record](../../streets_dev/experiments/streets/python_v1/checkpoints/dev58_01/checkpoint_checks.json)
 checks all 1,264 payloads, including 1,204 repository Python files, and
 reconstructs the source fingerprint above from the archive. The ZIP is
 18,773,123 bytes, SHA-256
@@ -1411,7 +1417,7 @@ reconstructs the source fingerprint above from the archive. The ZIP is
 Its build-time manifest correctly records qualification still in progress;
 this is development recovery data, not a qualified installer.
 
-The [dev58 source-delta audit](../../experiments/streets/python_v1/dev58_source_delta_01.json)
+The [dev58 source-delta audit](../../streets_dev/experiments/streets/python_v1/dev58_source_delta_01.json)
 compares its exact Python source with the installer-qualified dev53 archive.
 It finds 1,183 unchanged Python files; ten changed and four new runtime modules
 are confined to the street backend. Both supplied GN assets remain byte exact.
@@ -1429,33 +1435,33 @@ uses direct quads, explicit semantic seam keys and an independently reserved
 curve-error budget. No triangle mesh, source refit or looser geometry guard
 is introduced.
 
-The [prototype physical checks](../../experiments/streets/python_v1/angular_physical_grading_01/physical_checks.json)
+The [prototype physical checks](../../streets_dev/experiments/streets/python_v1/angular_physical_grading_01/physical_checks.json)
 retain the initial success for the 180-degree Exact island, the actual float32
 R4 failure and the 180-degree Smooth first-member width edit; the two other
 Exact islands still fail in that earlier experiment. The
-[coupled local road-body check](../../experiments/streets/python_v1/angular_local_road_body_01/physical_checks.json)
+[coupled local road-body check](../../streets_dev/experiments/streets/python_v1/angular_local_road_body_01/physical_checks.json)
 then constructs those 225/270-degree Exact inputs with 4,634/6,607 quads total,
 respectively, without changing shared grass edges or the physical slope limit.
 Those are external prototype receipts, not dev57 acceptance.
 
-The integrated [40-test run](../../experiments/streets/python_v1/angular_tiles_core_dev57_01/tile_checks.json)
+The integrated [40-test run](../../streets_dev/experiments/streets/python_v1/angular_tiles_core_dev57_01/tile_checks.json)
 now passes on unchanged source, zero failures/errors. It adds all three Exact islands in float64/float32, an
 independent shared-edge and boundary-error audit, the native first-member
 width regression with local/full/restoration checks, and the float32 R4 case.
 Peak resident/private usage is 143,855,616/143,355,904 bytes under the same
-1 GiB cap/reserve. The [new combined dev57 scene](../../experiments/streets/python_v1/angular_width_gallery_dev57_01/python_streets_width_changes.blend)
+1 GiB cap/reserve. The [new combined dev57 scene](../../streets_dev/experiments/streets/python_v1/angular_width_gallery_dev57_01/python_streets_width_changes.blend)
 has now saved all 86 fixtures with all twelve changing-width inputs generated
 through the actual Update operator. Its
-[initial generation record](../../experiments/streets/python_v1/angular_width_gallery_dev57_01/generation_checks.json)
-is passing; the [original serial qualification](../../experiments/streets/python_v1/angular_tiles_dev57_qualification_01.json)
+[initial generation record](../../streets_dev/experiments/streets/python_v1/angular_width_gallery_dev57_01/generation_checks.json)
+is passing; the [original serial qualification](../../streets_dev/experiments/streets/python_v1/angular_tiles_dev57_qualification_01.json)
 stopped at the memory reserve after seven completed edit sequences. The
-[selective continuation](../../experiments/streets/python_v1/angular_native_resume_dev57_01.json)
+[selective continuation](../../streets_dev/experiments/streets/python_v1/angular_native_resume_dev57_01.json)
 retains those results, completes three more, and captures the Exact270 vertex
 edit failure addressed above. Saved quality, fresh reopening, resolution and
 the broad suite remain separate gates. The scene is an R1 generation preview until those
 checks finish. Dev53 remains the installer-qualified preview.
 
-The separate [local-first work diagnostic](../../experiments/streets/python_v1/angular_local_first_work_01/local_first_checks.json)
+The separate [local-first work diagnostic](../../streets_dev/experiments/streets/python_v1/angular_local_first_work_01/local_first_checks.json)
 retains exact meshes on one float32 Exact270 input while reducing atlas maps
 769 to 318 and shape evaluations 3,285 to 990. It is a test-only configuration
 branch, not integrated runtime or a qualified native speed claim; its observed
@@ -1474,7 +1480,7 @@ offsets keep their curvature error bound, and the optional `Path.samples`
 allocation budget is checked before sample arrays are made. Existing callers
 keep their previous arithmetic when no budget is supplied.
 
-The [focused regression](../../experiments/streets/python_v1/angular_sampling_core_dev56_01/sampling_checks.json)
+The [focused regression](../../streets_dev/experiments/streets/python_v1/angular_sampling_core_dev56_01/sampling_checks.json)
 passes **37 tests**, including all three changing-width Smooth islands with
 float32 source coordinates, six constant-overlap cases, unchanged remote
 sampling, physical source points, ownership, local/full restoration and older
@@ -1482,17 +1488,17 @@ angular/axial regressions. Peak resident usage is 109,756,416 bytes. The runtime
 now generates nine of the twelve authored width-change inputs; the three Exact
 islands still lack a complete accepted pavement/separator construction.
 
-The [R1 inspection scene](../../experiments/streets/python_v1/angular_width_gallery_dev56_01/python_streets_width_changes.blend)
+The [R1 inspection scene](../../streets_dev/experiments/streets/python_v1/angular_width_gallery_dev56_01/python_streets_width_changes.blend)
 contains all 86 fixtures in their existing positions. Nine `angular_chain_*`
 examples use 7 m middle Sections 117/229 with 6 m other Sections: six complete
 overlaps and three Smooth islands. Its
-[generation record](../../experiments/streets/python_v1/angular_width_gallery_dev56_01/generation_checks.json)
+[generation record](../../streets_dev/experiments/streets/python_v1/angular_width_gallery_dev56_01/generation_checks.json)
 records all nine actual Update operations before the initial save. The broader
 native edit job subsequently fails when the first Smooth island's first member
 is widened by 0.1 m. The six complete-overlap edit sequences pass; the file is
 an inspection preview, not an edit- or release-qualified scene. The earlier
 R4 island failure also remains open. The
-[independent saved quality audit](../../experiments/streets/python_v1/angular_width_gallery_quality_dev56_01/import_quality_checks.json)
+[independent saved quality audit](../../streets_dev/experiments/streets/python_v1/angular_width_gallery_quality_dev56_01/import_quality_checks.json)
 passes all 86 networks and **529,023 quads**, zero cells above ratio 8, with
 maximum measured ratio 7.9963482749. Peak resident usage is 393,900,032 bytes.
 This proves the saved R1 meshes, separately from the incomplete editing and
@@ -1514,39 +1520,39 @@ remain authoritative. Whole-polynomial angular progress is proved with
 Bernstein bounds before the physical curbs enter a union. No replacement
 centerline is fitted and no radius, height or quad-shape limit is weakened.
 
-The [dev54 input diagnostic](../../experiments/streets/python_v1/angular_dimensions_before_01/dimension_probe.json)
+The [dev54 input diagnostic](../../streets_dev/experiments/streets/python_v1/angular_dimensions_before_01/dimension_probe.json)
 records twelve unsupported curved width-change networks (180/225/270 degrees,
 Exact/Smooth, constant overlap/island). The current
-[twelve-case check](../../experiments/streets/python_v1/angular_dimensions_coverage_01/dimension_checks.json)
+[twelve-case check](../../streets_dev/experiments/streets/python_v1/angular_dimensions_coverage_01/dimension_checks.json)
 generates **7/12**: all six constant-overlap cases and the 225-degree Smooth
 island. The other five island cases fail the unchanged quad guards. Protected
 corner sampling is retained. The wider
 width-aware/adaptive-tip experiment did not improve complete construction and
 was removed from the runtime; its source and failed receipts are preserved.
-The [focused 33-test check](../../experiments/streets/python_v1/angular_dimensions_core_01/dimension_core_checks.json)
+The [focused 33-test check](../../streets_dev/experiments/streets/python_v1/angular_dimensions_core_01/dimension_core_checks.json)
 passes the new constant-overlap, ownership, editing and attachment contracts
 alongside previous angular/axial regressions on source `b2e91ad20ccd...`.
-The separate [float32 before test](../../experiments/streets/python_v1/angular_dimensional_float32_before_01/float32_checks.json)
+The separate [float32 before test](../../streets_dev/experiments/streets/python_v1/angular_dimensional_float32_before_01/float32_checks.json)
 catches two Exact seam rejections. The
-[after test](../../experiments/streets/python_v1/angular_dimensional_float32_after_01/float32_checks.json)
+[after test](../../streets_dev/experiments/streets/python_v1/angular_dimensional_float32_after_01/float32_checks.json)
 passes all six sweeps/modes after applying the existing bounded ten-micrometre
 curb-join contract and including the measured discrepancy in the error budget.
-The [nine current new-contract tests](../../experiments/streets/python_v1/angular_dimensions_new_01/dimension_core_checks.json)
+The [nine current new-contract tests](../../streets_dev/experiments/streets/python_v1/angular_dimensions_new_01/dimension_core_checks.json)
 also pass on frozen source `a92f0427585a...`, including all six float32 inputs
 and switching back to compatible widths before exact restoration. Peak
 resident/private usage is 65,507,328/83,791,872 bytes. The
-[serial core checks](../../experiments/streets/python_v1/angular_dimensions_dev55_partial_qualification_01.json)
+[serial core checks](../../streets_dev/experiments/streets/python_v1/angular_dimensions_dev55_partial_qualification_01.json)
 are terminal success for their declared scope, with construction explicitly
-incomplete. The [complete regression](../../experiments/streets/python_v1/suite_dev55_01/suite_checks.json)
+incomplete. The [complete regression](../../streets_dev/experiments/streets/python_v1/suite_dev55_01/suite_checks.json)
 now passes **894 tests in 98 modules**, zero failures/errors, on the same frozen
 source. Peak resident/private usage is 162,877,440/188,792,832 bytes. The separate
 twelve-case construction remains a failing diagnostic. The existing
-[86-fixture scene upgrade](../../experiments/streets/python_v1/angular_dimensions_old_gallery_dev55_01/upgrade_checks.json),
-[independent quality audit](../../experiments/streets/python_v1/angular_dimensions_old_quality_dev55_01/import_quality_checks.json)
-and [fresh reopening](../../experiments/streets/python_v1/angular_dimensions_old_reopen_dev55_01/reopen_checks.json)
+[86-fixture scene upgrade](../../streets_dev/experiments/streets/python_v1/angular_dimensions_old_gallery_dev55_01/upgrade_checks.json),
+[independent quality audit](../../streets_dev/experiments/streets/python_v1/angular_dimensions_old_quality_dev55_01/import_quality_checks.json)
+and [fresh reopening](../../streets_dev/experiments/streets/python_v1/angular_dimensions_old_reopen_dev55_01/reopen_checks.json)
 all pass on the same source, preserving 525,028 quads, source records and
 furniture. Peak native resident/private usage is 519,278,592/592,629,760 bytes.
-The [new native edit sequences](../../experiments/streets/python_v1/angular_dimensions_native_demo_02/cases_partial.json)
+The [new native edit sequences](../../streets_dev/experiments/streets/python_v1/angular_dimensions_native_demo_02/cases_partial.json)
 also pass all seven generated R1 width-change cases, but their broader
 resolution job fails at R4; this is retained failure evidence, not a qualified
 width-change scene or installer. Separate source-anchored sampling and local
@@ -1568,39 +1574,39 @@ boundary, profile or publication check is replaced. The cache is call-local.
 The [formula and safety argument](STREETS_PYTHON_GEOMETRY.md#exact-invalid-corner-rejection-dev54)
 describe the construction.
 
-The [integrated focused check](../../experiments/streets/python_v1/integrated_quad_witness_dev54_01/integrated_witness_checks.json)
+The [integrated focused check](../../streets_dev/experiments/streets/python_v1/integrated_quad_witness_dev54_01/integrated_witness_checks.json)
 passes 600 exact energy comparisons against immutable dev53, all six captured
 actual Canal descents bit-for-bit, and nine workspace tests, including threshold,
 coordinate and connectivity changes. The preceding
-[balanced native candidate comparison](../../experiments/streets/python_v1/canal_quad_witness_dev53_01/witness_update_comparison.json)
+[balanced native candidate comparison](../../streets_dev/experiments/streets/python_v1/canal_quad_witness_dev53_01/witness_update_comparison.json)
 reduces the whole Canal seam Update median from 8.5096 s to 7.3316 s (13.84%)
 on four interleaved measurements per method. Edited/local-full/restored meshes,
 source records and unaffected output identities stay exact. This
 comparison covers the test-only candidate; the integrated runtime timing and
 publication evidence are recorded separately below. The
-[complete integrated regression](../../experiments/streets/python_v1/suite_dev54_01/suite_checks.json)
+[complete integrated regression](../../streets_dev/experiments/streets/python_v1/suite_dev54_01/suite_checks.json)
 now passes **885 tests in 96 modules**, zero failures/errors, with unchanged
 source and 163,074,048 peak resident bytes. Complex Updates still
 take seconds, and the broader geometry/performance goal remains active.
-The [integrated native comparison](../../experiments/streets/python_v1/canal_quad_witness_dev54_01/witness_update_comparison.json)
+The [integrated native comparison](../../streets_dev/experiments/streets/python_v1/canal_quad_witness_dev54_01/witness_update_comparison.json)
 now also passes all eight interleaved measurements. Production dev54 lowers
 the median whole Update from **8.5162 s to 7.4205 s (12.87%)**, with CPU medians
 8.3672/7.3047 s. Edited, local/full and restored meshes stay bit-for-bit exact;
 14/20 outputs remain, the other component is untouched and original inputs
 restore exactly. Peak resident/private usage is 287,305,728/355,299,328 bytes.
 This is a paired improvement on one costly edit, not a general latency bound.
-The [86-fixture dev54 scene](../../experiments/streets/python_v1/quad_witness_native_dev54_01/python_street_import_upgraded.blend)
+The [86-fixture dev54 scene](../../streets_dev/experiments/streets/python_v1/quad_witness_native_dev54_01/python_street_import_upgraded.blend)
 now rebuilds every source, semantic mesh key and furniture pose exactly. Its
-[independent saved quality check](../../experiments/streets/python_v1/quad_witness_quality_dev54_01/import_quality_checks.json)
+[independent saved quality check](../../streets_dev/experiments/streets/python_v1/quad_witness_quality_dev54_01/import_quality_checks.json)
 passes all **525,028 direct quads**, no overlaps, the crown envelope, ratio
 limits and bit-for-bit dev53 positions/connectivity. The native worker peaks
 at 468,660,224 resident / 530,558,976 private bytes.
-[Fresh reopening](../../experiments/streets/python_v1/quad_witness_reopen_dev54_01/reopen_checks.json)
+[Fresh reopening](../../streets_dev/experiments/streets/python_v1/quad_witness_reopen_dev54_01/reopen_checks.json)
 also passes all 86 controllers, actual vertex/width Update operations, local/full
 mesh/furniture agreement, restoration and R2/R4 checks for both angular families.
-The [serial qualification](../../experiments/streets/python_v1/quad_witness_dev54_qualification_01.json)
+The [serial qualification](../../streets_dev/experiments/streets/python_v1/quad_witness_dev54_qualification_01.json)
 has four terminal passing jobs plus the focused and complete regression checks.
-The [independent audit](../../experiments/streets/python_v1/dev54_witness_receipt_audit_01.json)
+The [independent audit](../../streets_dev/experiments/streets/python_v1/dev54_witness_receipt_audit_01.json)
 verifies all six terminal receipts, script hashes, source and unchanged single-
 thread 1 GiB cap/reserve. Maximum resident/private usage is
 521,256,960/585,773,056 bytes. It also verifies that only the energy workspace,
@@ -1620,28 +1626,28 @@ retained. The existing crown, curb, separator, direct-quad and quality rules
 remain authoritative. See the
 [route formulas and contracts](STREETS_PYTHON_GEOMETRY.md#source-preserving-angular-section-routes-dev53).
 
-The [before check](../../experiments/streets/python_v1/angular_chains_before_01/angular_chain_checks.json)
+The [before check](../../streets_dev/experiments/streets/python_v1/angular_chains_before_01/angular_chain_checks.json)
 records a valid curved chain rejected by dev52. The initial
-[focused checks](../../experiments/streets/python_v1/angular_chains_core_01/angular_chain_checks.json)
+[focused checks](../../streets_dev/experiments/streets/python_v1/angular_chains_core_01/angular_chain_checks.json)
 pass twelve test methods, including the previous single-Section cases. The
 first full Blender check exposed a dispatch regression for an existing Bundle
 with an internal multi-arm junction. That incidence now declines the angular
 route and retains its established provider. Full native/quality/reopening and
 regression qualification of the combined implementation now pass on source
 `841424fe0c2fcfe93ca9f7da80f345ddbdba201b30e8ccf65b1599e2251df856`.
-The [combined 86-fixture scene](../../experiments/streets/python_v1/angular_chains_native_04/python_streets_checkpoint.blend)
+The [combined 86-fixture scene](../../streets_dev/experiments/streets/python_v1/angular_chains_native_04/python_streets_checkpoint.blend)
 now passes the ordinary native generator and all twelve chain edit sequences.
-The [independent saved-mesh audit](../../experiments/streets/python_v1/angular_chains_quality_04/import_quality_checks.json)
+The [independent saved-mesh audit](../../streets_dev/experiments/streets/python_v1/angular_chains_quality_04/import_quality_checks.json)
 passes all 525,028 quads, zero overlaps and exact old74 reference positions and
-connectivity. [Fresh reopening](../../experiments/streets/python_v1/angular_chains_reopen_04/reopen_checks.json)
+connectivity. [Fresh reopening](../../streets_dev/experiments/streets/python_v1/angular_chains_reopen_04/reopen_checks.json)
 passes all 86 controllers and both angular fixture families. The
-[complete numerical suite](../../experiments/streets/python_v1/angular_chains_suite_04/suite_checks.json)
+[complete numerical suite](../../streets_dev/experiments/streets/python_v1/angular_chains_suite_04/suite_checks.json)
 passes **882 tests in 96 modules**, zero failures/errors. The
-[detached four-job audit](../../experiments/streets/python_v1/dev53_angular_receipt_audit_01.json)
+[detached four-job audit](../../streets_dev/experiments/streets/python_v1/dev53_angular_receipt_audit_01.json)
 verifies terminal exits, actual script hashes, source fingerprint, single-thread
 settings and the same memory cap/reserve. The current native/quality worker peaks are
 556,879,872/437,100,544 resident bytes, below the unchanged 1 GiB cap/reserve.
-The [focused native qualification](../../experiments/streets/python_v1/angular_chains_focused_native_02/angular_chain_native_checks.json)
+The [focused native qualification](../../streets_dev/experiments/streets/python_v1/angular_chains_focused_native_02/angular_chain_native_checks.json)
 now passes all twelve new actual Update-button sequences, exact local/full
 mesh/furniture agreement, restoration, unrelated-output reuse, cold recovery
 and R2/E0 plus R4/E10. Its source is `841424fe0c2f...`, and peak resident/private
@@ -1651,27 +1657,27 @@ bounded reconciliation and complete curve-error accounting are described in
 the geometry document. The
 [actual-data drawing](images/python_angular_section_routes.svg) shows the
 seven original Sections and the shared surface of one saved example. Its
-[export audit](../../experiments/streets/python_v1/angular_chains_drawing_02/drawing_checks.json)
+[export audit](../../streets_dev/experiments/streets/python_v1/angular_chains_drawing_02/drawing_checks.json)
 confirms that source records and saved meshes stay unchanged.
 
-The [nine fresh real-input jobs](../../experiments/streets/python_v1/dev53_real_import_checks_01.json)
+The [nine fresh real-input jobs](../../streets_dev/experiments/streets/python_v1/dev53_real_import_checks_01.json)
 also pass on the same source: Berlin (398,972 quads), Canal (21,818) and Nashville
 (263,213), with both components complete in each import. Saved buffers match
 dev52 exactly. Fresh coordinated seam/width edits agree with full regeneration,
 restore exactly and retain unrelated outputs. The
-[detached real-input audit](../../experiments/streets/python_v1/dev53_real_receipt_audit_01.json)
+[detached real-input audit](../../streets_dev/experiments/streets/python_v1/dev53_real_receipt_audit_01.json)
 verifies all actual job exits, input/script/source hashes and unchanged memory
 limits. Maximum resident/private usage is 656,871,424/709,816,320 bytes.
 The measured local Updates are 1.53/8.40/0.87 seconds respectively. These
 individual timings vary with the machine state and establish no new speedup.
 
-The [qualified dev53 addon ZIP](../../experiments/streets/python_v1/packages/dev53_v1/blosm_streets_python_dev53.zip)
-now passes [all four installed-copy checks](../../experiments/streets/python_v1/package_dev53_checks_01.json):
+The [qualified dev53 addon ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev53_v1/blosm_streets_python_dev53.zip)
+now passes [all four installed-copy checks](../../streets_dev/experiments/streets/python_v1/package_dev53_checks_01.json):
 actual installation/full registration, both backends and external materials,
 31 selected fixtures including all twelve new Section chains, normal Canal
 import, exact saved-mesh comparison and fresh seam/width edits. All imported
 runtime modules originate in the installed package. Its
-[detached package audit](../../experiments/streets/python_v1/package_dev53_qualification_01.json)
+[detached package audit](../../streets_dev/experiments/streets/python_v1/package_dev53_qualification_01.json)
 verifies all archive/installed payloads, source and terminal resources. The ZIP
 is 18,715,490 bytes, SHA-256
 `e6043689ff8bbafc5305519b4e77035caa81428cfaeb42483581a0d874d1b8d1`.
@@ -1682,10 +1688,10 @@ Angular dimensional seams, bent Exact Section joins, external junction
 attachments and more general islands remain construction work; expensive
 complex Updates also remain a performance task.
 
-The [dev53 source recovery archive](../../experiments/streets/python_v1/checkpoints/dev53_01/streets_python_dev53_source_checkpoint.zip)
+The [dev53 source recovery archive](../../streets_dev/experiments/streets/python_v1/checkpoints/dev53_01/streets_python_dev53_source_checkpoint.zip)
 preserves the exact qualified Python sources, current documents/vector drawings,
 required street libraries, the 86-fixture scene and selected qualification
-evidence. Its [checkpoint audit](../../experiments/streets/python_v1/checkpoints/dev53_01/checkpoint_checks.json)
+evidence. Its [checkpoint audit](../../streets_dev/experiments/streets/python_v1/checkpoints/dev53_01/checkpoint_checks.json)
 verifies all 1,268 payloads and reconstructs the exact source fingerprint above,
 including 1,196 Python files. This recovery archive is not an addon installation
 package; installed-copy qualification applies to the separate dev53 ZIP above.
@@ -1701,7 +1707,7 @@ experiment file, fixed fixture ID or saved numerical mesh is loaded by the addon
 The initial angular branch supports two complete single-Section members with
 genuine free ends; multi-Section routes and attached junction ports remain open.
 
-The [focused provider tests](../../experiments/streets/python_v1/angular_runtime_core_07/angular_runtime_checks.json)
+The [focused provider tests](../../streets_dev/experiments/streets/python_v1/angular_runtime_core_07/angular_runtime_checks.json)
 pass all 11 methods, including the full 12-case matrix, nondefault dimensions,
 offsets, crown rise/datum, reversed source storage and rigid transforms. Actual
 vertex/width Updates match fresh full builds, restore exactly, retain unrelated
@@ -1711,24 +1717,24 @@ cached direct grids; bounded fixed-boundary/crown grading corrects thin child
 cells without moving physical rims. Zero display exaggeration is supported.
 The numerical worker peaks at 95,178,752 resident bytes.
 
-The [actual Blender gallery check](../../experiments/streets/python_v1/angular_native_01/angular_native_checks.json)
+The [actual Blender gallery check](../../streets_dev/experiments/streets/python_v1/angular_native_01/angular_native_checks.json)
 preserves all 62 previous fixtures' source records and mesh buffers exactly,
 then adds and edits the 12 angular fixtures. All 74 share one
-[Blender scene](../../experiments/streets/python_v1/angular_native_reopen_01/python_streets_dev52.blend).
+[Blender scene](../../streets_dev/experiments/streets/python_v1/angular_native_reopen_01/python_streets_dev52.blend).
 Every new fixture passes actual source vertex/width edits, exact local/full
 output, restoration, unrelated-object reuse, furniture rebuilding and runtime
 reconstruction. Peak resident memory is 476,282,880 bytes under the 1 GiB cap
 and reserve. The source is pinned to
 `f34bbc9972b356adcd04551974a231dd3258ce53227aaa5d9714e3d093ec3f40`.
 
-[Fresh-file reopening](../../experiments/streets/python_v1/angular_native_reopen_01/angular_reopen_checks.json)
+[Fresh-file reopening](../../streets_dev/experiments/streets/python_v1/angular_native_reopen_01/angular_reopen_checks.json)
 passes all 12 new cases and the actual Update operator. The
-[published-buffer audit](../../experiments/streets/python_v1/angular_gallery_quality_01/import_quality_checks.json)
+[published-buffer audit](../../streets_dev/experiments/streets/python_v1/angular_gallery_quality_01/import_quality_checks.json)
 passes all 74 fixtures and 447,444 quads: positive quads, no published overlaps,
 the crown envelopes, ratio-8 and exact preservation of all 62 old fixtures.
-The [full regression](../../experiments/streets/python_v1/angular_suite_dev52_01/suite_checks.json)
+The [full regression](../../streets_dev/experiments/streets/python_v1/angular_suite_dev52_01/suite_checks.json)
 passes **874 tests in 95 modules**, with no errors/failures or source changes.
-The [detached receipt audit](../../experiments/streets/python_v1/dev52_angular_receipt_audit.json)
+The [detached receipt audit](../../streets_dev/experiments/streets/python_v1/dev52_angular_receipt_audit.json)
 verifies all five actual terminal jobs, source/script hashes and unchanged
 memory/thread policies. Peak resident/private values are
 476,282,880/540,127,232 bytes. The saved scene opens with the Smooth island
@@ -1739,13 +1745,13 @@ qualification and a separately installed-copy-qualified package below. Broader
 valid construction/performance work remains. This milestone does not complete
 the goal or establish a public release.
 
-The [verified source recovery checkpoint](../../experiments/streets/python_v1/checkpoints/dev52_01/checkpoint_checks.json)
+The [verified source recovery checkpoint](../../streets_dev/experiments/streets/python_v1/checkpoints/dev52_01/checkpoint_checks.json)
 preserves this milestone, including the 74-fixture scene and current evidence.
 It is separate from the installable package.
 
 The subsequent standard-fixture tooling revision has source fingerprint
 `d8d9f2c4b2f6339935a9200c76e4fa01a2a473ba619a84005e33a36532e1addf`.
-The [source audit](../../experiments/streets/python_v1/dev52_tooling_source_audit_02.json)
+The [source audit](../../streets_dev/experiments/streets/python_v1/dev52_tooling_source_audit_02.json)
 proves all 1,052 runtime modules remain exact against f34; only the fixture
 helper and related test entry points change. The affected seven numerical tests
 and exact fixture-record comparison pass. Standard Blender generation, saved
@@ -1756,21 +1762,21 @@ higher-resolution checks, then exposed a warm/cold-cache test-order issue in
 the earlier furniture-only check. The corrected order finishes the unchanged
 older dependency tests before angular reconstruction clears the cache. The
 original strict furniture-only assertion and all geometry guards stay intact.
-The [standard native result](../../experiments/streets/python_v1/angular_standard_native_02/scene_checks.json)
+The [standard native result](../../streets_dev/experiments/streets/python_v1/angular_standard_native_02/scene_checks.json)
 passes all 74 fixtures, twelve angular button-edit sequences and actual R2/E0
 and R4/E10 publication/restoration. The
-[independent saved-buffer comparison](../../experiments/streets/python_v1/angular_standard_quality_02/import_quality_checks.json)
+[independent saved-buffer comparison](../../streets_dev/experiments/streets/python_v1/angular_standard_quality_02/import_quality_checks.json)
 passes all 447,444 quads with no changed reference mesh position or connectivity.
 The ordinary generator's
-[combined scene](../../experiments/streets/python_v1/angular_standard_native_02/python_streets_checkpoint.blend)
+[combined scene](../../streets_dev/experiments/streets/python_v1/angular_standard_native_02/python_streets_checkpoint.blend)
 is reproducible from repository sources. Native peak resident/private usage is
 523,468,800/594,665,472 bytes under the unchanged 1 GiB cap/reserve.
-The [standard fresh-process check](../../experiments/streets/python_v1/angular_standard_reopen_02/reopen_checks.json)
+The [standard fresh-process check](../../streets_dev/experiments/streets/python_v1/angular_standard_reopen_02/reopen_checks.json)
 also passes all 74 fixtures, including the twelve angular button sequences,
 furniture poses and R2/R4 checks. The
-[three-job qualification](../../experiments/streets/python_v1/angular_fixture_tool_qualification_02.json)
+[three-job qualification](../../streets_dev/experiments/streets/python_v1/angular_fixture_tool_qualification_02.json)
 is terminal and passed on the same d8d9 source. All
-[nine fresh real-OSM checks](../../experiments/streets/python_v1/dev52_real_import_checks_01.json)
+[nine fresh real-OSM checks](../../streets_dev/experiments/streets/python_v1/dev52_real_import_checks_01.json)
 also pass: Berlin/Canal/Nashville complete imports, independent exact quality
 comparisons against dev51, and fresh seam edits with local/full equality,
 restoration and unchanged other components. Quads are 398,972/21,818/263,213.
@@ -1779,11 +1785,11 @@ Measured local Updates are 1.62/29.04/3.23 seconds in this run. Canal remains
 an explicit performance target; these individual measurements establish no
 speedup claim.
 
-The [dev52 preview ZIP](../../experiments/streets/python_v1/packages/dev52_v1/blosm_streets_python_dev52.zip)
-now passes [all four installed-copy jobs](../../experiments/streets/python_v1/package_dev52_checks_01.json).
+The [dev52 preview ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev52_v1/blosm_streets_python_dev52.zip)
+now passes [all four installed-copy jobs](../../streets_dev/experiments/streets/python_v1/package_dev52_checks_01.json).
 Actual installation/registration, both backends, external materials, nineteen
 current fixtures, normal Canal import, saved quality and fresh seam edits pass
-using only installed code. The [detached archive/payload audit](../../experiments/streets/python_v1/package_dev52_qualification_01.json)
+using only installed code. The [detached archive/payload audit](../../streets_dev/experiments/streets/python_v1/package_dev52_qualification_01.json)
 verifies every payload, source/script hashes, terminal exits and unchanged
 cap/reserve/threads1. The ZIP is 18,633,993 bytes, SHA-256
 `b6b1644f42246072ce8c6ab597d3cf5900796d894a50487f9ca0ed278f3b2345`.
@@ -1795,7 +1801,7 @@ record completed qualification. The older dev49 ZIP is preserved.
 
 ## Current development increment: shared road sampling (dev51)
 
-The [dev50 core qualification](../../experiments/streets/python_v1/dev50_checks_v3.json)
+The [dev50 core qualification](../../streets_dev/experiments/streets/python_v1/dev50_checks_v3.json)
 now passes all six jobs, including **862 tests in 93 modules** on source
 `d5c7e97932080033c6cd903a84b3b0da4610a6f7dafe358428b8b7dc97d950a9`.
 An additional downstream contract check then finds a separate integration gap:
@@ -1805,9 +1811,9 @@ uses 149/207. The retained source endpoints agree, but the intervening edges do 
 Dev51 adds immutable `RoadSampling`, shared by pavement generation and downstream
 rim reconstruction. Only roads using the new Smooth fallback store its local
 curvature flag; older metadata/layouts stay unchanged. The
-[shared-rim check](../../experiments/streets/python_v1/smooth_rim_contract_after_01/rim_contract_checks.json)
+[shared-rim check](../../streets_dev/experiments/streets/python_v1/smooth_rim_contract_after_01/rim_contract_checks.json)
 now matches all four new road sides exactly. The
-[30 focused tests](../../experiments/streets/python_v1/smooth_rim_core_after_01/smooth_core_checks.json)
+[30 focused tests](../../streets_dev/experiments/streets/python_v1/smooth_rim_core_after_01/smooth_core_checks.json)
 also cover reversed Sections and reconstruction after published mesh buffers
 are released. This verifies the common helper; it does not establish every
 Bundle configuration with a sharp Smooth seam.
@@ -1816,12 +1822,12 @@ The worktree is source-pinned at
 `8ca473ba7dd1453b01c8043849475f2f1201f42a9c76ad12da022c1c810d2615`.
 The gallery regenerates all 62 fixtures exactly, saved quality and fresh
 reopening pass, and the
-[complete regression](../../experiments/streets/python_v1/suite_57/suite_checks.json)
+[complete regression](../../streets_dev/experiments/streets/python_v1/suite_57/suite_checks.json)
 passes all **863 tests in 93 modules**, with no failures/errors or source changes.
 All three exact real-network regenerations now pass on this source: Berlin
 398,972 quads, Canal 21,818 and Nashville 263,213. Source records, all mesh
 buffers and semantic keys stay exact. The
-[nine-job receipt audit](../../experiments/streets/python_v1/dev51_receipt_audit.json)
+[nine-job receipt audit](../../streets_dev/experiments/streets/python_v1/dev51_receipt_audit.json)
 verifies terminal exits, actual script/source hashes and the unchanged 1 GiB
 process cap/reserve. Peak resident/private values are 609,128,448/674,975,744 bytes.
 The [new actual-mesh drawing](STREETS_PYTHON_GEOMETRY.md#local-curvature-certificate-for-smooth-seams-dev50)
@@ -1831,7 +1837,7 @@ the current qualified preview.
 
 ### Next construction gate: curved overlapping Bundles without one global axis
 
-The [source-pinned diagnostic](../../experiments/streets/python_v1/nonmonotone_bundle_probe_01/nonmonotone_probe.json)
+The [source-pinned diagnostic](../../streets_dev/experiments/streets/python_v1/nonmonotone_bundle_probe_01/nonmonotone_probe.json)
 tests two nested curved members through 180, 225 and 270 degrees, in Exact and
 Smooth modes. Their centerline separation is either 4 m throughout or varies
 from 4 to 8 and back to 4 m; both carriageways are 6 m wide. Every individual
@@ -1847,14 +1853,14 @@ one globally monotone world axis. Retain actual source ends and exterior curbs,
 dynamic profiles, direct quads, bounded memory and ordinary Update dependencies.
 The qualified dev51 runtime is unchanged during this diagnostic.
 
-The [angular-coordinate preparation](../../experiments/streets/python_v1/polar_bundle_frame_01/polar_frame_checks.json)
+The [angular-coordinate preparation](../../streets_dev/experiments/streets/python_v1/polar_bundle_frame_01/polar_frame_checks.json)
 now passes all 12 inputs. It certifies continuous angular progress, retains the
 actual physical source end cuts, and finds one pavement union with zero/one
 separator hole as appropriate. The estimated centre is a coordinate choice;
 no street is fitted to a circle or moved. World/chart round trips stay below
 2.1e-14 m in these examples.
 
-The [constant-overlap planar fill](../../experiments/streets/python_v1/polar_bundle_quads_03/polar_quad_checks.json)
+The [constant-overlap planar fill](../../streets_dev/experiments/streets/python_v1/polar_bundle_quads_03/polar_quad_checks.json)
 passes all six Exact/Smooth cases with **863–2,098 direct quads**, no overlaps,
 and maximum world edge ratio below 6. Every successful chart uses its initial
 direct pattern, with no numerical shape descent. Smooth front approximation
@@ -1862,11 +1868,11 @@ uses 3 mm of the 5 mm curve budget, while retaining all four original outer
 end corners. The initial tighter sampler and increased-candidate attempt are
 retained; more corner candidates alone did not fix the two long Smooth cases.
 
-The next [height experiment](../../experiments/streets/python_v1/polar_bundle_profiles_03/polar_profile_checks.json)
+The next [height experiment](../../streets_dev/experiments/streets/python_v1/polar_bundle_profiles_03/polar_profile_checks.json)
 applies the dynamic shared crown to those planar meshes. Only two of six pass
 the physical slope and drainage checks: a valid planar pattern alone is not
 enough to qualify its profiled surface. The
-[crown-aligned patch experiment](../../experiments/streets/python_v1/polar_crown_patches_01/polar_crown_patch_checks.json)
+[crown-aligned patch experiment](../../streets_dev/experiments/streets/python_v1/polar_crown_patches_01/polar_crown_patch_checks.json)
 then carries actual source curb/cap provenance and uses a shared crown ridge.
 The 180-degree Exact and 270-degree Smooth constant-overlap cases pass the
 tested height, slope, drainage and world-quality checks with 1,865 and 3,472
@@ -1874,7 +1880,7 @@ direct quads. Other inputs still need compatible terminal or island-tip charts.
 This worker peaks at 59,957,248 resident bytes. These two passes do not qualify
 all boundary/Update/publication contracts or establish support for the branch.
 
-The later [finite-cap construction](../../experiments/streets/python_v1/polar_crown_patches_06/polar_crown_patch_checks.json)
+The later [finite-cap construction](../../streets_dev/experiments/streets/python_v1/polar_crown_patches_06/polar_crown_patch_checks.json)
 now passes **all 12 profiled examples**, including six separator islands.
 It retains the physical end cuts and source curb ownership, uses whole-edge
 shared crown/island boundaries, and constructs **1,985–3,772 direct quads per
@@ -1884,10 +1890,10 @@ values are 6.573% and 1.544%. Outer curbs stay exactly zero and no height exceed
 the common 8 cm crown. Peak resident/private usage is 62,840,832/81,473,536 bytes.
 This is a bounded construction test, not a stable Update timing measurement.
 
-The [island boundary audit](../../experiments/streets/python_v1/polar_island_boundary_audit_01/island_boundary_audit.json)
+The [island boundary audit](../../streets_dev/experiments/streets/python_v1/polar_island_boundary_audit_01/island_boundary_audit.json)
 checks complete curve correspondence, exact interface edges, disk topology,
 area and world quality for all six fills. The
-[surface audit](../../experiments/streets/python_v1/polar_crown_surface_audit_02/crown_surface_audit.json)
+[surface audit](../../streets_dev/experiments/streets/python_v1/polar_crown_surface_audit_02/crown_surface_audit.json)
 passes every source outer curb, all four original cap corners, the 5 mm
 approximation contract and float32-buffer quality at exaggerations 1/10.
 The [actual-mesh drawing](images/python_streets_polar_crown_surfaces.svg) includes
@@ -1909,12 +1915,12 @@ source interpolation. The established candidate scan stays first; only if
 every ordinary Smooth candidate fails does the solver retry with local proofs.
 Previously accepted primary candidates retain their geometry and selection.
 
-The [source-pinned experiment](../../experiments/streets/python_v1/smooth_curvature_probe_01/smooth_fitting_probe.json)
+The [source-pinned experiment](../../streets_dev/experiments/streets/python_v1/smooth_curvature_probe_01/smooth_fitting_probe.json)
 resolves both mirrored 60 m / 150-degree failures with 960 transition quads.
 The 30 m example still fails its earlier source offset certificate; mixed
 Exact/Smooth joins and other sharp configurations remain unfinished. New tests
 fail on the previous implementation. The
-[focused production regression](../../experiments/streets/python_v1/smooth_core_after_04/smooth_core_checks.json)
+[focused production regression](../../streets_dev/experiments/streets/python_v1/smooth_core_after_04/smooth_core_checks.json)
 passes 29 tests, including complete profiles, certified radius, transform and
 resolution cases, cache release, furniture, incremental/full equality and restoration.
 
@@ -1929,12 +1935,12 @@ curve or profiles. The final focused test checks both visible curbs densely.
 
 `sharp_smooth_seam_60` is appended to the single combined inspection scene;
 the earlier 61 fixture positions stay unchanged. The
-[corrected combined scene](../../experiments/streets/python_v1/native_57/python_streets_checkpoint.blend)
+[corrected combined scene](../../streets_dev/experiments/streets/python_v1/native_57/python_streets_checkpoint.blend)
 passes native generation, manual edits and exact restoration with 369,835 quads.
 The new complete fixture has 7,552 quads, including its control road. The
-[saved quality comparison](../../experiments/streets/python_v1/gallery_quality_56/import_quality_checks.json)
+[saved quality comparison](../../streets_dev/experiments/streets/python_v1/gallery_quality_56/import_quality_checks.json)
 passes all 62 networks and keeps every one of the preceding 342 parts exact.
-[Fresh editing/reopening](../../experiments/streets/python_v1/reopen_55/reopen_checks.json)
+[Fresh editing/reopening](../../streets_dev/experiments/streets/python_v1/reopen_55/reopen_checks.json)
 passes all 62 controllers. The independent saved-buffer audit passes all six
 close-junction profile/slope checks and all 62 world boxes, with at least 10 m
 separation. The 862-test regression passes on that frozen dev50 source; the
@@ -1949,38 +1955,38 @@ qualified separately. See the
 Dev49 integrates ordered coordinate-wise gradient accumulation and bounded
 batched four-sided corner enumeration. The shape energy, derivative arithmetic,
 corner-angle formula, candidate set, rounded scores, line search and geometric
-acceptance guards stay unchanged. The [33 focused production tests](../../experiments/streets/python_v1/quad_hotspot_production_01/production_checks.json)
+acceptance guards stay unchanged. The [33 focused production tests](../../streets_dev/experiments/streets/python_v1/quad_hotspot_production_01/production_checks.json)
 pass on source `d4ed8df50b4d699aa3a1147ef4391efae799d91be3ca7cafafe026f2d7c3729a`.
 The publication guard now also respects `project_heights=False`: it rejects a
 required correction instead of silently enabling that numerical provider.
 
-Before integration, the [paired whole-Update experiment](../../experiments/streets/python_v1/canal_quad_hotspots_01/comparison_checks.json)
+Before integration, the [paired whole-Update experiment](../../streets_dev/experiments/streets/python_v1/canal_quad_hotspots_01/comparison_checks.json)
 keeps all edited mesh buffers and local/full results exact while reducing the
 median from 11.68 s to 9.07 s on the same Canal inputs. These measurements do not
 compare with the older 33.87 s qualification under different conditions.
-The [production qualification](../../experiments/streets/python_v1/dev49_checks.json)
+The [production qualification](../../streets_dev/experiments/streets/python_v1/dev49_checks.json)
 now checks exact upgrades of the 61-fixture gallery and Canal scene, a paired
 comparison using archived dev48 hotspot functions, reopening and the full suite.
 Exact upgrades now pass for all 61 fixtures and both Canal components. The
-[actual production comparison](../../experiments/streets/python_v1/canal_quad_hotspot_production_01/comparison_checks.json)
+[actual production comparison](../../streets_dev/experiments/streets/python_v1/canal_quad_hotspot_production_01/comparison_checks.json)
 also passes: 22.24 s / 17.80 s paired medians, approximately 20% less Update
 time, exact meshes and incremental/full agreement. Absolute timings vary
 substantially within this run; the acceptance record retains every measurement.
-[Fresh reopening](../../experiments/streets/python_v1/reopen_54/reopen_checks.json)
+[Fresh reopening](../../streets_dev/experiments/streets/python_v1/reopen_54/reopen_checks.json)
 passes all 61 fixtures too. The
-[full suite](../../experiments/streets/python_v1/suite_55/suite_checks.json) passes
+[full suite](../../streets_dev/experiments/streets/python_v1/suite_55/suite_checks.json) passes
 855 tests in 92 modules. All five core qualification jobs and all seven
-[real-network/saved-gallery jobs](../../experiments/streets/python_v1/dev49_real_checks_v2.json)
+[real-network/saved-gallery jobs](../../streets_dev/experiments/streets/python_v1/dev49_real_checks_v2.json)
 pass on the same source. The current
-[61-fixture inspection scene](../../experiments/streets/python_v1/gallery_upgrade_dev49_01/python_street_import_upgraded.blend)
+[61-fixture inspection scene](../../streets_dev/experiments/streets/python_v1/gallery_upgrade_dev49_01/python_street_import_upgraded.blend)
 uses this code without changing its saved geometry. Berlin and Nashville
 receive only independently qualified interior height precision corrections,
 at most 0.147/0.101 mm, with exact XY, topology, complete boundaries and source
 identities. Their whole-scene quality and fresh Update/reopen checks pass under
 the 1 GiB worker cap. See the acceptance record for attribution and independent
-audits. The [dev49 installer](../../experiments/streets/python_v1/packages/dev49_v1/blosm_streets_python_dev49.zip)
-now passes [all four installed-copy checks](../../experiments/streets/python_v1/package_dev49_checks_01.json).
-Its [detached package audit](../../experiments/streets/python_v1/packages/dev49_v1/package_checks.json)
+audits. The [dev49 installer](../../streets_dev/experiments/streets/python_v1/packages/dev49_v1/blosm_streets_python_dev49.zip)
+now passes [all four installed-copy checks](../../streets_dev/experiments/streets/python_v1/package_dev49_checks_01.json).
+Its [detached package audit](../../streets_dev/experiments/streets/python_v1/packages/dev49_v1/package_checks.json)
 checks every ZIP/installed payload, unchanged source, terminal/script hashes and
 the 1 GiB worker cap. The original Blender preferences are untouched.
 
@@ -1993,20 +1999,20 @@ Exact coincident partition cuts retain all source IDs and generate direct quads.
 The [geometry explanation and actual-mesh drawing](STREETS_PYTHON_GEOMETRY.md#internal-section-routes-in-close-junctions-dev48)
 gives the interval coverage, provisional reserve and partition rules.
 
-The [61-fixture development scene](../../experiments/streets/python_v1/native_55/python_streets_checkpoint.blend)
+The [61-fixture development scene](../../streets_dev/experiments/streets/python_v1/native_55/python_streets_checkpoint.blend)
 passes its actual Update/edit/restore checks with 362,283 quads and zero GN
-modifiers. The [26 focused tests](../../experiments/streets/python_v1/compound_routes_production_03/focused_checks.json)
-and [independent saved-mesh audit](../../experiments/streets/python_v1/compound_routes_saved_dev48_03/compound_saved_mesh_checks.json)
-pass, as do [whole-gallery mesh quality](../../experiments/streets/python_v1/gallery_quality_53/import_quality_checks.json)
-and [fresh reopening/editing of all 61 fixtures](../../experiments/streets/python_v1/reopen_53/reopen_checks.json).
+modifiers. The [26 focused tests](../../streets_dev/experiments/streets/python_v1/compound_routes_production_03/focused_checks.json)
+and [independent saved-mesh audit](../../streets_dev/experiments/streets/python_v1/compound_routes_saved_dev48_03/compound_saved_mesh_checks.json)
+pass, as do [whole-gallery mesh quality](../../streets_dev/experiments/streets/python_v1/gallery_quality_53/import_quality_checks.json)
+and [fresh reopening/editing of all 61 fixtures](../../streets_dev/experiments/streets/python_v1/reopen_53/reopen_checks.json).
 Its three new complete fixtures use 4,362, 4,401 and 4,234 quads.
-The [delta audit](../../experiments/streets/python_v1/publication_delta_dev48_01/publication_delta_checks.json)
+The [delta audit](../../streets_dev/experiments/streets/python_v1/publication_delta_dev48_01/publication_delta_checks.json)
 keeps 323 previous parts exact; one old surface receives only a 0.5484-micrometre
 interior height correction to keep its physical slope bound after float32
 publication. Its boundary, XY, topology, source data and furniture remain exact.
 
 Source fingerprint: `a0543f7d8a81433136a7223a2dc668b06efb91092cfe214b178cc075c01122e1`.
-[Core qualification](../../experiments/streets/python_v1/dev48_checks_v2.json)
+[Core qualification](../../streets_dev/experiments/streets/python_v1/dev48_checks_v2.json)
 passes all five jobs. This geometry increment alone does not establish an Update speedup;
 the costly complex-intersection Update remains a goal requirement. Dev47 below
 is retained as historical installation evidence. See the
@@ -2019,7 +2025,7 @@ raise a compound above its exposed incoming crowns, and unrelated entries in a
 layout dictionary must not alter its datum or ceiling. The existing common-
 minimum input requirement still applies to all related source approaches.
 Source fingerprint: `fece0164b12c6391131d8fcd3b9c55f4983127bed6d43ba3ca88e1e449424049`.
-The [nine focused boundary checks](../../experiments/streets/python_v1/boundary_scope_after_02/scope_checks.json)
+The [nine focused boundary checks](../../streets_dev/experiments/streets/python_v1/boundary_scope_after_02/scope_checks.json)
 pass. New regressions fail on the previous implementation, including an
 internal 18/50 cm crown incorrectly setting the ceiling and a remote datum
 causing a false rejection.
@@ -2030,27 +2036,27 @@ furniture stay unchanged when the internal rise is edited; exterior profiles
 remain authoritative. Native tests require exact geometry/pose restoration,
 stable semantic identities and retained exterior road objects. Related
 compound/furniture tasks may be rebuilt even when their geometry is unchanged.
-The [58-fixture scene](../../experiments/streets/python_v1/native_53/python_streets_checkpoint.blend)
+The [58-fixture scene](../../streets_dev/experiments/streets/python_v1/native_53/python_streets_checkpoint.blend)
 passes generation and actual Update checks with 349,286 convex quads and zero
-GN modifiers. The [saved-buffer comparison](../../experiments/streets/python_v1/gallery_quality_51/import_quality_checks.json)
+GN modifiers. The [saved-buffer comparison](../../streets_dev/experiments/streets/python_v1/gallery_quality_51/import_quality_checks.json)
 keeps all 318 preceding parts exactly unchanged, adding only the 4,362-quad
-internal-crown fixture. [Fresh reopening/editing](../../experiments/streets/python_v1/reopen_52/reopen_checks.json)
+internal-crown fixture. [Fresh reopening/editing](../../streets_dev/experiments/streets/python_v1/reopen_52/reopen_checks.json)
 passes all 58. Berlin, Canal Street and Nashville source/mesh/semantic-key
 upgrades also pass. The saved editing scripts and
-[independent surface/spacing audit](../../experiments/streets/python_v1/compound_ports_saved_dev47_01/compound_saved_mesh_checks.json)
-pass on the same source. The [complete numerical suite](../../experiments/streets/python_v1/suite_53/suite_checks.json)
+[independent surface/spacing audit](../../streets_dev/experiments/streets/python_v1/compound_ports_saved_dev47_01/compound_saved_mesh_checks.json)
+pass on the same source. The [complete numerical suite](../../streets_dev/experiments/streets/python_v1/suite_53/suite_checks.json)
 passes 843 tests in 91 modules, zero failures/errors. The
-[nine-job queue](../../experiments/streets/python_v1/dev47_checks_v2.json)
-and [receipt audit](../../experiments/streets/python_v1/dev47_audit_checks.json)
+[nine-job queue](../../streets_dev/experiments/streets/python_v1/dev47_checks_v2.json)
+and [receipt audit](../../streets_dev/experiments/streets/python_v1/dev47_audit_checks.json)
 verify unchanged source, terminal exits, script hashes and the 1 GiB process
 limit. The largest core worker peaks at 600,018,944 bytes resident and
 674,336,768 bytes sampled private memory. The
-[dev47 archive](../../experiments/streets/python_v1/packages/dev47_v1/blosm_streets_python_dev47.zip)
-passes [all four installed-copy checks](../../experiments/streets/python_v1/package_dev47_checks.json):
+[dev47 archive](../../streets_dev/experiments/streets/python_v1/packages/dev47_v1/blosm_streets_python_dev47.zip)
+passes [all four installed-copy checks](../../streets_dev/experiments/streets/python_v1/package_dev47_checks.json):
 actual installation/full registration, both backends, external material assets,
 all three new compound fixtures, normal Canal import and fresh Update/full/
 restoration. Installed source/runtime origins remain exact. The
-[package record](../../experiments/streets/python_v1/packages/dev47_v1/package_checks.json)
+[package record](../../streets_dev/experiments/streets/python_v1/packages/dev47_v1/package_checks.json)
 verifies the unchanged 17,228,589-byte ZIP and all 1,181 Python files. Registration
 peaks at 693,796,864 bytes resident; all private/resident values remain under
 1 GiB. The installed complex edit takes 33.87 s, retaining 14/20 outputs and
@@ -2070,27 +2076,27 @@ stay inside the new exterior with certified clearance. Local seam/layout
 signatures avoid rebuilding an unrelated compound after the global plan changes.
 Source fingerprint: `3e3485bd61dded8fd92b3d1ae9db55325be7722f5c331cbd43827f78f443c66d`.
 
-The [20 focused tests](../../experiments/streets/python_v1/compound_ports_unit_02/unit_checks.json)
+The [20 focused tests](../../streets_dev/experiments/streets/python_v1/compound_ports_unit_02/unit_checks.json)
 pass both modes, width/rise changes, source reversals, heterogeneous strict
 radii, transformed datums/resolutions, whole-edge profile joins, zero curbs,
 furniture, released-buffer Update/full/restoration and unrelated-compound
 locality. Negative checks reject a centerline crossing an unsampled concave
 gap and a support request exceeding its sample budget. That run precedes only
 the added inspection README text. The
-[complete current-source rerun](../../experiments/streets/python_v1/suite_52/suite_checks.json)
+[complete current-source rerun](../../streets_dev/experiments/streets/python_v1/suite_52/suite_checks.json)
 passes all 840 tests in 91 modules, with zero failures/errors and unchanged source.
 
-The [combined development scene](../../experiments/streets/python_v1/native_51/python_streets_checkpoint.blend)
+The [combined development scene](../../streets_dev/experiments/streets/python_v1/native_51/python_streets_checkpoint.blend)
 passes generation and actual button/parameter/centerline edits with 57 fixtures,
 344,924 quads and zero GN modifiers. Each new fixture has 4,401 total quads,
 including 721 intersection quads. The
-[independent published-buffer audit](../../experiments/streets/python_v1/gallery_quality_50/import_quality_checks.json)
+[independent published-buffer audit](../../streets_dev/experiments/streets/python_v1/gallery_quality_50/import_quality_checks.json)
 proves all 306 previous parts exact in coordinates and topology, with no
 overlaps and no cells above the unchanged edge-ratio limit.
-[Fresh reopening/editing](../../experiments/streets/python_v1/reopen_51/reopen_checks.json)
-passes all 57. The [serial queue](../../experiments/streets/python_v1/dev46_checks.json)
+[Fresh reopening/editing](../../streets_dev/experiments/streets/python_v1/reopen_51/reopen_checks.json)
+passes all 57. The [serial queue](../../streets_dev/experiments/streets/python_v1/dev46_checks.json)
 verifies terminal exit, script hashes and the unchanged source for all three jobs.
-The [independent new-surface audit](../../experiments/streets/python_v1/compound_ports_saved_03/compound_saved_mesh_checks.json)
+The [independent new-surface audit](../../streets_dev/experiments/streets/python_v1/compound_ports_saved_03/compound_saved_mesh_checks.json)
 imports no runtime geometry: both new saved intersections have 64 exact shared
 profile edges, zero curbs, a 0.08 m ceiling, no graph depressions, complete-quad
 slopes below 9.362% and entrance slopes below 0.169%. Each complete curb chord
@@ -2110,27 +2116,27 @@ The continuing Section supplies the complete external profile; source Sections
 and the Connection survive, with no duplicate taper inside the junction. Datum,
 profile family, Street and interpolation compatibility remain mandatory.
 Source fingerprint: `4cb19348505fd1f104e897a6cb65484ce0d6d6b59790dc4e8355c3f195a14e93`.
-[Three focused tests](../../experiments/streets/python_v1/absorbed_profile_unit_02/unit_checks.json)
+[Three focused tests](../../streets_dev/experiments/streets/python_v1/absorbed_profile_unit_02/unit_checks.json)
 pass lower/higher/flat crowns, pure-rise and width/rise changes, Exact/Smooth,
 source reversals, transformed datums, resolutions, zero curbs, round corners,
 full mouths, locality, ownership reversal and released-cache restoration.
-[Five preceding ownership tests](../../experiments/streets/python_v1/absorbed_legacy_unit_dev45_01/unit_checks.json)
-also pass. The [two native fixtures](../../experiments/streets/python_v1/absorbed_profile_native_01/profile_native_checks.json)
+[Five preceding ownership tests](../../streets_dev/experiments/streets/python_v1/absorbed_legacy_unit_dev45_01/unit_checks.json)
+also pass. The [two native fixtures](../../streets_dev/experiments/streets/python_v1/absorbed_profile_native_01/profile_native_checks.json)
 pass actual rise Update, furniture, incremental/full equality, exact restoration
-and cold reconstruction. The [combined 55-fixture scene](../../experiments/streets/python_v1/native_50/python_streets_checkpoint.blend)
+and cold reconstruction. The [combined 55-fixture scene](../../streets_dev/experiments/streets/python_v1/native_50/python_streets_checkpoint.blend)
 now passes generation/Update, saved-buffer quality and fresh reopening. All
 296 previous mesh parts remain exact; the scene contains 336,122 convex quads
 and zero GN modifiers. All three real-network upgrades and saved-demo checks
-also pass. The [full numerical rerun](../../experiments/streets/python_v1/suite_51/suite_checks.json)
+also pass. The [full numerical rerun](../../streets_dev/experiments/streets/python_v1/suite_51/suite_checks.json)
 passes 835 tests in 90 modules, with zero failures/errors and unchanged source.
-The [eight-job receipt audit](../../experiments/streets/python_v1/dev45_audit_checks.json)
+The [eight-job receipt audit](../../streets_dev/experiments/streets/python_v1/dev45_audit_checks.json)
 verifies terminal success, entry-script hashes and memory limits. Independent
-[complete-quad slopes](../../experiments/streets/python_v1/slopes_gallery_dev45_01/slope_checks.json)
-and [whole-edge interfaces/fixture spacing](../../experiments/streets/python_v1/gallery_interfaces_11/interface_checks.json)
+[complete-quad slopes](../../streets_dev/experiments/streets/python_v1/slopes_gallery_dev45_01/slope_checks.json)
+and [whole-edge interfaces/fixture spacing](../../streets_dev/experiments/streets/python_v1/gallery_interfaces_11/interface_checks.json)
 also pass for this scene. An earlier complete run found
 one obsolete test expecting an absorbed rise change to fail. It now checks an
-incompatible datum, and [all four route checks](../../experiments/streets/python_v1/dev45_routes_unit_01/unit_checks.json)
-pass. A [source-preimage proof](../../experiments/streets/python_v1/dev45_route_test_source_proof.json)
+incompatible datum, and [all four route checks](../../streets_dev/experiments/streets/python_v1/dev45_routes_unit_01/unit_checks.json)
+pass. A [source-preimage proof](../../streets_dev/experiments/streets/python_v1/dev45_route_test_source_proof.json)
 verifies that only that test file changed after the focused native/numerical
 checks; runtime code and every other test remain byte-identical. The
 [published-buffer drawing and audit](STREETS_PYTHON_GEOMETRY.md#crown-rise-changes-owned-by-the-junction-dev45)
@@ -2138,16 +2144,16 @@ show the new surfaces, exact shared edges, zero curbs and rounded-corner samplin
 See the
 [construction](STREETS_PYTHON_GEOMETRY.md#crown-rise-changes-owned-by-the-junction-dev45).
 
-The matching [dev45 addon ZIP](../../experiments/streets/python_v1/packages/dev45_v2/blosm_streets_python_dev45.zip)
-passes [all four installed-copy checks](../../experiments/streets/python_v1/package_dev45_checks.json),
+The matching [dev45 addon ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev45_v2/blosm_streets_python_dev45.zip)
+passes [all four installed-copy checks](../../streets_dev/experiments/streets/python_v1/package_dev45_checks.json),
 including normal Canal import and fresh local/full Update. Its 1,179 Python
 files have the same qualified fingerprint, all runtime imports originate in
 the isolated installed copy, and no original preferences are saved. The
-[package record](../../experiments/streets/python_v1/packages/dev45_v2/package_checks.json)
+[package record](../../streets_dev/experiments/streets/python_v1/packages/dev45_v2/package_checks.json)
 verifies the archive and retains the original build receipt.
 
 The next construction experiment remains outside addon runtime. Its
-[complete compound exterior ports](../../experiments/streets/python_v1/compound_exterior_ports_03/compound_exterior_ports_checks.json)
+[complete compound exterior ports](../../streets_dev/experiments/streets/python_v1/compound_exterior_ports_03/compound_exterior_ports_checks.json)
 pass the eight synthetic width/rise/mode cases that currently fail compound
 clipping, seven reversal/transformed-resolution cases and incremental/full
 agreement after releasing cached meshes. It preserves source IDs, four complete
@@ -2163,39 +2169,39 @@ Dev44 integrates call-local NumPy buffers and ordered gradient accumulation in
 backtracking limits, step cap, positivity tests and floating-point accumulation
 order. The current Python-source fingerprint is
 `1ace9e03256f06763f5adb7cc243ac2d48d06cace1a870c1564fa379f6a097e2`.
-[Five focused tests](../../experiments/streets/python_v1/quad_workspace_unit_02/unit_checks.json)
+[Five focused tests](../../streets_dev/experiments/streets/python_v1/quad_workspace_unit_02/unit_checks.json)
 pass independent directional derivatives, rejected-trial isolation, fixed
 exterior/hole rims, unchanged heights/topology/materials, iteration limits and
 nonpositive-input rejection. The
-[integrated native replay](../../experiments/streets/python_v1/quad_workspace_integrated_01/integrated_workspace_checks.json)
+[integrated native replay](../../streets_dev/experiments/streets/python_v1/quad_workspace_integrated_01/integrated_workspace_checks.json)
 matches all six captured Canal optimizer calls exactly, including positions,
 connectivity, step counts and energies. The
-[controlled Canal Update comparison](../../experiments/streets/python_v1/canal_workspace_update_01/update_comparison_checks.json)
+[controlled Canal Update comparison](../../streets_dev/experiments/streets/python_v1/canal_workspace_update_01/update_comparison_checks.json)
 passes two alternating old/new pairs. Median local Update takes 11.860 s with
 the previous optimizer and 10.583 s with dev44, a 10.8% time reduction in that
 same-process experiment. Edited meshes, incremental/full output and restoration
 are exact, 14/20 output identities are retained and the other component stays
 unchanged. The worker peaks at 288,763,904 bytes resident. The earlier 37.51 s
 installed run is not a controlled baseline for this experiment. The
-[full numerical suite](../../experiments/streets/python_v1/suite_49/suite_checks.json)
+[full numerical suite](../../streets_dev/experiments/streets/python_v1/suite_49/suite_checks.json)
 passes 832 tests in 89 modules on unchanged source. The
-[new combined scene](../../experiments/streets/python_v1/native_49/python_streets_checkpoint.blend)
+[new combined scene](../../streets_dev/experiments/streets/python_v1/native_49/python_streets_checkpoint.blend)
 passes generation/Update and fresh reopening/editing of all 53 controllers.
-The [saved-buffer audit](../../experiments/streets/python_v1/gallery_quality_48/import_quality_checks.json)
+The [saved-buffer audit](../../streets_dev/experiments/streets/python_v1/gallery_quality_48/import_quality_checks.json)
 finds all 296 parts exact against dev43, with the same 326,458 convex,
 nonoverlapping quads and maximum edge ratio 7.97745. The
-[completed seven-job queue](../../experiments/streets/python_v1/dev44_checks.json)
+[completed seven-job queue](../../streets_dev/experiments/streets/python_v1/dev44_checks.json)
 also passes exact source/mesh/key upgrades of Berlin, Canal Street and Nashville.
-The [independent receipt audit](../../experiments/streets/python_v1/dev44_audit_checks.json)
+The [independent receipt audit](../../streets_dev/experiments/streets/python_v1/dev44_audit_checks.json)
 verifies terminal success, script hashes, unchanged source and the 1 GiB limits.
-The [saved bootstrap/demo check](../../experiments/streets/python_v1/scene_demo_dev44_01/demo_checks.json)
+The [saved bootstrap/demo check](../../streets_dev/experiments/streets/python_v1/scene_demo_dev44_01/demo_checks.json)
 passes actual execution and exact restoration. The
-[dev44 ZIP](../../experiments/streets/python_v1/packages/dev44_v1/blosm_streets_python_dev44.zip)
-also passes [all four installed-copy jobs](../../experiments/streets/python_v1/package_dev44_checks.json):
+[dev44 ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev44_v1/blosm_streets_python_dev44.zip)
+also passes [all four installed-copy jobs](../../streets_dev/experiments/streets/python_v1/package_dev44_checks.json):
 installation/full registration, both backends, external materials, normal Canal
 import, saved-buffer quality and fresh incremental/full Update. Every runtime
 module originates in the installed copy; its source remains unchanged. The
-[package record](../../experiments/streets/python_v1/packages/dev44_v1/package_checks.json)
+[package record](../../streets_dev/experiments/streets/python_v1/packages/dev44_v1/package_checks.json)
 verifies the payloads and completed installation qualification.
 
 ## Qualified development increment: bounded sharp Exact seams (dev43)
@@ -2203,20 +2209,20 @@ verifies the payloads and completed installation qualification.
 Dev43 resolves the four recorded 150-degree Exact seam failures with certified
 curve sampling and bounded use of free source ends. Its qualified source hash is
 `709ff27409ac4e4be9bb3c0cf860f1d33b4b24de597f76a743f8fb2025c8f4dd`.
-The [focused native checks](../../experiments/streets/python_v1/fitted_exact_native_01/fitted_native_checks.json)
+The [focused native checks](../../streets_dev/experiments/streets/python_v1/fitted_exact_native_01/fitted_native_checks.json)
 pass both new fixtures: 768 transition quads each, complete profile joins, at
 most 3.760 mm curb error, vertex/width Update, furniture and exact restoration.
-The [full numerical suite](../../experiments/streets/python_v1/suite_48/suite_checks.json)
+The [full numerical suite](../../streets_dev/experiments/streets/python_v1/suite_48/suite_checks.json)
 passes 827 tests in 88 modules, at 137,564,160 bytes peak resident memory.
-The [combined 53-fixture scene](../../experiments/streets/python_v1/native_48/python_streets_checkpoint.blend)
+The [combined 53-fixture scene](../../streets_dev/experiments/streets/python_v1/native_48/python_streets_checkpoint.blend)
 passes generation/Update, published-buffer quality, fresh reopening, slopes,
 whole-edge interfaces, authored-circle/Bundle topology and saved-script execution.
 All 288 previous mesh parts remain exact. It contains 326,458 quads and zero
 GN modifiers. The quickstart points to this scene. The
-[eleven-job queue](../../experiments/streets/python_v1/dev43_checks.json) also
+[eleven-job queue](../../streets_dev/experiments/streets/python_v1/dev43_checks.json) also
 passes exact upgrades of Berlin, Canal Street and Nashville and exports the
 actual meshes for the new drawing. All jobs retain the same source fingerprint.
-The [installable experimental ZIP](../../experiments/streets/python_v1/packages/dev43_v1/blosm_streets_python_dev43.zip)
+The [installable experimental ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev43_v1/blosm_streets_python_dev43.zip)
 also passes full addon registration, both backend choices, external materials,
 the Update button, a normal installed-copy Canal import and fresh real-network
 editing. All 21 Canal mesh parts match the reference exactly. Its observed local
@@ -2241,42 +2247,42 @@ source paths meet at a bent width/offset seam. Authored controls inside the
 trim remain compulsory; the centerline and complete outer profiles are kept.
 Bundle boundary consumers certify and sample each polynomial piece.
 
-[Seven maintained tests](../../experiments/streets/python_v1/exact_transitions_unit_02/unit_checks.json)
-and [focused Blender checks](../../experiments/streets/python_v1/exact_native_focus_01/exact_native_checks.json)
+[Seven maintained tests](../../streets_dev/experiments/streets/python_v1/exact_transitions_unit_02/unit_checks.json)
+and [focused Blender checks](../../streets_dev/experiments/streets/python_v1/exact_native_focus_01/exact_native_checks.json)
 pass for ordinary seams and the original two-ended Bundle failure. Native
 checks verify Update/full equality, exact restoration, cold-cache identity and
 whole published profile edges. The measured float32 centerline error is
 `4.88e-8` m; worker peak resident memory is 245,669,888 bytes. The
-[complete numerical regression](../../experiments/streets/python_v1/suite_47/suite_checks.json)
+[complete numerical regression](../../streets_dev/experiments/streets/python_v1/suite_47/suite_checks.json)
 passes **818 tests in 87 modules**, with zero errors/failures and identical
 before/after source hashes, at 139,694,080 bytes peak resident memory. The
-[source preimage proof](../../experiments/streets/python_v1/dev42_scene_instructions_proof.json)
+[source preimage proof](../../streets_dev/experiments/streets/python_v1/dev42_scene_instructions_proof.json)
 ties that tested `9038014b…` source to the intermediate `29036626…` fingerprint: only a generated
 README string in the native scene script changed; all Python logic, production
 files and numerical tests remain identical. The combined gallery now passes all
 six native checks: **51 fixtures / 321,626 quads**, generation/Update,
 saved-buffer comparison, fresh reopening, physical slopes, whole-edge
 interfaces and the independent higher-valence/annular Bundle audit. All 281
-prior mesh parts remain exact. The [nine-job queue](../../experiments/streets/python_v1/dev42_checks.json)
+prior mesh parts remain exact. The [nine-job queue](../../streets_dev/experiments/streets/python_v1/dev42_checks.json)
 also passes exact upgrades of Berlin, Canal Street and Nashville to dev42.
 The quickstart points to the corrected dev42 inspection scene and explains
 its Exact/Smooth demonstration text. A final
-[startup-text source proof](../../experiments/streets/python_v1/dev42_bootstrap_source_proof.json)
+[startup-text source proof](../../streets_dev/experiments/streets/python_v1/dev42_bootstrap_source_proof.json)
 records the explicit `bpy` import missing from the optional bootstrap. Only
 that generated string changed after the nine-job qualification; production
 and test logic remain identical. The
-[new saved scene](../../experiments/streets/python_v1/native_47/scene_text_checks.json)
+[new saved scene](../../streets_dev/experiments/streets/python_v1/native_47/scene_text_checks.json)
 retains all geometry/source/manifests/transforms exactly, and
-[actual execution of both saved texts](../../experiments/streets/python_v1/dev42_scene_demo_02/demo_checks.json)
+[actual execution of both saved texts](../../streets_dev/experiments/streets/python_v1/dev42_scene_demo_02/demo_checks.json)
 now passes Exact/Smooth switching and exact restoration for both new fixtures.
 
-The [wider angle sweep](../../experiments/streets/python_v1/exact_angles_01/angle_checks.json)
+The [wider angle sweep](../../streets_dev/experiments/streets/python_v1/exact_angles_01/angle_checks.json)
 passes both signs of 5, 35, 65 and 110 degrees for 30/60 m source spans. Four
 150-degree cases fail the positive-chart or ratio-8 guards. These valid-input
 failures remain construction work; mixed Exact/Smooth bent seams also remain
 unfinished. See the [piecewise construction and formulas](STREETS_PYTHON_GEOMETRY.md#exact-bent-dimensional-seams-piecewise-common-miter-construction).
 
-An [isolated 24-candidate pattern trial](../../experiments/streets/python_v1/exact_atlas_probe_01/atlas_probe_checks.json)
+An [isolated 24-candidate pattern trial](../../streets_dev/experiments/streets/python_v1/exact_atlas_probe_01/atlas_probe_checks.json)
 does not solve those sharper inputs. Adding 1:3 transverse refinement at the
 miter alone fails ratio 8 or the physical-slope limit. None of that prototype
 is integrated into the qualified runtime. The next investigation must reconcile
@@ -2287,7 +2293,7 @@ profile and quad-quality contracts.
 
 The qualified dev41 all-Python source fingerprint is
 `689cd567c9ba6d7c8475d3425974fa1abf17863f33b243bd7abae7a32796ff90`.
-The [source proof](../../experiments/streets/python_v1/extended_fixture_source_proof.json)
+The [source proof](../../streets_dev/experiments/streets/python_v1/extended_fixture_source_proof.json)
 shows that this increment changes only tests/fixture definitions; production
 code is byte-identical to the dev41 core below. The old 808-test numerical
 baseline is supplemented by three passing maintained tests, rather than
@@ -2295,7 +2301,7 @@ described as an unexecuted combined 811-test run.
 
 `six_way`, `seven_way` and `two_merged_terminals` now join the original 46
 fixtures in one scene. All 263 old mesh parts remain exact. The
-[six-job native qualification](../../experiments/streets/python_v1/extended_gallery_checks.json)
+[six-job native qualification](../../streets_dev/experiments/streets/python_v1/extended_gallery_checks.json)
 passes generation/Update, saved-buffer quality, fresh reopening, physical
 slopes, whole-edge interfaces and independent authored-circle/profile checks.
 The gallery has 313,576 quads. The new cases retain ordinary position/width
@@ -2324,10 +2330,10 @@ initially concave, a bounded interior half-plane initialization is tried before
 the unchanged shape correction. No boundary, crown, slope or overlap guard is
 weakened. All faces are constructed directly as quads.
 
-The [32-move development sweep](../../experiments/streets/python_v1/terminal_move_matrix_03/move_checks.json)
+The [32-move development sweep](../../streets_dev/experiments/streets/python_v1/terminal_move_matrix_03/move_checks.json)
 passes both signs of 0.1 mm through 1 m in Exact and Smooth modes. The final
-source's [eight permanent tests](../../experiments/streets/python_v1/terminal_unions_unit_03/unit_checks.json)
-and [focused Blender Update check](../../experiments/streets/python_v1/terminal_update_native_02/terminal_update_checks.json)
+source's [eight permanent tests](../../streets_dev/experiments/streets/python_v1/terminal_unions_unit_03/unit_checks.json)
+and [focused Blender Update check](../../streets_dev/experiments/streets/python_v1/terminal_update_native_02/terminal_update_checks.json)
 also pass. The latter covers float32 coordinates, local/full equality, remote
 identity, branch switching, restoration and cold-cache reconstruction in both
 modes. See the [formulas and construction](STREETS_PYTHON_GEOMETRY.md#stable-small-edits-bounded-boundary-sampling-and-local-grading).
@@ -2409,7 +2415,7 @@ generates the captured 5 cm Bundle edit in both interpolation modes and matches
 full rebuilding. Five focused tests pass both move signs, path reversal,
 resolutions 1–4, rigid transforms, zero display height, restoration and cache
 release. The new fixture is `nonparallel_merged_terminal`. The
-[broad suite](../../experiments/streets/python_v1/suite_45/suite_checks.json)
+[broad suite](../../streets_dev/experiments/streets/python_v1/suite_45/suite_checks.json)
 passes **805 tests across 85 modules** on unchanged source
 `cd96f6009a7efba9f0f02232eae180bd283f5b4b2e1e17ef0661f80f86c4dbd1`.
 The current native-qualification snapshot is
@@ -2417,10 +2423,10 @@ The current native-qualification snapshot is
 Only a native verification script changed after that suite: its remote-object
 identity must be compared across each local Update rather than across an
 explicit forced full rebuild. The
-[preimage proof](../../experiments/streets/python_v1/dev40_native_check_fix.json)
+[preimage proof](../../streets_dev/experiments/streets/python_v1/dev40_native_check_fix.json)
 establishes byte-identical production and numerical-test sources. The corrected
 focused native check passes. The
-[combined native queue](../../experiments/streets/python_v1/dev40_checks.json)
+[combined native queue](../../streets_dev/experiments/streets/python_v1/dev40_checks.json)
 then passes all seven jobs on the current source. The gallery has **46 fixtures
 and 295,216 quads**; all **260 previous mesh parts** remain exact. Native
 generation/Update takes **247.98 s** at **381,145,088 bytes peak resident**;
@@ -2454,7 +2460,7 @@ its 788-test broad suite, combined gallery and fresh reopening all pass.
 Remaining input branches and release gates are below.
 Dev38 adds one-sided finite strips opposite an aligned merged free end. The
 seven focused numerical cases pass, including constant-width members. The
-[source-hashed broad suite](../../experiments/streets/python_v1/suite_41/suite_checks.json)
+[source-hashed broad suite](../../streets_dev/experiments/streets/python_v1/suite_41/suite_checks.json)
 passes **795 tests across 83 modules** on unchanged Python sources:
 `0a0fa2d45a6ec65e2144401de881410ae22c0ae16986692542f2e202319b0e88`.
 Final native qualification is recorded with the checkpoint below.
@@ -2467,16 +2473,16 @@ The geometry-qualified dev39 Python source snapshot is
 `0b27e00c8ad2b9fe1e1ea19b11a8a9fb6a36db1bcdbd50713d55548781a2d981`.
 The current snapshot, including runtime cache-lifetime handling and its native
 test, is `ff6bd7b2dd09ba6ed99b8e164f2cb36b2f6882353a2e6360c6e2d1102c1cb33a`.
-The [final broad rerun](../../experiments/streets/python_v1/suite_44/suite_checks.json)
+The [final broad rerun](../../streets_dev/experiments/streets/python_v1/suite_44/suite_checks.json)
 passes **800 tests across 84 modules**, with zero errors/failures and equal
 before/after fingerprints. Its worker takes **255.35 s**, peaking at
 **137,256,960 bytes resident** and **150,421,504 bytes sampled private memory**.
-All [ten final native/numerical jobs](../../experiments/streets/python_v1/final_dev39_checks.json)
+All [ten final native/numerical jobs](../../streets_dev/experiments/streets/python_v1/final_dev39_checks.json)
 complete on that unchanged snapshot. Preceding geometry evidence below retains
 its exact source version.
 Its 29 focused checks pass. A wider-reach certificate now leaves cached source
 sampling metadata unchanged. The final checkpoint-41 fresh reopen passes all
-45 controllers. The [preceding broad run](../../experiments/streets/python_v1/suite_43/suite_checks.json)
+45 controllers. The [preceding broad run](../../streets_dev/experiments/streets/python_v1/suite_43/suite_checks.json)
 passes **800 tests across 84 modules**, with the same source hash before and
 after execution. Its worker takes **706.72 s**, peaking at **137,936,896 bytes
 resident**, under the 1 GiB process cap and 1 GiB system reserve. These suite
@@ -2485,10 +2491,10 @@ The earlier 799-test run found one obsolete terminal-mouth expectation, now
 replaced with a complete junction-owned-incidence check rather than a stop at
 the former dimensional seam.
 Current native asset/backend checks also pass: the
-[shared-library suite](../../experiments/streets/python_v1/assets_dev39_01/asset_checks.json)
+[shared-library suite](../../streets_dev/experiments/streets/python_v1/assets_dev39_01/asset_checks.json)
 runs 31 tests for Base/Pro availability, bundled/external identity, different
 datablock kinds, storage policy and exact-revision recovery in Blender. The
-[backend selection check](../../experiments/streets/python_v1/backend_dev39_03/backend_checks.json)
+[backend selection check](../../streets_dev/experiments/streets/python_v1/backend_dev39_03/backend_checks.json)
 uses the real registered import setting and renderer facade on one shared
 prepared T-junction. Both choices generate 2,304 quads. Python produces ordinary
 meshes, shares the default material with GN, and updates without changing the
@@ -2506,7 +2512,7 @@ Street islands and the unsupported chart configurations below remain open.
 
 ### Runtime lifetime and final native verification
 
-The [lifetime check](../../experiments/streets/python_v1/lifecycle_dev39_02/lifecycle_checks.json)
+The [lifetime check](../../streets_dev/experiments/streets/python_v1/lifecycle_dev39_02/lifecycle_checks.json)
 verifies garbage collection of a deleted controller's engine on the next Update,
 cache reuse for retained controllers, and release of prior-file engines on
 Blender's file-load event. Unregistering also clears the engines. Registration is
@@ -2514,14 +2520,14 @@ idempotent. There is no drawing, timer or depsgraph observer; editing still wait
 for the explicit Update button. Live controller count bounds engine lifetime;
 each engine separately applies its pattern LRU and geometry-release policy.
 
-The [registered extension check](../../experiments/streets/python_v1/extension_dev39_01/extension_checks.json)
+The [registered extension check](../../streets_dev/experiments/streets/python_v1/extension_dev39_01/extension_checks.json)
 also passes: a custom mesh provider and material participate in Update,
 incremental/full comparison, save/reopen, exact restoration and missing-provider
 recovery without discarding previous output. The final-source
-[gallery reopen](../../experiments/streets/python_v1/reopen_42/reopen_checks.json),
-[source grouping](../../experiments/streets/python_v1/grouping_dev39_02/grouping_checks.json),
-[late publication rollback](../../experiments/streets/python_v1/publication_dev39_02/publication_checks.json)
-and [Undo/Redo](../../experiments/streets/python_v1/undo_dev39_02/undo_checks.json)
+[gallery reopen](../../streets_dev/experiments/streets/python_v1/reopen_42/reopen_checks.json),
+[source grouping](../../streets_dev/experiments/streets/python_v1/grouping_dev39_02/grouping_checks.json),
+[late publication rollback](../../streets_dev/experiments/streets/python_v1/publication_dev39_02/publication_checks.json)
+and [Undo/Redo](../../streets_dev/experiments/streets/python_v1/undo_dev39_02/undo_checks.json)
 all pass, as does the separate final broad suite recorded above.
 
 Implemented:
@@ -2667,9 +2673,9 @@ reopening verify local/full equality, exact restoration, released-buffer
 reconstruction and unchanged remote output identity. The source inputs are not
 rewritten. The fixture uses **4,832 quads**, including its unrelated control road.
 
-The [dev39 Canal upgrade](../../experiments/streets/python_v1/canal_dev39_upgrade_01/upgrade_checks.json)
+The [dev39 Canal upgrade](../../streets_dev/experiments/streets/python_v1/canal_dev39_upgrade_01/upgrade_checks.json)
 preserves all baseline source records, mesh buffers and semantic output keys.
-The [same-version Connection-12 edit](../../experiments/streets/python_v1/canal_dev39_reopen_01/import_reopen_checks.json)
+The [same-version Connection-12 edit](../../streets_dev/experiments/streets/python_v1/canal_dev39_reopen_01/import_reopen_checks.json)
 moves both endpoint copies and increases both adjacent Section widths by 5 cm.
 It now passes: cold reconstruction **33.90 s**, local Update **38.03 s**,
 forced full **39.46 s**, restoration **35.09 s**. **14 of 20** output objects
@@ -2688,13 +2694,13 @@ The wider cases of profile-changing absorbed seams, multiple junctions claiming
 one dimensional seam, and internal physical junctions inside a merged Bundle
 remain construction work.
 
-The [edited Canal inspection scene](../../experiments/streets/python_v1/canal_dev39_edited_01/python_streets_canal_width_edit.blend)
+The [edited Canal inspection scene](../../streets_dev/experiments/streets/python_v1/canal_dev39_edited_01/python_streets_canal_width_edit.blend)
 uses the final source snapshot and exactly the previously captured edited input.
-Its [construction/reopen checks](../../experiments/streets/python_v1/canal_dev39_edited_01/edited_scene_checks.json)
+Its [construction/reopen checks](../../streets_dev/experiments/streets/python_v1/canal_dev39_edited_01/edited_scene_checks.json)
 verify that the Section-29/26 corner retains its requested **10 m radius**, both
 new dimensional seams have explicit junction owners, and a fresh reopen/Update
 retains every mesh and output object. The
-[independent saved-buffer audit](../../experiments/streets/python_v1/canal_dev39_edited_quality_01/import_quality_checks.json)
+[independent saved-buffer audit](../../streets_dev/experiments/streets/python_v1/canal_dev39_edited_quality_01/import_quality_checks.json)
 passes all **21,852 quads**, with maximum edge ratio **7.7401**, no overlaps and
 the unchanged crown envelope. That inspection-copy worker peaks at
 **280,117,248 bytes resident**. Its optional text enables the manual Update
@@ -2731,7 +2737,7 @@ manifold joins, local/full equality, remote-output locality, exact restoration
 and preserved height queries after buffer release. They are included in the
 795-test broad suite. The new combined fixture is `one_sided_free_cap`.
 
-The [independent native-buffer audit](../../experiments/streets/python_v1/one_sided_cap_native_01/native_cap_checks.json)
+The [independent native-buffer audit](../../streets_dev/experiments/streets/python_v1/one_sided_cap_native_01/native_cap_checks.json)
 checks manifold incidence, disk Euler count, no exposed internal cut edges,
 complete mouth profiles and both directions of curb approximation. Maximum
 sampled curb error is **2.749 mm**, plus the retained 1 mm source-collection
@@ -2764,18 +2770,18 @@ resolutions 1–4, shifted datums/zero exaggeration, rotated coordinates, one-si
 and staggered width changes, offsets, incremental/full/restoration equality,
 remote-output locality, cache release, ownership changes and crossing rejection.
 Skew-strip checks also verify that opposite terminals use their own dimensions.
-The [source-hashed broad suite](../../experiments/streets/python_v1/suite_39/suite_checks.json)
+The [source-hashed broad suite](../../streets_dev/experiments/streets/python_v1/suite_39/suite_checks.json)
 passes **788 tests across 82 modules** in 164.74 s worker wall time, with
 132,976,640 bytes peak resident. Its before/after Python-source SHA-256 is
 `8b3cd35e1f987cf4d88b8139fb050f50ca2beb5ed6c26572dbf69a797f535151`.
 The focused cases are included in that frozen-source run.
 
 The combined gallery and fresh reopening qualify all three new examples.
-The [native curb audit](../../experiments/streets/python_v1/dimensional_curbs_01/curb_checks.json)
+The [native curb audit](../../streets_dev/experiments/streets/python_v1/dimensional_curbs_01/curb_checks.json)
 measures at most **2.86 mm** polygonal outline error against the physical lookup
 curves; reserving another 1 mm for source-curve collection keeps the full
 5 mm budget. It checks nine samples per exterior edge and the inverse direction.
-The [interface audit](../../experiments/streets/python_v1/gallery_interfaces_03/interface_checks.json)
+The [interface audit](../../streets_dev/experiments/streets/python_v1/gallery_interfaces_03/interface_checks.json)
 verifies all 64 float32 whole mouth edges of the new attached example, the prior
 four attached cases, and disjoint world bounds for all 43 fixtures.
 See [construction formulas and saved-mesh drawing](STREETS_PYTHON_GEOMETRY.md#width-changing-sections-inside-an-overlapping-bundle).
@@ -2828,10 +2834,10 @@ capture verifies that failure preserves the previous meshes and manifest and
 that restoring the sources restores the exact geometry. The dev39 implementation
 and passing native qualification of this exact edit are recorded above.
 
-- [Historical Canal normal import](../../experiments/streets/python_v1/canal_dev37_01/python_street_import.blend)
-- [Saved-buffer audit](../../experiments/streets/python_v1/canal_dev37_quality_01/import_quality_checks.json)
-- [Passing terminal Update/reopen check](../../experiments/streets/python_v1/canal_dev37_reopen_02/import_reopen_checks.json)
-- [Exact rejected seam input and last-good preservation](../../experiments/streets/python_v1/canal_seam_gap_01/construction_gap.json)
+- [Historical Canal normal import](../../streets_dev/experiments/streets/python_v1/canal_dev37_01/python_street_import.blend)
+- [Saved-buffer audit](../../streets_dev/experiments/streets/python_v1/canal_dev37_quality_01/import_quality_checks.json)
+- [Passing terminal Update/reopen check](../../streets_dev/experiments/streets/python_v1/canal_dev37_reopen_02/import_reopen_checks.json)
+- [Exact rejected seam input and last-good preservation](../../streets_dev/experiments/streets/python_v1/canal_seam_gap_01/construction_gap.json)
 
 ### Historical additional input: Nashville, dev37
 
@@ -2849,9 +2855,9 @@ retain identity and the other component is untouched. Peak resident is
 As for the other timings, this qualifies the specified edit, not every source
 configuration or a universal latency target.
 
-- [Historical Nashville normal import](../../experiments/streets/python_v1/nashville_dev37_01/python_street_import.blend)
-- [Saved-buffer audit and strict geometry comparison](../../experiments/streets/python_v1/nashville_dev37_quality_01/import_quality_checks.json)
-- [Fresh seam Update/reopen qualification](../../experiments/streets/python_v1/nashville_dev37_reopen_01/import_reopen_checks.json)
+- [Historical Nashville normal import](../../streets_dev/experiments/streets/python_v1/nashville_dev37_01/python_street_import.blend)
+- [Saved-buffer audit and strict geometry comparison](../../streets_dev/experiments/streets/python_v1/nashville_dev37_quality_01/import_quality_checks.json)
+- [Fresh seam Update/reopen qualification](../../streets_dev/experiments/streets/python_v1/nashville_dev37_reopen_01/import_reopen_checks.json)
 
 ### Concrete next construction cases
 
@@ -2865,7 +2871,7 @@ numerical checks above. Its full native/suite qualification remains separate;
 the goal remains active.
 
 The two captured limitations are now resolved for their actual inputs: dev38
-handles the [5 cm skew-cap edit](../../experiments/streets/python_v1/dimensional_free_cap_gap_01/construction_gap.json),
+handles the [5 cm skew-cap edit](../../streets_dev/experiments/streets/python_v1/dimensional_free_cap_gap_01/construction_gap.json),
 and dev39 handles the Canal Connection-12 width edit. Their old rejection
 captures remain historical evidence, not the current capability claim.
 
@@ -2891,7 +2897,7 @@ Dev38 adds the one-sided finite cap; dev39 adds a dimensional seam owned by a
 rounded junction. Checkpoint 41 uses the geometry-qualified dev39 source snapshot, with
 **288,948 quads** in the complete scene and no GN modifiers. Its bounded Blender
 generation/Update check takes **221.40 s**, peaking at **373,854,208 bytes resident**.
-The [strict comparison with checkpoint 40](../../experiments/streets/python_v1/gallery_quality_41/import_quality_checks.json)
+The [strict comparison with checkpoint 40](../../streets_dev/experiments/streets/python_v1/gallery_quality_41/import_quality_checks.json)
 retains all **260** mesh parts exactly after the read-only certificate fix.
 The current-source checkpoint-41 fresh reopen passes all 45 controllers in
 **168.41 s**, at **392,318,976 bytes peak resident**. Workers use a 1 GiB process cap with a 1 GiB
@@ -2904,55 +2910,55 @@ All gallery sources use Smooth interpolation; the numerical suite also covers
 the retained Exact cases. Source edits rebuild related surfaces and furniture,
 while unrelated outputs retain their object identities.
 
-- [Combined scene, checkpoint 41](../../experiments/streets/python_v1/native_41/python_streets_checkpoint.blend)
-- [Generation/update checks and per-surface measurements](../../experiments/streets/python_v1/native_41/scene_checks.json)
-- [Current-source fresh reopening and Edit Mode checks](../../experiments/streets/python_v1/reopen_42/reopen_checks.json)
-- [Final-source saved-buffer audit; all 260 checkpoint-40 parts exact](../../experiments/streets/python_v1/gallery_quality_41/import_quality_checks.json)
-- [Checkpoint 40 versus dev38; all 255 previous parts exact](../../experiments/streets/python_v1/gallery_quality_40/import_quality_checks.json)
-- [Curb accuracy, whole mouth edges and exact per-network comparison with dev34](../../experiments/streets/python_v1/finite_boundaries_02/boundary_checks.json)
-- [Current whole mouth edges, zero curbs and gallery spacing](../../experiments/streets/python_v1/gallery_interfaces_05/interface_checks.json)
-- [Historical Berlin normal import, dev37](../../experiments/streets/python_v1/berlin_dev37_01/python_street_import.blend)
-- [Dev37 Berlin saved-buffer audit; all 328 parts exact](../../experiments/streets/python_v1/berlin_dev37_quality_01/import_quality_checks.json)
-- [Dev37 combined seam/Bundle Update qualification](../../experiments/streets/python_v1/berlin_dev37_reopen_01/import_reopen_checks.json)
-- [Framed Berlin inspection copy, dev37](../../experiments/streets/python_v1/berlin_dev37_inspection_01/python_streets_berlin_inspection.blend)
-- [Earlier Berlin normal import, dev35](../../experiments/streets/python_v1/berlin_dev35_01/python_street_import.blend)
-- [Berlin regenerated with dev36; exact source/meshes/semantic keys](../../experiments/streets/python_v1/berlin_dev36_upgrade_01/upgrade_checks.json)
-- [Dev36 Berlin saved-buffer quality and exact comparison](../../experiments/streets/python_v1/berlin_dev36_quality_01/import_quality_checks.json)
-- [Current framed Berlin inspection copy, dev36](../../experiments/streets/python_v1/berlin_dev36_inspection_01/python_streets_berlin_inspection.blend)
-- [Framed Berlin inspection copy with optional manual-edit panel](../../experiments/streets/python_v1/berlin_dev35_inspection_01/python_streets_berlin_inspection.blend)
-- [Inspection copy: exact source/mesh buffers and verified UI operator](../../experiments/streets/python_v1/berlin_dev35_inspection_01/inspection_checks.json)
-- [Berlin saved-buffer quality and unchanged parts](../../experiments/streets/python_v1/berlin_dev35_quality_02/import_quality_checks.json)
-- [Berlin finite-Bundle curbs, mouth seams and independent slopes](../../experiments/streets/python_v1/berlin_dev35_boundaries_02/finite_import_checks.json)
-- [Berlin cold reconstruction, combined seam/Bundle edits and full-build equivalence](../../experiments/streets/python_v1/berlin_dev35_reopen_01/import_reopen_checks.json)
-- [Historical dev34 scene with 38 fixtures](../../experiments/streets/python_v1/native_31/python_streets_checkpoint.blend)
-- [Addition of the attached overlap: all 179 previous mesh buffers unchanged](../../experiments/streets/python_v1/gallery_quality_29/import_quality_checks.json)
-- [Complete Nashville import, dev33, physical profile heights](../../experiments/streets/python_v1/nashville_dev33_01/python_street_import.blend)
-- [Nashville saved-buffer quality audit](../../experiments/streets/python_v1/nashville_dev33_quality_01/import_quality_checks.json)
-- [Nashville fresh reopening and seam-edit equivalence](../../experiments/streets/python_v1/nashville_dev33_reopen_01/import_reopen_checks.json)
-- [Independent Bundle reference qualification](../../experiments/streets/python_v1/bundle_reference_04/bundle_reference_checks.json)
-- [Native Undo/Redo checkpoints](../../experiments/streets/python_v1/undo_03/undo_checks.json)
-- [Grouped/per-Street/mixed inputs](../../experiments/streets/python_v1/grouping_01/grouping_checks.json)
-- [Failed-publication rollback and retry](../../experiments/streets/python_v1/publication_02/publication_checks.json)
-- [Complete Berlin ground-carriageway import, dev28](../../experiments/streets/python_v1/berlin_23/python_street_import.blend)
-- [Berlin scene upgraded to dev30 with exact source and mesh buffers](../../experiments/streets/python_v1/berlin_upgrade_01/python_street_import_upgraded.blend)
-- [Explicit dev28-to-dev30 upgrade checks](../../experiments/streets/python_v1/berlin_upgrade_01/upgrade_checks.json)
-- [Dev30 Berlin seam edit, fresh reconstruction, local/full equality and restoration](../../experiments/streets/python_v1/berlin_seam_02/import_reopen_checks.json)
-- [Earlier dev24 real-scene reopening, local/full comparison and restoration](../../experiments/streets/python_v1/import_reopen_20/import_reopen_checks.json)
-- [Dev28 published-buffer audit and unchanged-part comparison](../../experiments/streets/python_v1/import_quality_25/import_quality_checks.json)
-- [Sub-cell mouth alignment drawing](../../experiments/streets/python_v1/mouth_alignment_01/mouth_alignment.svg)
-- [Complete-profile and continuing-road equality checks](../../experiments/streets/python_v1/mouth_alignment_01/mouth_checks.json)
-- [Physical footprint and independent-guide diagnostic](../../experiments/streets/python_v1/footprints_02/footprint_checks.json)
-- [Combined compound outlines and preserved hole](../../experiments/streets/python_v1/footprints_02/compound_boundaries.svg)
-- [Compound boundary/profile conditions](../../experiments/streets/python_v1/footprints_03/footprint_checks.json)
-- [Direct planar quad layout drawings](../../experiments/streets/python_v1/quad_charts_01/quad_charts.svg)
-- [Planar chart quality qualification](../../experiments/streets/python_v1/quad_charts_01/quad_chart_checks.json)
-- [Latest footprint diagnostic](../../experiments/streets/python_v1/footprints_04/footprint_checks.json)
-- [Conforming compound quad drawings](../../experiments/streets/python_v1/compound_charts_03/compound_quad_charts.svg)
-- [Compound planar mesh and curve qualification](../../experiments/streets/python_v1/compound_charts_03/compound_chart_checks.json)
-- [Compound profiled surface drawings](../../experiments/streets/python_v1/compound_surfaces_03/compound_surfaces.svg)
-- [Compound surface primitive qualification](../../experiments/streets/python_v1/compound_surfaces_03/compound_surface_checks.json)
-- [Current profiled chart qualification](../../experiments/streets/python_v1/profiled_charts_02/compound_surface_checks.json)
-- [Current profiled chart drawings](../../experiments/streets/python_v1/profiled_charts_02/compound_surfaces.svg)
+- [Combined scene, checkpoint 41](../../streets_dev/experiments/streets/python_v1/native_41/python_streets_checkpoint.blend)
+- [Generation/update checks and per-surface measurements](../../streets_dev/experiments/streets/python_v1/native_41/scene_checks.json)
+- [Current-source fresh reopening and Edit Mode checks](../../streets_dev/experiments/streets/python_v1/reopen_42/reopen_checks.json)
+- [Final-source saved-buffer audit; all 260 checkpoint-40 parts exact](../../streets_dev/experiments/streets/python_v1/gallery_quality_41/import_quality_checks.json)
+- [Checkpoint 40 versus dev38; all 255 previous parts exact](../../streets_dev/experiments/streets/python_v1/gallery_quality_40/import_quality_checks.json)
+- [Curb accuracy, whole mouth edges and exact per-network comparison with dev34](../../streets_dev/experiments/streets/python_v1/finite_boundaries_02/boundary_checks.json)
+- [Current whole mouth edges, zero curbs and gallery spacing](../../streets_dev/experiments/streets/python_v1/gallery_interfaces_05/interface_checks.json)
+- [Historical Berlin normal import, dev37](../../streets_dev/experiments/streets/python_v1/berlin_dev37_01/python_street_import.blend)
+- [Dev37 Berlin saved-buffer audit; all 328 parts exact](../../streets_dev/experiments/streets/python_v1/berlin_dev37_quality_01/import_quality_checks.json)
+- [Dev37 combined seam/Bundle Update qualification](../../streets_dev/experiments/streets/python_v1/berlin_dev37_reopen_01/import_reopen_checks.json)
+- [Framed Berlin inspection copy, dev37](../../streets_dev/experiments/streets/python_v1/berlin_dev37_inspection_01/python_streets_berlin_inspection.blend)
+- [Earlier Berlin normal import, dev35](../../streets_dev/experiments/streets/python_v1/berlin_dev35_01/python_street_import.blend)
+- [Berlin regenerated with dev36; exact source/meshes/semantic keys](../../streets_dev/experiments/streets/python_v1/berlin_dev36_upgrade_01/upgrade_checks.json)
+- [Dev36 Berlin saved-buffer quality and exact comparison](../../streets_dev/experiments/streets/python_v1/berlin_dev36_quality_01/import_quality_checks.json)
+- [Current framed Berlin inspection copy, dev36](../../streets_dev/experiments/streets/python_v1/berlin_dev36_inspection_01/python_streets_berlin_inspection.blend)
+- [Framed Berlin inspection copy with optional manual-edit panel](../../streets_dev/experiments/streets/python_v1/berlin_dev35_inspection_01/python_streets_berlin_inspection.blend)
+- [Inspection copy: exact source/mesh buffers and verified UI operator](../../streets_dev/experiments/streets/python_v1/berlin_dev35_inspection_01/inspection_checks.json)
+- [Berlin saved-buffer quality and unchanged parts](../../streets_dev/experiments/streets/python_v1/berlin_dev35_quality_02/import_quality_checks.json)
+- [Berlin finite-Bundle curbs, mouth seams and independent slopes](../../streets_dev/experiments/streets/python_v1/berlin_dev35_boundaries_02/finite_import_checks.json)
+- [Berlin cold reconstruction, combined seam/Bundle edits and full-build equivalence](../../streets_dev/experiments/streets/python_v1/berlin_dev35_reopen_01/import_reopen_checks.json)
+- [Historical dev34 scene with 38 fixtures](../../streets_dev/experiments/streets/python_v1/native_31/python_streets_checkpoint.blend)
+- [Addition of the attached overlap: all 179 previous mesh buffers unchanged](../../streets_dev/experiments/streets/python_v1/gallery_quality_29/import_quality_checks.json)
+- [Complete Nashville import, dev33, physical profile heights](../../streets_dev/experiments/streets/python_v1/nashville_dev33_01/python_street_import.blend)
+- [Nashville saved-buffer quality audit](../../streets_dev/experiments/streets/python_v1/nashville_dev33_quality_01/import_quality_checks.json)
+- [Nashville fresh reopening and seam-edit equivalence](../../streets_dev/experiments/streets/python_v1/nashville_dev33_reopen_01/import_reopen_checks.json)
+- [Independent Bundle reference qualification](../../streets_dev/experiments/streets/python_v1/bundle_reference_04/bundle_reference_checks.json)
+- [Native Undo/Redo checkpoints](../../streets_dev/experiments/streets/python_v1/undo_03/undo_checks.json)
+- [Grouped/per-Street/mixed inputs](../../streets_dev/experiments/streets/python_v1/grouping_01/grouping_checks.json)
+- [Failed-publication rollback and retry](../../streets_dev/experiments/streets/python_v1/publication_02/publication_checks.json)
+- [Complete Berlin ground-carriageway import, dev28](../../streets_dev/experiments/streets/python_v1/berlin_23/python_street_import.blend)
+- [Berlin scene upgraded to dev30 with exact source and mesh buffers](../../streets_dev/experiments/streets/python_v1/berlin_upgrade_01/python_street_import_upgraded.blend)
+- [Explicit dev28-to-dev30 upgrade checks](../../streets_dev/experiments/streets/python_v1/berlin_upgrade_01/upgrade_checks.json)
+- [Dev30 Berlin seam edit, fresh reconstruction, local/full equality and restoration](../../streets_dev/experiments/streets/python_v1/berlin_seam_02/import_reopen_checks.json)
+- [Earlier dev24 real-scene reopening, local/full comparison and restoration](../../streets_dev/experiments/streets/python_v1/import_reopen_20/import_reopen_checks.json)
+- [Dev28 published-buffer audit and unchanged-part comparison](../../streets_dev/experiments/streets/python_v1/import_quality_25/import_quality_checks.json)
+- [Sub-cell mouth alignment drawing](../../streets_dev/experiments/streets/python_v1/mouth_alignment_01/mouth_alignment.svg)
+- [Complete-profile and continuing-road equality checks](../../streets_dev/experiments/streets/python_v1/mouth_alignment_01/mouth_checks.json)
+- [Physical footprint and independent-guide diagnostic](../../streets_dev/experiments/streets/python_v1/footprints_02/footprint_checks.json)
+- [Combined compound outlines and preserved hole](../../streets_dev/experiments/streets/python_v1/footprints_02/compound_boundaries.svg)
+- [Compound boundary/profile conditions](../../streets_dev/experiments/streets/python_v1/footprints_03/footprint_checks.json)
+- [Direct planar quad layout drawings](../../streets_dev/experiments/streets/python_v1/quad_charts_01/quad_charts.svg)
+- [Planar chart quality qualification](../../streets_dev/experiments/streets/python_v1/quad_charts_01/quad_chart_checks.json)
+- [Latest footprint diagnostic](../../streets_dev/experiments/streets/python_v1/footprints_04/footprint_checks.json)
+- [Conforming compound quad drawings](../../streets_dev/experiments/streets/python_v1/compound_charts_03/compound_quad_charts.svg)
+- [Compound planar mesh and curve qualification](../../streets_dev/experiments/streets/python_v1/compound_charts_03/compound_chart_checks.json)
+- [Compound profiled surface drawings](../../streets_dev/experiments/streets/python_v1/compound_surfaces_03/compound_surfaces.svg)
+- [Compound surface primitive qualification](../../streets_dev/experiments/streets/python_v1/compound_surfaces_03/compound_surface_checks.json)
+- [Current profiled chart qualification](../../streets_dev/experiments/streets/python_v1/profiled_charts_02/compound_surface_checks.json)
+- [Current profiled chart drawings](../../streets_dev/experiments/streets/python_v1/profiled_charts_02/compound_surfaces.svg)
 
 Successful generation/Update tests do not imply that every quality target
 passes. The separate checkpoint-26 saved-buffer audit now verifies all
@@ -2963,7 +2969,7 @@ pavement and separator parts change. The comparison uses persistent network
 UUIDs because gallery fixtures intentionally reuse local Section IDs. Fresh
 imports continue to compare by their semantic Section sets.
 
-For historical context, the [checkpoint-25 audit](../../experiments/streets/python_v1/gallery_quality_25/import_quality_checks.json)
+For historical context, the [checkpoint-25 audit](../../streets_dev/experiments/streets/python_v1/gallery_quality_25/import_quality_checks.json)
 failed the ratio-8 target for the following 99 cells; these five outputs now pass:
 
 | Fixture | Part | Cells above 8 | Maximum ratio |
@@ -2975,7 +2981,7 @@ failed the ratio-8 target for the following 99 cells; these five outputs now pas
 | `Bundle / unequal_widths` | `bundle_pavement:7` | 28 | 10.25573 |
 
 The captured NPZs and part metadata are retained beside the strict audit.
-A [bounded planar repair experiment](../../experiments/streets/python_v1/bundle_quad_quality_01/planar_checks.json)
+A [bounded planar repair experiment](../../streets_dev/experiments/streets/python_v1/bundle_quad_quality_01/planar_checks.json)
 uses the same production correction utilities without publishing a surface.
 It brings all four pavement outputs below 8, retaining fixed physical rims and
 face/vertex counts. The separator remains at 11.69123, so more fixed-rim
@@ -3150,7 +3156,7 @@ comes from merged pavement, even when its own member road is unchanged.
 The road and placement task signatures have version 2; an older saved manifest
 can therefore require a one-time rebuild when first updated by this version.
 
-The dev24 [same-process comparison](../../experiments/streets/python_v1/update_profile_04/profile_checks.json)
+The dev24 [same-process comparison](../../streets_dev/experiments/streets/python_v1/update_profile_04/profile_checks.json)
 applies the same edit in reference/batched/batched/reference order. With the
 precise dependencies active in **both** variants, unprofiled manual Update is
 **30.52 s** for each reference run and **10.24–10.31 s** for the batched runs,
@@ -3162,7 +3168,7 @@ These controlled measurements qualify the validator change; timings from
 separate sessions, including the earlier `import_reopen_19` 17.88 s result, have different system
 load and should not be treated as a controlled comparison.
 
-The final [batched cProfile report](../../experiments/streets/python_v1/update_profile_04/profile.txt)
+The final [batched cProfile report](../../streets_dev/experiments/streets/python_v1/update_profile_04/profile.txt)
 shows **5.48 million calls**. Its instrumented **14.26 s** Update includes
 **3.19 s** in the two overlap checks, **3.34 s** constructing the changed
 junction surface, and repeated route-frame queries plus dependency planning.
@@ -3194,8 +3200,8 @@ The previous dev27 host suite passed **726 tests in 72 modules**; existing
 preparation/asset tests are included. Four native
 addon-startup/restricted-context tests also pass. The host log and bounded
 worker receipts are in `C:/dev/workspace/tmp/streets_python_v1`. Its
-[source-hashed suite receipt](../../experiments/streets/python_v1/suite_30/suite_checks.json)
-and [full log](../../experiments/streets/python_v1/suite_30/tests.log) record
+[source-hashed suite receipt](../../streets_dev/experiments/streets/python_v1/suite_30/suite_checks.json)
+and [full log](../../streets_dev/experiments/streets/python_v1/suite_30/tests.log) record
 that dev27 source snapshot and 117,084,160 bytes peak resident. Both source hashes agree:
 `fc392d73f06f3bce30e6240af8780d25dd20d1d556105706b6c6e170f880b567`.
 This includes clearance-aware transitions, curb-only continuations, mirrored and
@@ -3231,35 +3237,35 @@ for assembled repair without repeating construction.
 The source-support module's fifteen tests pass, including a nearby unconnected
 road and rejection of the corresponding infeasible strict-radius request.
 Current-source broad and native qualification is recorded separately below.
-The latest [dev36 broad suite](../../experiments/streets/python_v1/suite_38/suite_checks.json)
+The latest [dev36 broad suite](../../streets_dev/experiments/streets/python_v1/suite_38/suite_checks.json)
 passes **778 tests in 81 modules**, with zero failures/errors and unchanged
 before/after Python-source SHA-256
 `4d4013583babf88d5ba414ed8fb88bc5b7dfe9a4017d0fbdb77a4a7f25a9fbff`.
 The bounded host-Python worker takes **518.69 s** and peaks at **132,022,272
 bytes resident**. It includes the five whole-edge entrance-slope regressions
 and all earlier physical-input, geometry, update and asset checks.
-The historical [dev35 broad suite](../../experiments/streets/python_v1/suite_37/suite_checks.json)
+The historical [dev35 broad suite](../../streets_dev/experiments/streets/python_v1/suite_37/suite_checks.json)
 passes **773 tests in 80 modules**, with zero failures/errors and unchanged
 before/after Python-source SHA-256
 `9204816d4851814ce8cc59257e764f2beb36525a63e0f606f7f22bec345b2fea`.
 The bounded host-Python worker takes **531.84 s** and peaks at **133,644,288
 bytes resident**. This includes the six skew-mouth tests, physical circle
 contacts on Exact miters and explicit compound-ownership dependency/locality.
-The historical [dev34 broad suite](../../experiments/streets/python_v1/suite_36/suite_checks.json)
+The historical [dev34 broad suite](../../streets_dev/experiments/streets/python_v1/suite_36/suite_checks.json)
 passes **766 tests in 79 modules**, with zero failures/errors and unchanged
 before/after Python-source SHA-256
 `2adab60692c9b1f9287009e77a8d24eff940875ae1c32f4cbb9b6f9c89aec44a`.
 The bounded host-Python worker takes 425.74 s and peaks at **130,560,000 bytes
 resident**. It includes the Section-chain, consumed-end, orientation,
 resolution, source-incidence and furniture-endpoint regressions.
-The historical [dev33 broad suite](../../experiments/streets/python_v1/suite_35/suite_checks.json)
+The historical [dev33 broad suite](../../streets_dev/experiments/streets/python_v1/suite_35/suite_checks.json)
 passes **761 tests in 78 modules**, with zero failures/errors and unchanged
 before/after Python-source SHA-256
 `fc9a1493cf3cb8e5af4922751ce8f1a380f9f596428090af3bbb573fc7870636`.
 Its bounded host-Python worker takes 337.66 s and peaks at **129,175,552 bytes
 resident**. It includes the refined grading, drainage-floor, field-query and
 publication-release regressions. These are suite resources, not Update timings.
-The historical [dev32 broad suite](../../experiments/streets/python_v1/suite_34/suite_checks.json)
+The historical [dev32 broad suite](../../streets_dev/experiments/streets/python_v1/suite_34/suite_checks.json)
 passes **755 tests in 77 modules**, with zero failures/errors and unchanged
 before/after Python-source SHA-256
 `b867d688fef2d1b6d50914f541d3c42d28b61d266f1653e0843eebb12cd2aee4`.
@@ -3267,14 +3273,14 @@ The bounded host-Python worker peaks at **128,626,688 bytes resident** and takes
 339.10 s. This is a regression-suite duration, not an individual Update time.
 It includes the attached-union edits, branch switching, translated-height
 roundoff and the 16 interpolation/resolution/direction combinations.
-The historical [dev30 broad suite](../../experiments/streets/python_v1/suite_33/suite_checks.json)
+The historical [dev30 broad suite](../../streets_dev/experiments/streets/python_v1/suite_33/suite_checks.json)
 passes **749 tests in 76 modules**, with no failures/errors, unchanged before/after
 source hashes and 125,489,152 bytes peak resident. Its Python-source SHA-256 is
 `a642b183d63a517ab44d873ce1a21308f18e1e7f1a1212c85d1c859fdd05a278`.
 This includes fixed-guide profiled grading, capped fibre strips and bounded
-work-reuse/reference tests. The [dev29 suite](../../experiments/streets/python_v1/suite_32/suite_checks.json)
+work-reuse/reference tests. The [dev29 suite](../../streets_dev/experiments/streets/python_v1/suite_32/suite_checks.json)
 passed 744 tests in 75 modules before the work-reuse changes.
-The [previous dev28 suite](../../experiments/streets/python_v1/suite_31/suite_checks.json)
+The [previous dev28 suite](../../streets_dev/experiments/streets/python_v1/suite_31/suite_checks.json)
 passed 736 tests in 73 modules before those corrections.
 The previous dev13 suite passed 635 tests; dev12 passed 630 tests
 and the earlier dev11 suite passed 626 tests.
@@ -3285,9 +3291,9 @@ pavement grading and direct width-aware capped separator strips. Its 35-fixture
 generation/Update, strict saved-buffer quality and fresh-reopening checks pass.
 
 The newer dev30 work-reuse build is saved as
-[checkpoint 27](../../experiments/streets/python_v1/native_27/python_streets_checkpoint.blend).
+[checkpoint 27](../../streets_dev/experiments/streets/python_v1/native_27/python_streets_checkpoint.blend).
 It passes generation/Update for all 35 fixtures and a
-[strict comparison](../../experiments/streets/python_v1/gallery_quality_28/import_quality_checks.json):
+[strict comparison](../../streets_dev/experiments/streets/python_v1/gallery_quality_28/import_quality_checks.json):
 all 175,230 quad positions/connectivity are exactly unchanged from checkpoint
 26, with the same quality and overlap results. Its build/check worker takes
 74.92 s and peaks at 340,598,784 bytes resident. The previous 178.13 s run is
@@ -3296,7 +3302,7 @@ controllers, including Edit Mode, width changes, furniture, restoration and
 the retained dependency-locality cases. The new full suite also passes.
 Controlled work-reuse profiling is recorded separately below.
 
-The [controlled Canal Street work-reuse comparison](../../experiments/streets/python_v1/canal_work_profile_01/profile_checks.json)
+The [controlled Canal Street work-reuse comparison](../../streets_dev/experiments/streets/python_v1/canal_work_profile_01/profile_checks.json)
 now passes on the same Section-1 edit. Unprofiled reference/reused/reused/reference
 wall times are **32.00 / 28.52 / 22.71 / 30.43 s**; CPU times are
 **31.06 / 27.47 / 22.19 / 30.02 s**. The reused pair's mean wall time is about
@@ -3337,7 +3343,7 @@ and seam-edit qualification. The bounded upgrade worker peaks at **596,402,176
 bytes resident**. Its main reconstruction takes 254.99 s in this loaded session;
 that is a version/cold operation, not an ordinary warm Update time.
 
-The separate [dev30 real-seam check](../../experiments/streets/python_v1/berlin_seam_02/import_reopen_checks.json)
+The separate [dev30 real-seam check](../../streets_dev/experiments/streets/python_v1/berlin_seam_02/import_reopen_checks.json)
 now passes in a fresh Blender process. It moves both authored vertex copies
 of Connection **50**, between Sections **359 and 431** of Street **595**, by
 5 cm and widens both Sections by 5 cm. Same-version cold reconstruction retains
@@ -3391,7 +3397,7 @@ qualification and update cost are listed below.
 
 ### Additional real input: preferred radii and short clipped approaches
 
-The normal [Canal Street trial](../../experiments/streets/python_v1/canal_01/import_checks.json)
+The normal [Canal Street trial](../../streets_dev/experiments/streets/python_v1/canal_01/import_checks.json)
 is **PARTIAL**, not a second successful full-network qualification: one small
 component generates 576 quads, while the main component stops at physical
 junction 35. Its six incoming Streets include two curved, nearly parallel
@@ -3400,7 +3406,7 @@ The requested 4 m corner has no converged contact in the current branch on
 their retained 64.47/59.51 m approaches. Both chains end at rectangle cuts;
 the original outside-source context is retained in the preparation report.
 
-The [independent contact oracle](../../experiments/streets/python_v1/canal_oracle_02/contact_checks.json)
+The [independent contact oracle](../../streets_dev/experiments/streets/python_v1/canal_oracle_02/contact_checks.json)
 finds no 4 m contact even after adding the first authentic outside-source
 segments. It finds valid circular contacts at 2.5 m and 2 m; the 2.5 m case also
 has a second root with the wrong sector, which remains rejected. This bounded
@@ -3414,7 +3420,7 @@ override API, and actual/requested radius metadata. Existing feasible radii keep
 their exact mesh coordinates. No runtime SciPy dependency is introduced.
 See the [radius contract and equations](STREETS_PYTHON_GEOMETRY.md#preferred-style-radii-and-strict-overrides).
 
-The dev26 [normal import](../../experiments/streets/python_v1/canal_02/import_checks.json)
+The dev26 [normal import](../../streets_dev/experiments/streets/python_v1/canal_02/import_checks.json)
 passes the original six-arm contact failure but remains **PARTIAL**. It now
 stops at junction 97: Sections 4 and 49 provide only 7.488/2.961 m of retained
 support. Both end at rectangle cuts, with authentic continuation geometry in
@@ -3434,18 +3440,18 @@ metric station of furniture anchors; source IDs and source-relative ownership
 survive. This preparation runs during initial import, not on every manual Update.
 See the [source-support equations and contracts](STREETS_PYTHON_GEOMETRY.md#junction-support-near-a-selection-boundary).
 
-The [dev27 normal import](../../experiments/streets/python_v1/canal_03/import_checks.json)
+The [dev27 normal import](../../streets_dev/experiments/streets/python_v1/canal_03/import_checks.json)
 passes junction 97's contact gate. It adds **23.822 m** to Section 4 and
 **26.059 m** to Section 49 from their authentic source intervals; all original
 controls and requested radii remain. The component's source preparation reports
-`CONTACTS_READY`. The [independent footprint diagnostic](../../experiments/streets/python_v1/canal_footprints_01/footprint_checks.json)
+`CONTACTS_READY`. The [independent footprint diagnostic](../../streets_dev/experiments/streets/python_v1/canal_footprints_01/footprint_checks.json)
 solves all **four physical junction footprints**, with no overlapping source
 claims. It is still **PARTIAL** at profiled surface construction: junction 35
 has no accepted quad chart under the existing edge-ratio limit. Junction 61
 also needs its boundary-chart branch because its original band guides fail.
 
-The [captured planar chart](../../experiments/streets/python_v1/canal_chart_02/chart_checks.json)
-and [diagnostic drawing](../../experiments/streets/python_v1/canal_chart_02/chart_failure.svg)
+The [captured planar chart](../../streets_dev/experiments/streets/python_v1/canal_chart_02/chart_checks.json)
+and [diagnostic drawing](../../streets_dev/experiments/streets/python_v1/canal_chart_02/chart_failure.svg)
 isolate two visible blocks separated by a computational cut. The existing
 strip-cut policy and stronger 15/25/35-degree cut constraints do not yield a
 qualified alternative. Ordinary weighted shape relaxation and quad-edge
@@ -3458,7 +3464,7 @@ Dev28 closes this chart gate with an assembled correction. Physical rims stay
 fixed; computational cut vertices become ordinary interior degrees of freedom.
 Bounded quad rotations and a direct edge-ratio/angle violation objective improve
 the captured chart from **41.45 to 7.76**, without adding any faces. The
-[planar receipt](../../experiments/streets/python_v1/canal_targeted_quality_02/targeted_checks.json)
+[planar receipt](../../streets_dev/experiments/streets/python_v1/canal_targeted_quality_02/targeted_checks.json)
 and [formulas](STREETS_PYTHON_GEOMETRY.md#correcting-the-assembled-chart-without-freezing-computational-cuts)
 separate that evidence from the later profiled/native checks. Failed corner-strip,
 core-collar and longer proxy-relaxation experiments are not runtime branches.
@@ -3466,14 +3472,14 @@ core-collar and longer proxy-relaxation experiments are not runtime branches.
 The subsequent full numerical test passed the six-arm profile and slope guards
 but exposed a genuine **2.6464 m²** overlap between the unnecessarily extended
 Section 4 approach and unrelated Section 1. The
-[captured diagnosis](../../experiments/streets/python_v1/canal_rejection_01/overlap_detail.svg)
+[captured diagnosis](../../streets_dev/experiments/streets/python_v1/canal_rejection_01/overlap_detail.svg)
 uses independent convex-polygon clipping; it was not a tolerance adjustment.
 Original-source support now estimates reach using the permitted minimum of a
 style radius's fitting range. The ordinary solver still starts from the stored
 preferred maximum. Strict overrides retain their complete requested reach and
 remain diagnostic if their resulting pavement overlaps another road.
 
-The [dev28 normal import](../../experiments/streets/python_v1/canal_04/import_checks.json)
+The [dev28 normal import](../../streets_dev/experiments/streets/python_v1/canal_04/import_checks.json)
 is **COMPLETE: 2/2 components, 24,069 quads**, with no preparation issues or
 construction failures. The main 26-Section component has 23,493 quads; the
 independent component has 576. Original-source recovery adds only **6.442 m**
@@ -3481,7 +3487,7 @@ to Section 4 and **11.400 m** to Section 49. Junction 97 fits its preferred
 10 m corner to **2.62144 m**; the requested value and all source identities
 remain. Junction 35 retains its fitted 2.56 m corner.
 
-The [saved Blender buffer audit](../../experiments/streets/python_v1/canal_quality_04/import_quality_checks.json)
+The [saved Blender buffer audit](../../streets_dev/experiments/streets/python_v1/canal_quality_04/import_quality_checks.json)
 passes actual float32 publication: all convex quads, maximum edge ratio
 **7.57387**, no cells above 8, no inter-part or self-overlaps, and the global
 datum/highest-crown elevation envelope. The import worker peaks at
@@ -3498,7 +3504,7 @@ space, while the same explicit 2 m request remains diagnostic. The subsequent
 31-test radius/source/terminal group passes; full native Update qualification
 is still recorded separately.
 
-The [Canal native Update receipt](../../experiments/streets/python_v1/canal_reopen_05/import_reopen_checks.json)
+The [Canal native Update receipt](../../streets_dev/experiments/streets/python_v1/canal_reopen_05/import_reopen_checks.json)
 passes fresh reconstruction, explicit vertex/width Update, exact incremental/full
 equality, exact restoration and unchanged independent components. It retains
 16 of 20 main-component output objects for the edit, with a 279,363,584-byte
@@ -3506,7 +3512,7 @@ worker peak resident. Its local Update is **44.01 s**, forced full build
 50.55 s and restoration 92.98 s; this complex surface still needs performance
 work. That receipt precedes the chart-reuse optimization below.
 
-The [subsequent normal import](../../experiments/streets/python_v1/canal_05/import_checks.json)
+The [subsequent normal import](../../streets_dev/experiments/streets/python_v1/canal_05/import_checks.json)
 retains a leaf's already qualified four-sided atlas and the first positive
 candidate from a failed leaf. It repairs their assembled chart without
 rebuilding both leaves. This preserves a useful atlas that the original retry
@@ -3515,7 +3521,7 @@ discarded. The six-arm intersection now has **4,921 quads** and the whole input
 These separate runs have different interior meshes and are not a controlled
 same-geometry timing benchmark.
 
-The [independent saved-buffer comparison](../../experiments/streets/python_v1/canal_quality_06/import_quality_checks.json)
+The [independent saved-buffer comparison](../../streets_dev/experiments/streets/python_v1/canal_quality_06/import_quality_checks.json)
 verifies the changed intersection's complete **XYZ boundary segments exactly**
 and all **20 other mesh buffers exactly**. Source controls, preferred/actual
 radii and recovery intervals are unchanged. Every published quad remains
@@ -3523,12 +3529,12 @@ convex, with maximum edge ratio **7.49628**, zero cells above 8, no overlaps
 and the same elevation envelope. The six-arm physical mesh's independently
 measured slope maximum is 7.2581%, below its 10% limit. The fresh Blender
 scene is
-[`canal_05/python_street_import.blend`](../../experiments/streets/python_v1/canal_05/python_street_import.blend).
-The [actual quad/height drawing](../../experiments/streets/python_v1/canal_05/quad_layout.svg)
+[`canal_05/python_street_import.blend`](../../streets_dev/experiments/streets/python_v1/canal_05/python_street_import.blend).
+The [actual quad/height drawing](../../streets_dev/experiments/streets/python_v1/canal_05/quad_layout.svg)
 uses those saved float32 mesh buffers, with physical heights shown in millimetres.
 Its generator is retained outside the addon source at
 `experiments/streets/python_v1/draw_canal_python.py`.
-The [optimized-scene native Update check](../../experiments/streets/python_v1/canal_reopen_06/import_reopen_checks.json)
+The [optimized-scene native Update check](../../streets_dev/experiments/streets/python_v1/canal_reopen_06/import_reopen_checks.json)
 also passes: two controllers, cold reconstruction without replacing existing
 objects, dormant edits until explicit Update, vertex/width editing at a
 persistent selection cut, exact incremental/full equality, exact restoration
@@ -3544,7 +3550,7 @@ The current normal-import check exports effective `SourceObjects.read()` inputs
 to `numerical_inputs.json` and keeps templates separately in
 `prepared_input_templates.json`. For existing saved scenes,
 `check_python_street_input_snapshot.py` exports both without changing geometry.
-The [Canal effective-input snapshot](../../experiments/streets/python_v1/canal_effective_inputs_01/input_checks.json)
+The [Canal effective-input snapshot](../../streets_dev/experiments/streets/python_v1/canal_effective_inputs_01/input_checks.json)
 retains the actual authored data and persisted original-source provenance.
 Use that snapshot for exact chart diagnosis; older failed-import numerical
 captures can describe their initial templates instead of effective attributes.
@@ -3823,17 +3829,17 @@ their remote comparison road**. Their input Section partition adds no mesh
 subdivision relative to the original single-Section fixture. Real-network
 qualification of the updated branch remains distinct from these fixture gates.
 
-The [dev34 Berlin normal import](../../experiments/streets/python_v1/berlin_dev34_01/import_checks.json)
+The [dev34 Berlin normal import](../../streets_dev/experiments/streets/python_v1/berlin_dev34_01/import_checks.json)
 completes both components with **399,459 quads**, using physical exaggeration 1.
-Its [saved-buffer audit](../../experiments/streets/python_v1/berlin_dev34_quality_01/import_quality_checks.json)
+Its [saved-buffer audit](../../streets_dev/experiments/streets/python_v1/berlin_dev34_quality_01/import_quality_checks.json)
 passes convexity, crown-envelope, overlap and ratio-8 checks; maximum ratio is
-**7.96533**. The [physical-default comparison](../../experiments/streets/python_v1/berlin_physical_defaults_01/physical_default_checks.json)
+**7.96533**. The [physical-default comparison](../../streets_dev/experiments/streets/python_v1/berlin_physical_defaults_01/physical_default_checks.json)
 also passes: all **332 output parts** preserve exact XY, connectivity and semantic
 keys relative to the dev30 scene. Authored input is identical apart from import
 UUID and the intended exaggeration setting. Published Z differs only by the
 10-to-1 scale, with maximum rounding discrepancy **5.96e-9 m**. The import worker
 takes **272.60 s** and peaks at **514,363,392 bytes resident**.
-The [dev34 fresh reopening/seam-edit check](../../experiments/streets/python_v1/berlin_dev34_reopen_01/import_reopen_checks.json)
+The [dev34 fresh reopening/seam-edit check](../../streets_dev/experiments/streets/python_v1/berlin_dev34_reopen_01/import_reopen_checks.json)
 also passes on Connection 50, Sections 359/431 of Street 595: both endpoint copies
 move and both widths change together. Cold reconstruction takes **146.54 s**,
 local Update **5.17 s**, full rebuilding **248.50 s**, and restoration **6.30 s**.
@@ -3853,13 +3859,13 @@ not completion of the remaining construction branches and release gates below.
 Dev33 adds fixed-boundary grading and drainage reconciliation for refined
 compound surfaces. The independent Nashville Wyoming Avenue normal import
 now generates **both components completely: 263,213 quads**, including a
-133-Section main component. Its [saved-buffer audit](../../experiments/streets/python_v1/nashville_dev33_quality_01/import_quality_checks.json)
+133-Section main component. Its [saved-buffer audit](../../streets_dev/experiments/streets/python_v1/nashville_dev33_quality_01/import_quality_checks.json)
 passes convexity, ratio 8, crown-envelope and overlap checks for every quad;
 the maximum saved-buffer edge ratio is **7.86491**. New imports use physical
 exaggeration 1, and this scene's crown ceiling is **0.08 m**. The import worker
 takes 74.29 s and peaks at **397,316,096 bytes resident**.
 
-The [initial failed import](../../experiments/streets/python_v1/nashville_dev32_01/import_checks.json)
+The [initial failed import](../../streets_dev/experiments/streets/python_v1/nashville_dev32_01/import_checks.json)
 is retained as failure evidence: its main component stopped at junction 29.
 Planar slope refinement had created a few stretched cells. The new repair keeps
 all **1,138 quads** and exact boundary XYZ, improves internal XY, reevaluates the
@@ -3870,7 +3876,7 @@ the overall **17.6%** slope limit is inherited from the specified 2 m-wide,
 arbitrary narrow-road style: existing profiles remain authoritative.
 Six focused tests pass, including flat basins, bounded floors, infeasibility,
 the real five-Section seam setup, publication-buffer release, furniture queries,
-local/full equivalence and restoration. The [fresh native seam check](../../experiments/streets/python_v1/nashville_dev33_reopen_01/import_reopen_checks.json)
+local/full equivalence and restoration. The [fresh native seam check](../../streets_dev/experiments/streets/python_v1/nashville_dev33_reopen_01/import_reopen_checks.json)
 also passes on Connection 3, Sections 75/15: both authored copies move and both
 widths change together. Cold reconstruction takes **45.99 s**, local Update
 **3.26 s**, full reconstruction **58.11 s**, and restoration **8.73 s**.
@@ -3882,7 +3888,7 @@ suite also passes all 761 tests in 78 modules on the source hash recorded above;
 earlier suite receipts predate this repair.
 
 Current real-input inspection file:
-[Nashville, dev33, physical height](../../experiments/streets/python_v1/nashville_dev33_01/python_street_import.blend).
+[Nashville, dev33, physical height](../../streets_dev/experiments/streets/python_v1/nashville_dev33_01/python_street_import.blend).
 
 Dev28's normal Canal Street import completes both components and passes
 the saved-buffer audit, fresh reopening, explicit Update, forced full equality
@@ -3899,11 +3905,11 @@ integrates the aligned single-Section attached overlap: all 36 fixture
 generation, saved-buffer audit and fresh reopening checks pass. Current-source
 complete real-input validation is still required after this integration.
 The dev32 source-hashed broad suite also passes all 755 tests in 77 modules.
-The subsequent [dev32 Canal Street normal import](../../experiments/streets/python_v1/canal_dev32_01/import_checks.json)
-now completes both components. Its [saved-buffer audit](../../experiments/streets/python_v1/canal_dev32_quality_01/import_quality_checks.json)
+The subsequent [dev32 Canal Street normal import](../../streets_dev/experiments/streets/python_v1/canal_dev32_01/import_checks.json)
+now completes both components. Its [saved-buffer audit](../../streets_dev/experiments/streets/python_v1/canal_dev32_quality_01/import_quality_checks.json)
 qualifies all **21,818 quads**, with maximum edge ratio **7.4963**, no overlaps
 and exact position/connectivity equality with the previous dev28 result.
-The [fresh-process manual Update check](../../experiments/streets/python_v1/canal_dev32_reopen_01/import_reopen_checks.json)
+The [fresh-process manual Update check](../../streets_dev/experiments/streets/python_v1/canal_dev32_reopen_01/import_reopen_checks.json)
 also passes: cold reconstruction **34.05 s**, local edit **28.91 s**, full rebuild
 **31.51 s**, restoration **33.65 s**. Sixteen of twenty outputs retain identity;
 incremental/full buffers and restored buffers are exact, and the other component
@@ -3980,11 +3986,11 @@ substituted for current complete-network evidence.
 
 ### Attached curved Bundle overlap: integrated in dev32
 
-The [minimal source case](../../experiments/streets/python_v1/attached_overlap_01/numerical_input.json)
+The [minimal source case](../../streets_dev/experiments/streets/python_v1/attached_overlap_01/numerical_input.json)
 has two curved, noncrossing member centerlines, four ordinary rounded end
 T-junctions and a pavement overlap in the middle. The former production branch
 rejected its separator boundary as self-intersecting; the historical
-[probe receipt](../../experiments/streets/python_v1/attached_overlap_01/attached_overlap_checks.json)
+[probe receipt](../../streets_dev/experiments/streets/python_v1/attached_overlap_01/attached_overlap_checks.json)
 records **supported=false**. `bundle_ends.AttachedAxialPlan` now constructs this
 case in production. Checkpoint 29 includes it as `attached_curved_overlap`, with
 **16,036 quads including its remote comparison road**. All 179 prior fixture
@@ -3994,7 +4000,7 @@ The read-only prototype restricts each original path to its actual junction-mout
 stations, without reinterpolating controls. Its common-fibre body replaces the
 two overlapping road surfaces. Existing junction meshes and curved median caps
 are reused, with the body cross-sections using the existing mouth interval count.
-The [qualified numerical prototype](../../experiments/streets/python_v1/attached_union_body_03/body_checks.json)
+The [qualified numerical prototype](../../streets_dev/experiments/streets/python_v1/attached_union_body_03/body_checks.json)
 has **7,032 pavement body quads**, **2,860 separator quads** and **13,956 quads in
 the complete fixture**. All **64 pavement/junction mouth edges** match as whole
 edges. Declared seam keys weld **34 cap/body vertices**, yielding the expected
@@ -4004,7 +4010,7 @@ maximum measured pavement slope is below **5%**, and all inter-part/self-overlap
 checks pass. Width-aware fibre strips reduce the separator from 6,664 to 2,860
 quads while retaining its curved caps and shared boundary samples.
 
-![Actual quad buffers of the attached-overlap prototype](../../experiments/streets/python_v1/attached_union_body_03/attached_union.png)
+![Actual quad buffers of the attached-overlap prototype](../../streets_dev/experiments/streets/python_v1/attached_union_body_03/attached_union.png)
 
 The drawing shows the numerical prototype from which the integrated branch was
 developed; checkpoint 29 contains the production result and a remote road.
@@ -4045,7 +4051,7 @@ normal-import gate and next actions are recorded above; earlier guide and
 height failures below should not be read as the latest status.
 
 The diagnostic's retained normal-import numerical inputs are in
-`../../experiments/streets/python_v1/berlin_05/numerical_inputs.json`.
+`../../streets_dev/experiments/streets/python_v1/berlin_05/numerical_inputs.json`.
 In that retained input, junction 19's 4 m-radius corner previously exceeded
 Section 2's **8.226 m** length. The new route follows explicit Connection 0
 through Section 8 (same Street 559) and solves every corner contact. Its actual
@@ -4090,7 +4096,7 @@ edge-ratio check alone does not establish uniform global mesh density.
 The two grading cases are sites **734 and 414** in this retained input. Raising
 the local budget to 600/1,500 steps did not make either meet the limit and cost
 up to **17.35 s** for one chart. The default remains **300**; the
-[focused grading receipt](../../experiments/streets/python_v1/hard_chart_quality_01/results.json)
+[focused grading receipt](../../streets_dev/experiments/streets/python_v1/hard_chart_quality_01/results.json)
 supports changing the local block decomposition rather than increasing that
 iteration budget. None of these planar results advances full-import coverage.
 
@@ -4206,7 +4212,7 @@ height range remains [0, 0.08 m], no isolated interior minima are detected, and
 the maximum entrance longitudinal slope is **0.43%**. The largest height change
 is **5.62 mm**. Ten optimization iterations took about **6.3 s**; the bounded
 worker peaked at **169,312,256 bytes resident**. See the
-[test-only oracle receipt](../../experiments/streets/python_v1/height_oracle_01/oracle_checks.json).
+[test-only oracle receipt](../../streets_dev/experiments/streets/python_v1/height_oracle_01/oracle_checks.json).
 This oracle is outside the addon, uses a dense matrix restricted to 1,500 free
 heights, and is not the runtime implementation. The next implementation task is
 a bounded NumPy projection/height-query construction, with independent
@@ -4321,7 +4327,7 @@ within that scope: 26,597 total quads, including 5,888 separator quads, with
 56,205,312 bytes worker peak resident. It is not a full-network publication
 result. The complete normal import `berlin_20` also passes this construction
 and publishes both components. The [geometry explanation and actual quad drawing](STREETS_PYTHON_GEOMETRY.md#interior-crossing-streets-and-unequal-member-ends)
-describe the distinction. The [scoped receipt](../../experiments/streets/python_v1/interior_region_02/region_checks.json)
+describe the distinction. The [scoped receipt](../../streets_dev/experiments/streets/python_v1/interior_region_02/region_checks.json)
 retains the exact original input and region metadata.
 
 The earlier dev22 prefix had 8,437 grass quads and a maximum edge ratio of
@@ -4330,7 +4336,7 @@ ratio 8 and tries its existing fixed-rim charts. Its long prefix has 3,794
 quads with maximum ratio 7.30, retaining all 868 physical boundary vertices
 exactly. The continuation stays at 2,094 quads with maximum ratio 7.16. Together
 the two regions reduce grass from 10,531 to 5,888 quads. The
-[independent fixed-boundary comparison](../../experiments/streets/python_v1/interior_prefix_chart_01/chart_checks.json)
+[independent fixed-boundary comparison](../../streets_dev/experiments/streets/python_v1/interior_prefix_chart_01/chart_checks.json)
 also checks area and measured physical slopes. This qualifies these regions;
 general near-contact/tip grading remains a separate qualification task.
 
@@ -4365,7 +4371,7 @@ The `bundle_consumed_terminal_cap` fixture covers this with both authored
 Section directions, a width update across the seam, furniture relocation,
 exact restoration and fresh reopening. A separate host test changes a remote
 junction, rebuilds the index and retains the existing separator object.
-The [captured original failure](../../experiments/streets/python_v1/partly_attached_cap_01/port_checks.json)
+The [captured original failure](../../streets_dev/experiments/streets/python_v1/partly_attached_cap_01/port_checks.json)
 records the exact old mismatch; the normal `berlin_20` import now passes it.
 
 The normal-import `StreetDesign` and Blender GUI now default to physical

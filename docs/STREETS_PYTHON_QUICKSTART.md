@@ -1,22 +1,37 @@
 # Python streets: inspection and editing
 
+The latest source is now on `buildings_gn` at `C:/dev/workspace/blosm`.
+Runtime dev75 adds [shared rounded Section corners](STREETS_PYTHON_LOCAL_SMOOTHING.md#shared-corner-across-section-seams-dev75)
+to the bounded local smoothing construction.
+Open the [corrected Karl-Marx-Allee inspection scene](../../streets_dev/experiments/streets/python_shared_rounds/shared_rounds_inspection.blend).
+It selects `Street 595` and opens directly at the repaired corner. The
+[current 112-fixture gallery](../../streets_dev/experiments/streets/python_shared_rounds/gallery/python_streets_gallery.blend)
+reproduces the previous fixture meshes and furniture exactly. Reload the current
+addon before editing or pressing Update. See the local smoothing notes for the
+focused regression and native verification scope.
+
+## Previous qualified package and examples
+
+The dev72 scenes and ZIP below remain the preceding qualified milestone;
+reload the current addon and re-import or Update to use the revised curves.
+
 Use **Blender 5.2** and the dev72 development checkout at
 `C:/dev/workspace/streets_dev/blosm`, branch `streets_python`. The separate
 checkout at `C:/dev/workspace/blosm` remains on `buildings_gn`. NumPy ships with
 Blender; SciPy is used only by optional independent experiments.
 
 Restart Blender or reload the addon after changing development code. The
-[dev72 ZIP](../../experiments/streets/python_v1/packages/dev72_01/blosm_streets_python_dev72.zip)
-has passed [isolated installation qualification](../../experiments/streets/python_v1/package_dev72_qualification_01.json).
+[dev72 ZIP](../../streets_dev/experiments/streets/python_v1/packages/dev72_01/blosm_streets_python_dev72.zip)
+has passed [isolated installation qualification](../../streets_dev/experiments/streets/python_v1/package_dev72_qualification_01.json).
 It uses the addon ID `blosm`; use a separate Blender profile when comparing it
 with a buildings-development installation. Enable the addon or run the scene's `OPTIONAL - Python street
 editing.py` once to register the Streets panel.
 
 <a id="current-development-gallery"></a>
 
-## Current inspection scene
+## dev72 inspection scene
 
-Open the [112-fixture dev72 gallery](../../experiments/streets/python_v1/gallery_generated_dev72_01/python_streets_gallery.blend).
+Open the [112-fixture dev72 gallery](../../streets_dev/experiments/streets/python_v1/gallery_generated_dev72_01/python_streets_gallery.blend).
 It contains all earlier fixtures, arranged without overlaps. Resolution 1 and
 exaggeration 10 are the saved inspection defaults. Search the Outliner for:
 
@@ -32,10 +47,10 @@ exaggeration 10 are the saved inspection defaults. Search the Outliner for:
 Suffix 0 denotes Exact polyline, 3 Smooth interpolation. The menu presents these
 as two named options. Fixtures deliberately exercise both modes.
 
-The [gallery audit](../../experiments/streets/python_v1/gallery_dev72_audit_01.json)
+The [gallery audit](../../streets_dev/experiments/streets/python_v1/gallery_dev72_audit_01.json)
 proves all 110 predecessor source/mesh/furniture/layout sets unchanged, actual
 saved mesh quality, all 112 cold Updates and native edits of the two newest
-examples. The [complete regression](../../experiments/streets/python_v1/suite_dev72_audit_01.json)
+examples. The [complete regression](../../streets_dev/experiments/streets/python_v1/suite_dev72_audit_01.json)
 passes all 982 tests. These checks have distinct scopes; the full evidence and
 remaining construction limits are in the [verification record](STREETS_PYTHON_ACCEPTANCE.md).
 
@@ -51,7 +66,7 @@ For a streets-only first import:
    or vegetation asset package.
 4. Choose **Street backend → Python (experimental)** and press **Import**.
 
-The [actual registered Import-operator check](../../experiments/streets/python_v1/installed_ui_import_dev72_01/operator_import_checks.json)
+The [actual registered Import-operator check](../../streets_dev/experiments/streets/python_v1/installed_ui_import_dev72_01/operator_import_checks.json)
 passes these settings from an isolated installation without replacing setup or
 renderer functions. **Geometry Nodes** remains a
 separate backend choice over the shared prepared Street/Section/junction/Bundle
@@ -81,17 +96,17 @@ work and may reach the documented construction/allocation limits. Complex
 affected regions can take seconds to regenerate. This is a manual Update
 workflow; no continuously running geometry observer is installed.
 
-## Current real-network examples
+## dev72 real-network examples
 
-The [three-input audit](../../experiments/streets/python_v1/dev72_real_receipt_audit_01.json)
+The [three-input audit](../../streets_dev/experiments/streets/python_v1/dev72_real_receipt_audit_01.json)
 passes normal import, saved mesh quality, reopening, coordinated seam/width
 editing, local/full equivalence and exact restoration. Open:
 
 | Example | Editable Blender scene | Measured local Update |
 | --- | --- | ---: |
-| Karl-Marx-Allee | [Berlin](../../experiments/streets/python_v1/berlin_fresh_dev72_01/python_street_import.blend) | 1.66 s |
-| Canal Street | [Canal](../../experiments/streets/python_v1/canal_fresh_dev72_01/python_street_import.blend) | 7.63 s |
-| Nashville | [Nashville](../../experiments/streets/python_v1/nashville_fresh_dev72_01/python_street_import.blend) | 0.94 s |
+| Karl-Marx-Allee | [Berlin](../../streets_dev/experiments/streets/python_v1/berlin_fresh_dev72_01/python_street_import.blend) | 1.66 s |
+| Canal Street | [Canal](../../streets_dev/experiments/streets/python_v1/canal_fresh_dev72_01/python_street_import.blend) | 7.63 s |
+| Nashville | [Nashville](../../streets_dev/experiments/streets/python_v1/nashville_fresh_dev72_01/python_street_import.blend) | 0.94 s |
 
 These are individual qualification measurements with one numerical thread,
 not a universal timing guarantee or controlled comparison. All nine workers

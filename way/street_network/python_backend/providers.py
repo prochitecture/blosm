@@ -46,10 +46,14 @@ class AnchorTransform:
 class PathProvider(FeatureProvider):
     source_kinds = frozenset(('section',))
     def tasks(self, network):
+        from .profiles import memberships
+        members = memberships(network)
         for section in network.sections:
             neighbors = [j for j in (*network.intersections, *network.connections) if len(j.ends) == 2
                          and any(e.section_id == section.id for e in j.ends)]
-            deps = tuple(sorted({section.key, *(Key('section', e.section_id) for j in neighbors for e in j.ends),
+            source_ids = {section.id, *(e.section_id for j in neighbors for e in j.ends)}
+            deps = tuple(sorted({*(Key('section', sid) for sid in source_ids),
+                                 *(members[sid][0].key for sid in source_ids if sid in members),
                                  *(j.key for j in neighbors)}))
             yield Task(Key('path', section.id), deps,
                 lambda context, source=section, seams=neighbors: self.build(context, source, seams))
@@ -57,16 +61,35 @@ class PathProvider(FeatureProvider):
     @staticmethod
     def build(context, section, seams):
         endpoints = {}
+        endpoint_bends = {}
+        envelope_width = section.width
+        from .profiles import memberships
+        from .local_smoothing import shared_endpoint_bends
+        members = memberships(context.network)
         for seam in seams:
             own = next(e for e in seam.ends if e.section_id == section.id)
             partner = next(e for e in seam.ends if e != own)
             other = context.network.section_index[partner.section_id]
+            # A width-changing continuation must accommodate both complete
+            # incoming profiles, rather than only its narrower half.
+            envelope_width = max(envelope_width, other.width)
             def outward(source, end):
                 points = np.asarray(source.points)[:, :2]
                 return unit(points[1] - points[0]) if end == 0 else unit(points[-2] - points[-1])
             common = unit(outward(section, own.end) - outward(other, partner.end))
             endpoints[own.end] = common if own.end == 0 else -common
-        return Path(section, context.network.settings.curve_tolerance, endpoints)
+            # Smooth complete profiles can share one physical centerline bend.
+            # Dimensional transitions still own their profile/width joins.
+            # Mixed-mode and Bundle transition geometry keeps its prior policy.
+            if (section.interpolation == other.interpolation == 3
+                    and section.id not in members and other.id not in members):
+                canonical = sorted(((section, own.end), (other, partner.end)), key=lambda pair: pair[0].id)
+                bends = shared_endpoint_bends(*canonical[0], *canonical[1],
+                    max(4. * context.network.settings.curve_tolerance, section.width, other.width))
+                if bends is not None:
+                    endpoint_bends[own.end] = bends[0 if canonical[0][0].id == section.id else 1]
+        return Path(section, context.network.settings.curve_tolerance, endpoints,
+                    deviation_limit=envelope_width, endpoint_bends=endpoint_bends)
 
 
 class CarriagewayProvider(FeatureProvider):
@@ -201,6 +224,11 @@ class CarriagewayProvider(FeatureProvider):
                     junction_spans=junction_spans, transition_spans=transition_spans)
         if refine_sampling:
             metadata['local_curvature_sampling'] = True
+        if getattr(path, 'localized', False):
+            metadata['centerline_smoothing'] = dict(method='local_tangent_cubics',
+                source_deviation_limit=path.deviation_limit, bends=path.local_bends,
+                shared_ends={str(end): dict(radius=bend.radius, setback=bend.setback)
+                             for end, bend in path.endpoint_bends.items()})
         return Part(section.key, mesh, metadata)
 
 

@@ -174,7 +174,7 @@ class PythonMixedTransitionTests(unittest.TestCase):
         self.assertEqual(rebuilt.products[model.Key('placement',85)].position,pose)
 
     def test_invalid_smooth_offset_is_rejected_before_transition_construction(self):
-        with self.assertRaisesRegex(ValueError,'Smooth offset curvature'):
+        with self.assertRaisesRegex(ValueError,r'path:2: (Smooth offset curvature|Local Smooth)'):
             PythonMeshBackend(source_network(length=30.,angle=150.,modes=(0,3)).settings).prepare(
                 source_network(length=30.,angle=150.,modes=(0,3)))
 

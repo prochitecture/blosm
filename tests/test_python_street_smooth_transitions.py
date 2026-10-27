@@ -99,7 +99,7 @@ class PythonSmoothTransitionTests(unittest.TestCase):
     def test_unsafe_source_offsets_still_fail_before_surface_construction(self):
         source = sharp_network(length=30.)
         source = replace(source, sections=tuple(replace(s, interpolation=3) for s in source.sections))
-        with self.assertRaisesRegex(ValueError, 'Smooth offset curvature could fold'):
+        with self.assertRaisesRegex(ValueError, r'path:[12]: (Smooth offset curvature|Local Smooth)'):
             PythonMeshBackend(source.settings).prepare(source)
 
     def test_visible_road_sampling_uses_certified_trimmed_curvature(self):

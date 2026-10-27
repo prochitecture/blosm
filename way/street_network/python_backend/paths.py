@@ -1,7 +1,9 @@
 """Vectorized Exact/Smooth centerlines, physical stations and offset guards.
 
-Smooth coefficients and the continuous offset-curvature certificate reuse the
-accepted cubic construction from the GN reference. Arc length uses bounded
+Smooth uses a bounded source envelope: gentle interpolating cubics are retained,
+and excessive span-wide bows are replaced by local tangent cubic bends with
+straight source runs. The continuous offset-curvature certificate is unchanged.
+Arc length uses bounded
 adaptive intervals and Gauss integration, rather than a fixed dense subdivision
 for every segment. No SciPy or Blender API is required.
 """
@@ -24,10 +26,18 @@ def unit(vector):
 
 
 class Path:
-    def __init__(self, section, tolerance=.005, endpoint_directions=None):
+    def __init__(self, section, tolerance=.005, endpoint_directions=None, *, deviation_limit=None,
+                 endpoint_bends=None):
         self.section = section
         self.tolerance = tolerance
         self.points = np.asarray(section.points, dtype=float)[:, :2]
+        self.source_points = self.points.copy()
+        self.local_bends = ()
+        self.localized = False
+        self.endpoint_bends = endpoint_bends or {}
+        if deviation_limit is not None and (not math.isfinite(deviation_limit) or deviation_limit <= 0.):
+            raise ValueError('Source-deviation limit must be positive and finite')
+        self.deviation_limit = max(4. * tolerance, section.width if deviation_limit is None else deviation_limit)
         if np.max(abs(np.asarray(section.points)[:, 2])) > 1e-7:
             raise ValueError('Terrain/graded alignment is outside the initial flat-ground provider')
         if np.linalg.norm(self.points[0] - self.points[-1]) < 1e-7:
@@ -59,7 +69,8 @@ class Path:
         for end, value in (endpoint_directions or {}).items():
             tangent[0 if end == 0 else -1] = unit(np.asarray(value))
         self.coefficients = self._coefficients(delta, tangent)
-        if not self._certified():
+        certified = self._certified()
+        if not certified:
             # Established spacing-weighted retry; the interpolation still goes
             # through every authored point and retains endpoint directions.
             tangent = unit(np.vstack((directions[0],
@@ -67,8 +78,18 @@ class Path:
             for end, value in (endpoint_directions or {}).items():
                 tangent[0 if end == 0 else -1] = unit(np.asarray(value))
             self.coefficients = self._coefficients(delta, tangent)
-            if not self._certified():
-                raise ValueError('Smooth offset curvature could fold this carriageway')
+            certified = self._certified()
+        from .local_smoothing import LocalCubicSmoothing, within_source_envelope
+        if endpoint_bends or not certified or not within_source_envelope(
+                self.coefficients, self.source_points, self.deviation_limit):
+            reach = abs(section.offset) + .5 * section.width
+            self.points, self.chords, self.coefficients, self.local_bends = LocalCubicSmoothing(
+                self.source_points, reach, self.deviation_limit, endpoint_directions, endpoint_bends).build()
+            self.knots = np.r_[0., np.cumsum(self.chords)]
+            self.localized = True
+            certified = self._certified()
+        if not certified:
+            raise ValueError('Smooth offset curvature could fold this carriageway')
         parameters = [0.]
         # Midpoint-to-chord error controls the interval seed. Continuous offset
         # safety is supplied separately by the Bernstein curvature certificate.
@@ -90,6 +111,8 @@ class Path:
         lengths = self._integral(self.parameters[:-1], self.parameters[1:])
         self.stations = np.r_[0., np.cumsum(lengths)]
         self.length = float(self.stations[-1])
+        if self.localized:
+            self.piece_stations = self.station(self.knots)
 
     def _coefficients(self, delta, tangent):
         a, b = tangent[:-1] * self.chords[:, None], tangent[1:] * self.chords[:, None]
@@ -100,7 +123,7 @@ class Path:
         record = reach is None
         a, b, c = [self.coefficients[:, None, k, :] for k in (1, 2, 3)]
         reach = abs(self.section.offset) + self.section.width * .5 if reach is None else reach
-        for count in (8, 16, 32, 64):
+        for count in ((32, 64) if self.localized else (8, 16, 32, 64)):
             t0 = (np.arange(count) / count)[None, :, None]
             t1 = t0 + 1. / count
             tm = t0 + .5 / count
@@ -114,10 +137,13 @@ class Path:
             upper = np.maximum.reduce([abs(v) for v in (cross(d0, acc0),
                 (2. * cross(d1, acc0) + cross(d0, acc1)) / 3.,
                 (cross(d2, acc0) + 2. * cross(d1, acc1)) / 3., cross(d2, acc1))])
-            if np.all(lower > 1e-5) and np.all(reach * upper / np.maximum(lower, 1e-8) ** 3 < .98):
+            minimum_speed = 1e-5 * self.chords[:, None] if self.localized else 1e-5
+            denominator = np.maximum(lower, 1e-30 if self.localized else 1e-8)
+            if np.all(lower > minimum_speed) and np.all(reach * upper / denominator ** 3 < .98):
                 if record:
                     self.certificate_intervals = count
-                    self.curvature_bound = float(np.max(upper / lower ** 3))
+                    self.piece_curvature_bounds = np.max(upper / lower ** 3, axis=1)
+                    self.curvature_bound = float(self.piece_curvature_bounds.max())
                 return True
         return False
 
@@ -156,7 +182,7 @@ class Path:
         return t
 
     def station(self, parameter):
-        """Metric inverse of parameter(), including original control stations."""
+        """Metric inverse of parameter(), including derived polynomial joins."""
         parameter = np.asarray(parameter)
         if np.any(parameter < -1e-8) or np.any(parameter > self.knots[-1] + 1e-8):
             raise ValueError('Parameter falls outside the source path')
@@ -222,6 +248,9 @@ class Path:
             raise ValueError('A path sample budget must be an integer of at least three')
         if last <= first + 1e-7:
             raise ValueError('Intersection trims consume the complete carriageway')
+        if self.localized:
+            return self._localized_samples(first, last, spacing,
+                self.tolerance if tolerance is None else tolerance, max_samples, local_curvature)
         if not self.exact:
             # A continuous curvature bound controls physical offset-curve chord
             # error. It permits regular metric rows instead of copying the fine
@@ -254,6 +283,48 @@ class Path:
                 raise ValueError('Path sampling exceeds its allocation budget')
             pieces.append(np.linspace(a, b, count + 1)[:-1])
         return np.concatenate(pieces + [np.array([last])])
+
+    def _localized_samples(self, first, last, spacing, tolerance, max_samples, local_curvature):
+        """Refine only nominal row intervals meeting a certified local bend.
+
+        Nominal intervals have equal length. Subdividing each independently
+        avoids tiny leftovers at arc/line joins, while bounding every interval
+        by the maximum curvature of all polynomial pieces it intersects.
+        """
+        count = max(2, int(np.ceil((last - first) / spacing)))
+        count += count % 2
+        if max_samples is not None and count + 1 > max_samples:
+            raise ValueError('Path sampling exceeds its allocation budget')
+        base = np.linspace(first, last, count + 1)
+        curvature = np.zeros(count)
+        for a, b, bound in zip(self.piece_stations, self.piece_stations[1:], self.piece_curvature_bounds):
+            if b < first or a > last:
+                continue
+            lo = max(0, int(np.searchsorted(base, a, side='left')) - 1)
+            hi = min(count, int(np.searchsorted(base, b, side='right')))
+            curvature[lo:hi] = np.maximum(curvature[lo:hi], bound)
+        if local_curvature:
+            curvature = np.minimum(curvature, self.visible_curvature_bound(first, last))
+        reach = abs(self.section.offset) + .5 * self.section.width
+        allowed = np.full(count, spacing)
+        curved = curvature > 1e-12
+        k = curvature[curved]
+        offset_curvature = k / (1. - reach * k)
+        allowed[curved] = np.minimum(allowed[curved],
+            np.minimum(np.sqrt(8. * tolerance / offset_curvature),
+                       math.pi / (2. * offset_curvature)) / (1. + reach * k))
+        parts = np.maximum(1, np.ceil(np.diff(base) / allowed).astype(np.int64))
+        # Numerical roundoff must not split a nominal straight interval twice.
+        parts[~curved] = 1
+        if int(parts.sum()) % 2:
+            parts[int(np.argmax(parts))] += 1
+        total = int(parts.sum())
+        if max_samples is not None and total + 1 > max_samples:
+            raise ValueError('Path sampling exceeds its allocation budget')
+        starts = np.r_[0, np.cumsum(parts)[:-1]]
+        offsets = np.arange(total) - np.repeat(starts, parts)
+        rows = np.repeat(base[:-1], parts) + offsets * np.repeat(np.diff(base) / parts, parts)
+        return np.r_[rows, last]
 
     def point(self, station, offset=0.):
         point, _, normal = self.frame(station)

@@ -17,11 +17,21 @@ class PythonJunctionTransitionTests(unittest.TestCase):
         path=Path(model.Section(1,1,((0.,0.,0.),(10.,4.,0.),(15.,-2.,0.),(30.,5.,0.)),width=.1))
         saved=path.certificate_intervals,path.curvature_bound
         samples=path.samples(0.,path.length,.5)
-        # This wider reach needs a finer proof subdivision than the original
-        # source. It must not overwrite the original path's sampling bound.
-        self.assertTrue(path._certified(.98/saved[1]*1.15))
-        self.assertEqual((path.certificate_intervals,path.curvature_bound),saved)
-        np.testing.assert_array_equal(path.samples(0.,path.length,.5),samples)
+        # Query wider envelopes without assuming that this particular source
+        # leaves 15% slack in its curvature bound. Local cubics have a tighter
+        # estimate than the former span-wide curve. Successful refined proofs
+        # and rejected envelopes must both leave source sampling unchanged.
+        safe=.98/saved[1]*.99
+        self.assertTrue(path._certified(safe))
+        parameter=np.linspace(0.,path.knots[-1],16001)
+        unused,velocity,acceleration=path.jet(parameter)
+        curvature=abs(velocity[:,0]*acceleration[:,1]-velocity[:,1]*acceleration[:,0])/np.linalg.norm(velocity,axis=1)**3
+        measured=float(curvature.max())
+        for reach in np.linspace(safe,.98/measured*.999,16):
+            path._certified(float(reach))
+            self.assertEqual((path.certificate_intervals,path.curvature_bound),saved)
+            np.testing.assert_array_equal(path.samples(0.,path.length,.5),samples)
+        self.assertFalse(path._certified(1.001/measured))
         self.assertFalse(path._certified(1e6))
         self.assertEqual((path.certificate_intervals,path.curvature_bound),saved)
 

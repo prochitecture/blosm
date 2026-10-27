@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title description">
+  <title id="title">Bounded local smoothing of a sparse street centerline</title>
+  <desc id="description">A 120 by 80 metre courtyard with a five metre carriageway. The previous cubic bows across long spans. Local cubic bends preserve the long straight runs and round only the two corners.</desc>
+  <rect width="1200" height="650" fill="#f4f7fb"/>
+  <g font-family="Segoe UI,Arial,sans-serif" fill="#172c43">
+    <text x="48" y="48" font-size="27" font-weight="700">Keep the straight runs. Round the corners locally.</text>
+    <text x="48" y="78" font-size="16" fill="#50667b">Illustrative 120 × 80 m courtyard · 5 m carriageway · the source vertices and identities stay unchanged</text>
+    <rect x="35" y="105" width="550" height="455" rx="16" fill="white" stroke="#d7e0e9"/>
+    <rect x="615" y="105" width="550" height="455" rx="16" fill="white" stroke="#d7e0e9"/>
+    <text x="60" y="140" font-size="21" font-weight="600">Previous span-wide cubic</text>
+    <text x="640" y="140" font-size="21" font-weight="600">Bounded local cubic bends</text>
+    <g transform="translate(110 185) scale(3)" fill="none" stroke-linejoin="round">
+      <path d="M0 0 C0 26.666667 -18.856181 61.143819 0 80 C28.284271 108.284271 91.715729 108.284271 120 80 C138.856181 61.143819 120 26.666667 120 0" stroke="#e8c7c6" stroke-width="5"/>
+      <path d="M0 0 L0 80 L120 80 L120 0" stroke="#64748b" stroke-width="0.65" stroke-dasharray="2 2"/>
+      <path d="M0 0 C0 26.666667 -18.856181 61.143819 0 80 C28.284271 108.284271 91.715729 108.284271 120 80 C138.856181 61.143819 120 26.666667 120 0" stroke="#b74343" stroke-width="0.95"/>
+      <g fill="#172c43" stroke="white" stroke-width="0.5"><circle cx="0" cy="0" r="1.5"/><circle cx="0" cy="80" r="1.5"/><circle cx="120" cy="80" r="1.5"/><circle cx="120" cy="0" r="1.5"/></g>
+    </g>
+    <g transform="translate(690 185) scale(3)" fill="none" stroke-linejoin="round">
+      <path d="M0 0 L0 75 C0 77.761424 2.238576 80 5 80 L115 80 C117.761424 80 120 77.761424 120 75 L120 0" stroke="#c6e6e9" stroke-width="5"/>
+      <path d="M0 0 L0 80 L120 80 L120 0" stroke="#64748b" stroke-width="0.65" stroke-dasharray="2 2"/>
+      <path d="M0 0 L0 75 C0 77.761424 2.238576 80 5 80 L115 80 C117.761424 80 120 77.761424 120 75 L120 0" stroke="#087f8c" stroke-width="0.95"/>
+      <g fill="#172c43" stroke="white" stroke-width="0.5"><circle cx="0" cy="0" r="1.5"/><circle cx="0" cy="80" r="1.5"/><circle cx="120" cy="80" r="1.5"/><circle cx="120" cy="0" r="1.5"/></g>
+    </g>
+    <text x="60" y="530" font-size="16" fill="#9a3838">About 21 m of unwanted bow along the long bottom span</text>
+    <text x="640" y="480" font-size="16" fill="#086b76">5 m-radius bends; about 1.5 m deviation from the source legs</text>
+    <text x="640" y="510" font-size="15" fill="#50667b">Straight portions keep their nominal mesh spacing.</text>
+    <text x="640" y="535" font-size="15" fill="#50667b">Offset curvature and published quad quality still have to pass.</text>
+    <path d="M50 596 H100" stroke="#64748b" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="112" y="602" font-size="16">Source polyline</text>
+    <circle cx="310" cy="596" r="5" fill="#172c43"/>
+    <text x="325" y="602" font-size="16">Authored source vertex</text>
+    <text x="640" y="602" font-size="15" fill="#50667b">Gentle cubics already inside the envelope retain their coefficients.</text>
+  </g>
+</svg>

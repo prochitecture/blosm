@@ -53,7 +53,7 @@ class BLOSM_OT_PythonStreetSection(bpy.types.Operator):
     rise: bpy.props.FloatProperty(name='Crown rise', min=0., default=.08)
     interpolation: bpy.props.EnumProperty(name='Interpolation', items=(
         ('0', 'Exact polyline', 'Preserve polyline segments and mitered joins'),
-        ('3', 'Smooth interpolation', 'Optimized interpolating cubic')), default='3')
+        ('3', 'Smooth interpolation', 'Cubic smoothing with bounded local corner transitions')), default='3')
 
     def invoke(self, context, event):
         try:
