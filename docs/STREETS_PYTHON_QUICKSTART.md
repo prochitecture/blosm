@@ -64,7 +64,9 @@ For a streets-only first import:
 3. Enable roads; disable buildings, forests and the other feature layers for
    this demonstration. The bundled street library needs no external building
    or vegetation asset package.
-4. Choose **Street backend → Python (experimental)** and press **Import**.
+4. The **Street backend** defaults to **Python (experimental)**. Press **Import**.
+   An existing saved scene keeps its selected backend; choose Python manually
+   there if necessary.
 
 The [actual registered Import-operator check](../../streets_dev/experiments/streets/python_v1/installed_ui_import_dev72_01/operator_import_checks.json)
 passes these settings from an isolated installation without replacing setup or

@@ -933,7 +933,7 @@ class StreetRenderer:
     def __init__(self, app, itemRenderers=None, *, backend=None, design=None,
                  features=None, asset_loader=None):
         self.backend = backend or getattr(app, 'streetBackend',
-            'legacy' if itemRenderers is not None else 'geometry_nodes')
+            'legacy' if itemRenderers is not None else 'python')
         if self.backend == 'python':
             from .street_network.python_backend.renderer import PythonStreetRenderer
             self.implementation = PythonStreetRenderer(app, design=design,

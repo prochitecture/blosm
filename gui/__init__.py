@@ -907,7 +907,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
         items=(('python', 'Python (experimental)', 'Direct mesh generation; edit centerlines and press Update'),
                ('geometry_nodes', 'Geometry Nodes (experimental)', 'Shared editable flat-ground street solver'),
                ('legacy', 'Legacy', 'Previous street renderer')),
-        default='geometry_nodes')
+        default='python')
     streetProfileRise: bpy.props.FloatProperty(name="Crown rise", default=.08, min=0., subtype='DISTANCE')
     streetConstruction: bpy.props.EnumProperty(name="Street construction",
         items=(('current','Current','Established experimental carriageway and Bundle construction'),
