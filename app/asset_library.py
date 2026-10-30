@@ -140,8 +140,8 @@ class BlenderAssetLoader:
             raise AssetError(f'Library fingerprint mismatch: {path}; expected {spec.sha256}')
         return spec, path
 
-    def load(self, reference, *, link=None):
-        return self.load_many((reference,), link=link)[reference]
+    def load(self, reference, *, link=None, reuse_local_id=False):
+        return self.load_many((reference,), link=link, reuse_local_id=reuse_local_id)[reference]
 
     def contains(self, reference, *, link=None):
         """Inspect a library catalog without allocating any datablocks.
@@ -162,8 +162,17 @@ class BlenderAssetLoader:
                 raise AssetError('Invalid library datablock kind: '+reference.kind)
             return reference.name in names
 
-    def load_many(self, references, *, link=None):
+    def load_many(self, references, *, link=None, reuse_local_id=False):
+        """Load a batch; verified GN consumers can opt into native append reuse.
+
+        Blender's reuse flag also reuses indirect dependencies, across calls and
+        save/reopen. It does not check edits or library revisions: callers opting
+        in must verify the complete resulting graph against their asset catalog.
+        Other consumers retain the existing append behavior.
+        """
         import bpy
+        if reuse_local_id and bpy.app.version < (5, 2, 0):
+            raise AssetError('Verified local dependency reuse requires Blender 5.2+')
         references = tuple(dict.fromkeys(references))
         result, pending, resolved = {}, {}, {}
         # Resolve every library/edition before mutating Blender data.
@@ -211,7 +220,8 @@ class BlenderAssetLoader:
             kinds = {}
             for ref, key in entries:
                 kinds.setdefault(ref.kind, []).append((ref, key))
-            with bpy.data.libraries.load(str(path), link=use_link) as (_available, requested):
+            reuse = {'reuse_local_id': True} if reuse_local_id and not use_link else {}
+            with bpy.data.libraries.load(str(path), link=use_link, **reuse) as (_available, requested):
                 for kind, values in kinds.items():
                     setattr(requested, kind, [ref.name for ref, _key in values])
             for kind, values in kinds.items():

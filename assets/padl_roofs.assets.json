@@ -1,0 +1,36 @@
+{
+  "schema": "blosm-padl-roofs-v1",
+  "library": "padl_roofs.blend",
+  "revision": "b345e120e7cd2e8e9a2eb9dd55be06a2d17dd595f99855f7f0e6b82781af2a6e",
+  "sha256": "b345e120e7cd2e8e9a2eb9dd55be06a2d17dd595f99855f7f0e6b82781af2a6e",
+  "groups": {
+    "flat": {
+      "name": "Prochitecture Flat Roof",
+      "fingerprint": "9faedf89491fdcc92a700f5a52cebcee54fe514ec9e458db9d6fe2bba7c63613",
+      "edition": "BASE"
+    },
+    "skillion": {
+      "name": "Prochitecture Skillion Roof",
+      "fingerprint": "9b9b345fb4dae72ca4c365883dd14f6f22acf237d27c487e2d6f36ff0da07fa8",
+      "edition": "BASE"
+    },
+    "gabled": {
+      "name": "Prochitecture Gabled Roof",
+      "fingerprint": "993cf0bb5d5933fafec8d65a5adaae7b385029861d7fe7a39eac74ac78e1dadd",
+      "edition": "BASE"
+    },
+    "hipped": {
+      "name": "Prochitecture Hipped Roof",
+      "fingerprint": "590b8e436ef7f1f47047d365e5452d2a78d055db8060fe8949a2eef74ae91c2a",
+      "edition": "BASE"
+    }
+  },
+  "programs": [
+    {
+      "name": "PADL simple_3d",
+      "program_sha256": "ef96776480c2fb58801a27ed209314f6f6c42d3a488a552b30864515b5db65e0",
+      "edition": "BASE",
+      "fingerprint": "624779e7eee2f0114eb807637558709d00c430aeeecf732a56d3303235701908"
+    }
+  ]
+}
