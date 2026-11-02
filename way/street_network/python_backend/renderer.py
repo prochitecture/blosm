@@ -6,6 +6,7 @@ from uuid import uuid4
 import bpy
 from ....app.asset_library import BlenderAssetLoader
 from .. import assets
+from ..backends import StreetRenderBackend
 from ..adapter import PreparedNetworkAdapter
 from ..design import StreetDesign
 from ..physical_sources import PhysicalStreetInventory
@@ -19,7 +20,7 @@ from .source_support import ClippedApproachSupport
 from . import ui
 
 
-class PythonStreetRenderer:
+class PythonStreetRenderer(StreetRenderBackend):
     def __init__(self, app, *, design=None, features=None, asset_loader=None):
         self.app = app
         self.design = design or StreetDesign.from_app(app)

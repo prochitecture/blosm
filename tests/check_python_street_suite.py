@@ -26,7 +26,7 @@ BASE_MODULES = (
     'test_physical_dimensions', 'test_physical_junctions', 'test_physical_ports', 'test_physical_sources',
     'test_port_clusters', 'test_port_compounds', 'test_port_connections', 'test_port_network',
     'test_port_source_layout', 'test_selection_boundaries',
-    'test_shared_port_clusters', 'test_street_coverage', 'test_street_surface_validation',
+    'test_shared_port_clusters', 'test_street_backends', 'test_street_coverage', 'test_street_surface_validation',
 )
 
 

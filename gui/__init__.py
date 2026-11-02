@@ -23,6 +23,7 @@ from bpy.app.handlers import persistent
 from ..app.blender import app
 from ..defs import Keys
 from .asset_libraries import classes as asset_library_classes
+from ..way.street_network.backends import registry as street_backends, migrate_saved_selection
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
@@ -123,11 +124,13 @@ def _onFileLoaded(scene):
 
 
 def _migrateStreetBackend():
-    """Retired selection falls back to Python; Legacy keeps its saved value."""
+    """Retired street renderer selections use the current default backend."""
     for scene in bpy.data.scenes:
-        settings = scene.blosm
-        if settings.get('streetBackend') in (1, 'geometry_nodes'):
-            settings.streetBackend = 'python'
+        migrate_saved_selection(scene.blosm)
+
+
+def getStreetBackends(self, context):
+    return street_backends.enum_items()
 
 
 class BLOSM_UL_DefaultLevels(bpy.types.UIList):
@@ -519,19 +522,22 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             streets_box = box.box()
             streets_box.prop(addon, "highways")
             if addon.highways:
-                streets_box.prop(addon, "streetBackend")
-                if addon.streetBackend == 'python':
-                    streets_box.label(text="Experimental: flat-ground carriageways")
-                    streets_box.prop(addon, "streetProfileRise")
-                    streets_box.prop(addon, "streetCellSize")
-                    streets_box.prop(addon, "streetResolution")
-                    streets_box.prop(addon, "streetExaggeration")
-                    streets_box.prop(addon, "streetMaterialFile")
-                    library_box = streets_box.box()
-                    library_box.prop(addon, "assetLibraryMode")
-                    if addon.assetLibraryMode != 'APPEND':
-                        library_box.prop(addon, "assetLibraryDirectory")
-                        library_box.label(text="Keep retained libraries when moving a project")
+                if len(street_backends) > 1:
+                    streets_box.prop(addon, "streetBackend")
+                streets_box.label(text="Experimental: flat-ground carriageways")
+                streets_box.prop(addon, "streetProfileRise")
+                streets_box.prop(addon, "streetCellSize")
+                streets_box.prop(addon, "streetResolution")
+                streets_box.prop(addon, "streetExaggeration")
+                streets_box.prop(addon, "streetMaterialFile")
+                library_box = streets_box.box()
+                library_box.prop(addon, "assetLibraryMode")
+                if addon.assetLibraryMode != 'APPEND':
+                    library_box.prop(addon, "assetLibraryDirectory")
+                    library_box.label(text="Keep retained libraries when moving a project")
+                backend = street_backends.get(addon.streetBackend or 'python')
+                if backend.draw_settings is not None:
+                    backend.draw_settings(streets_box, addon)
             box.box().prop(addon, "railways")
             
             box = box.box()
@@ -925,9 +931,8 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
     streetBackend: bpy.props.EnumProperty(
         name="Street backend",
-        items=(('python', 'Python (experimental)', 'Direct mesh generation; edit centerlines and press Update', 0),
-               ('legacy', 'Legacy', 'Previous street renderer', 2)),
-        default='python')
+        items=getStreetBackends,
+        default=0)
     streetProfileRise: bpy.props.FloatProperty(name="Crown rise", default=.08, min=0., subtype='DISTANCE')
     streetCellSize: bpy.props.FloatProperty(name="Mesh cell size", default=.7, min=.05, subtype='DISTANCE')
     streetResolution: bpy.props.IntProperty(name="Mesh resolution", default=1, min=1, max=4)

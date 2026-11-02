@@ -149,19 +149,6 @@ class BaseApp:
                 raise Exception("%s isn't a valid path for the asset info file" % assetInfoFilepath)
             self.assetInfoFilepath = assetInfoFilepath
         
-        if ((self.highways or self.railways or self.aviation)
-                and getattr(self, 'streetBackend', 'python') != 'python'):
-            pmlFilepath = os.path.join(assetPackageDir, "style/street/main.pml")
-            if not os.path.isfile(pmlFilepath):
-                raise Exception("%s isn't a valid path for the PML file" % pmlFilepath)
-            self.pmlFilepathStreet = pmlFilepath
-            
-            if self.type != AppType.commandLine:
-                assetInfoFilepathStreet = os.path.join(assetPackageDir, "asset_info/street.json")
-                if not os.path.isfile(assetInfoFilepathStreet):
-                    raise Exception("%s isn't a valid path for the asset info file" % assetInfoFilepathStreet)
-                self.assetInfoFilepathStreet = assetInfoFilepathStreet
-    
     def loadSetupScript(self, setupScript):
         setupScript = os.path.realpath(setupScript)
         if not os.path.isfile(setupScript):

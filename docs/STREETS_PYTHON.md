@@ -1,6 +1,6 @@
 # Python street generation — implementation goal
 
-**2 November 2026 backend cleanup:** the experimental street GN backend and its GUI controls have been removed from `buildings_gn`. Python remains the default; Legacy remains available. Shared materials, Python Update and building GN are preserved. See [the removal and Git recovery record](STREETS_GEOMETRY_NODES.md). Earlier backend-choice/package statements below describe their dated milestones.
+**2 November 2026 backend cleanup:** the experimental street GN backend and its GUI controls have been removed from `buildings_gn`. Python is now the only installed street backend; Legacy was subsequently removed too. A [backend registry and common lifecycle](STREET_BACKENDS.md) allow future GN and other implementations. Shared materials, Python Update and building GN are preserved. See [the removal and Git recovery record](STREETS_GEOMETRY_NODES.md). Earlier backend-choice/package statements below describe their dated milestones.
 
 Current source: `C:/dev/workspace/blosm`, branch `buildings_gn`.
 The dev75 [local smoothing increment](STREETS_PYTHON_LOCAL_SMOOTHING.md)

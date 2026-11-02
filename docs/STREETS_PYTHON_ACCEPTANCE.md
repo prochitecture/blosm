@@ -1,6 +1,6 @@
 # Python streets: deliverable and verification record
 
-**2 November 2026 backend cleanup:** the experimental street GN backend and its GUI controls have been removed from `buildings_gn`. Python remains the default; Legacy remains available. Shared materials, Python Update and building GN are preserved. See [the removal and Git recovery record](STREETS_GEOMETRY_NODES.md). Earlier backend-choice/package statements below describe their dated milestones.
+**2 November 2026 backend cleanup:** the experimental street GN backend and its GUI controls have been removed from `buildings_gn`. Python is now the only installed street backend; Legacy was subsequently removed too. A [backend registry and common lifecycle](STREET_BACKENDS.md) allow future GN and other implementations. Shared materials, Python Update and building GN are preserved. See [the removal and Git recovery record](STREETS_GEOMETRY_NODES.md). Earlier backend-choice/package statements below describe their dated milestones.
 
 For the current `buildings_gn` dev75 centerline increment, see
 [local smoothing and its verification scope](STREETS_PYTHON_LOCAL_SMOOTHING.md).
@@ -10,6 +10,40 @@ Street 595 editing/restoration, and exact reproduction/quality of all 112
 previous fixtures. It does not replace the broader dev72 installation
 qualification recorded below; the earlier ZIP remains unchanged.
 
+
+## Legacy removal and extensible backends — 2 November 2026
+
+Python is now the only installed street backend. The Legacy implementation,
+its private item renderers/asset store and external street-style requirements
+have been removed. The [common renderer lifecycle and registry](STREET_BACKENDS.md)
+keep another backend, including GN, straightforward to add without importer or
+selector dispatch branches. The selector is hidden with one provider and appears
+when another registers; backend-specific controls can use its settings hook.
+Both retired selections migrate to Python, with old numeric values reserved.
+
+Validation of this follow-up:
+
+- **Seven host registry/facade tests passed**: lazy factories, reserved/duplicate
+  IDs, optional provider removal, lifecycle/options/results, validation and UI hooks.
+- **Four native registration/extension tests passed**: real restricted-context
+  addon registration, current controls/building GN, old GN/Legacy migration and
+  dynamically registering/selecting/driving a temporary GN-style provider through
+  Blender RNA. That provider's new numeric selection survives file-load migration.
+- **Nineteen native preparation tests passed**, covering chain ownership,
+  junction incidences, cycles, connector preservation and pixel-correction policy.
+- **Four native shared-material tests and independent reopening passed**.
+- Fresh Karl-Marx-Allee import: two ready networks, complete coverage,
+  **361,698 quads**, zero GN modifiers. All **328 mesh parts** preserve exact
+  coordinates/topology/ownership against the preceding Python import. Convexity,
+  quad grading, crown bounds and non-overlap checks pass.
+- Independent reopening, actual editing and explicit Update pass; local equals
+  full rebuild, restoration is exact and 323 of 327 output identities are retained.
+
+This is focused verification of backend routing, preparation, GUI and removal;
+the earlier 932-test numerical run below retains its own scope and was not
+repeated or relabeled. Numerical surface construction is unchanged. Local
+receipts/inspection output: workspace `tmp/street_legacy_removal_20261102/`.
+Workers retain the 1.5 GiB guard and 1 GiB system-memory reserve.
 
 ## Python-only backend cleanup validation — 2 November 2026
 

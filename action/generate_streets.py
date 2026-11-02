@@ -53,7 +53,7 @@ def _pseudoangle(d):
 
 class StreetGenerator():
 
-    def __init__(self, styleStore, getStyle, doPixelCorrection=True,
+    def __init__(self, styleStore, getStyle, doPixelCorrection=False,
             debugCircularStreets = False, debugParallelStreets = False, debugBundle=False, plotStreetID=None
         ):
         self.styleStore = styleStore
@@ -191,10 +191,9 @@ class StreetGenerator():
         # SweepIntersector provides a fast implementation of a sweep intersection algorithm.
         intersector = SweepIntersector()
         self.intersectingSegments = intersector.findIntersections(cleanedSegs)
-        if getattr(self.app, 'streetBackend', 'legacy') == 'python':
-            from ..way.connectivity_audit import ConnectivityAudit
-            self.wayManager.streetPreparationAudit = ConnectivityAudit().read(
-                auditedWays, self.intersectingSegments)
+        from ..way.connectivity_audit import ConnectivityAudit
+        self.wayManager.streetPreparationAudit = ConnectivityAudit().read(
+            auditedWays, self.intersectingSegments)
 
 
     # Creates the network graph <self.sectionNetwork> for way-sections (ways between crossings).
@@ -206,11 +205,9 @@ class StreetGenerator():
 
         # prepare clipper for this frame of the scene
         clipper = SCClipper(self.app.minX, self.app.maxX, self.app.minY, self.app.maxY)
-        context = None
-        if getattr(self.app, 'streetBackend', 'legacy') == 'python':
-            from ..way.clipped_context import ClippedSourceContext
-            context = ClippedSourceContext((self.app.minX,self.app.maxX,self.app.minY,self.app.maxY),
-                source_selection='ALL_WAYS' if self.allWays else 'SURFACE_VEHICLES')
+        from ..way.clipped_context import ClippedSourceContext
+        context = ClippedSourceContext((self.app.minX,self.app.maxX,self.app.minY,self.app.maxY),
+            source_selection='ALL_WAYS' if self.allWays else 'SURFACE_VEHICLES')
 
         # create full way network
         wayManager.networkGraph = self.networkGraph = WayNetwork(self.leftHandTraffic)

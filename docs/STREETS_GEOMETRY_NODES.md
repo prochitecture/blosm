@@ -2,8 +2,10 @@
 
 The experimental street GN backend was removed from `buildings_gn` on
 2 November 2026 so current development can concentrate on Python streets.
-The ordinary street backend choices are now **Python (experimental)** and
-**Legacy**. Building Geometry Nodes functionality remains available.
+The Legacy renderer was subsequently removed too. **Python is the only installed
+street backend**; the [backend registry and lifecycle](STREET_BACKENDS.md) retain
+a straightforward extension point for future GN and other implementations.
+Building Geometry Nodes functionality remains available.
 
 ## What changed
 
@@ -22,13 +24,12 @@ The ordinary street backend choices are now **Python (experimental)** and
 - Reduced `way/street_network/assets.py` to material declarations. Retained
   `assets/prochitecture_street_materials.blend`, generic asset loading/storage,
   shared street preparation, Python mesh generation and all building GN code.
-- Retained numeric menu values Python=0 and Legacy=2. Saved retired GN selection
-  1 changes to Python on startup/file load, without silently selecting Legacy.
+- Retained Python numeric selection 0. Old GN value 1 and Legacy value 2 are
+  retired and migrate to Python. New backends must use new persistent numbers.
   Old `streetConstruction` / `streetAssetFile` data is no longer exposed by RNA.
 
-The Legacy renderer is the earlier, separate implementation and retains its
-existing asset requirements. This removal concerns the experimental shared
-street GN backend, not every historical use of a GN modifier in the addon.
+Both retired street implementations remain in Git history. Shared building GN
+functionality and generic geometry-node utilities were preserved.
 Saved GN street objects are not converted into Python output by loading a file;
 use the preserved addon revision for further editing with the old GN tooling.
 

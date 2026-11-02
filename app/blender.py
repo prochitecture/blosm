@@ -200,13 +200,12 @@ class BlenderApp(BaseApp):
             BuildingProgramLibrary(os.path.join(self.basePath, 'assets'), app=self).program('simple_3d')
         
         experimental = prefs[addonName].preferences.enableExperimentalFeatures if addonName in prefs else True
-        native_streets = (experimental and self.mode is BaseApp.realistic
-                          and getattr(self, 'streetBackend', 'python') == 'python')
-        bundled_streets_only = (native_streets and self.highways and not self.buildings
+        prepared_streets = experimental and self.mode is BaseApp.realistic
+        bundled_streets_only = (prepared_streets and self.highways and not self.buildings
                                 and not self.forests and not self.aviation)
         # Native street preparation has numeric built-in styles. This also
         # clears paths left over from a previous legacy import in the session.
-        if native_streets:
+        if prepared_streets:
             self.pmlFilepathStreet = None
         if self.mode is BaseApp.realistic and not bundled_streets_only:
             assetsDir = self.validateAssetsDirContent(context)
