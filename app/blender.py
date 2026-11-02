@@ -192,6 +192,12 @@ class BlenderApp(BaseApp):
                 else BaseApp.simple
         else:
             self.mode = BaseApp.twoD
+
+        if self.mode is BaseApp.simple and self.buildings:
+            if getattr(self, 'buildingBackend', 'geometry_nodes') == 'geometry_nodes' and bpy.app.version < (5, 2, 0):
+                raise Exception('Geometry Nodes buildings require Blender 5.2 or later')
+            from ..building.padl_integration.assets import BuildingProgramLibrary
+            BuildingProgramLibrary(os.path.join(self.basePath, 'assets'), app=self).program('simple_3d')
         
         experimental = prefs[addonName].preferences.enableExperimentalFeatures if addonName in prefs else True
         native_streets = (experimental and self.mode is BaseApp.realistic

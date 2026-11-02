@@ -32,7 +32,11 @@ class BlenderTerrainSampler:
                 vertices = [obj.matrix_world @ v.co for v in mesh.vertices]
                 self.minimum = min(v.z for v in vertices)
                 self.maximum = max(v.z for v in vertices)
-                self.bvh = BVHTree.FromPolygons(vertices, [tuple(p.vertices) for p in mesh.polygons])
+                # Use Blender's evaluated tessellation, as GN Raycast does.
+                # Re-tessellating nonplanar quads in BVHTree.FromPolygons can
+                # choose another diagonal and give a different T_min.
+                mesh.calc_loop_triangles()
+                self.bvh = BVHTree.FromPolygons(vertices, [tuple(t.vertices) for t in mesh.loop_triangles], all_triangles=True)
         finally:
             obj.to_mesh_clear()
 

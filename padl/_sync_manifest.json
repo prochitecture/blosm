@@ -14,13 +14,13 @@
     "python_backend.py": "1fabe25a3a1799853a73a1a96f7ad742e6d77ab2522aab286dcabdd66010ddb5",
     "randomness.py": "3924d10d3f9468b9359ac0346bfcc5b115710e460e77ceb4e01d5a50ab08d23f",
     "services.py": "836ca1e64540c75e210e68e31ba3ca2ad874f950a8ab76ba475cec806a726d92",
-    "terrain.py": "a0414d1338f1d2b10b29c61b8824e6f0003331fdceed61c8fdb57a981a5ed111"
+    "terrain.py": "b5fc92b9112e41a819a4d2b7964f35e109b81ee64ee9bd010ca22f95656285c9"
   },
   "profile": "python",
   "schema": "padl-python-runtime-bundle-v1",
   "source": {
-    "content_sha256": "4da8b6979a32e5ab54ae98bdf560a2a80fba09ac023cc2bd8f6a9383ae929940",
-    "git_revision": "388d028cf227d2dc8f927fff2f05059a3701636e",
+    "content_sha256": "0b0c2d626fc023b20eb3bac1dd54ae43c5d256348f074a192e11aca7f8b01361",
+    "git_revision": "90c7db32ac861539231f1263a72091a4677d1e85",
     "version": "0.1.0"
   }
 }

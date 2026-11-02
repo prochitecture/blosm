@@ -593,6 +593,10 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             split.prop(addon, "setupScript", text="")
     
     def _drawBuildingSettings(self, box, addon):
+        if addon.mode == '3Dsimple':
+            box.prop(addon, 'buildingBackend')
+            box.prop(addon, 'buildingSeed')
+            return
         split = box.split(factor=0.67)
         split.label(text="Default roof shape:")
         split.prop(addon, "defaultRoofShape", text="")
@@ -822,6 +826,17 @@ class BlosmProperties(bpy.types.PropertyGroup):
         default = "3Drealistic" if _has3dRealistic else "3Dsimple"
     )
     
+    buildingBackend: bpy.props.EnumProperty(
+        name='Building backend',
+        items=(('geometry_nodes', 'Geometry Nodes', 'Editable PADL footprints with live Geometry Nodes volumes (Blender 5.2+)'),
+               ('python', 'Python', 'Generate PADL volumes with the Python geometry backend')),
+        default='geometry_nodes'
+    )
+
+    buildingSeed: bpy.props.IntProperty(
+        name='Building seed', description='Stable seed for PADL building defaults', default=0
+    )
+
     importForExport: bpy.props.BoolProperty(
         name = "Import for export",
         description = "Import OpenStreetMap buildings ready for export to the popular 3D formats",

@@ -25,10 +25,6 @@ from ..renderer import Renderer2d
 from ..renderer.node_renderer import BaseNodeRenderer
 from ..renderer.curve_renderer import CurveRenderer
 
-from ..building.manager import BuildingManager, BuildingParts, BuildingRelations
-from ..building.layer import BuildingLayer
-from ..building.renderer import BuildingRenderer
-
 from ..manager.logging import Logger
 
 
@@ -64,7 +60,14 @@ def setup(app, osm):
                 "buildings", 
                 GnBldg2dManager(app) if app.gnSetup2d != '-' else polygon
             )
-        else: # 3D
+        elif app.mode is app.simple:
+            from ..building.padl_integration.manager import PadlBuildingManager
+            buildings = PadlBuildingManager(osm, app)
+            osm.addCondition(buildings.accepts, None, buildings)
+        else: # legacy realistic mode
+            from ..building.manager import BuildingManager, BuildingParts, BuildingRelations
+            from ..building.layer import BuildingLayer
+            from ..building.renderer import BuildingRenderer
             buildingParts = BuildingParts()
             buildingRelations = BuildingRelations()
             buildings = BuildingManager(osm, app, buildingParts, BuildingLayer)

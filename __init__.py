@@ -21,7 +21,7 @@ bl_info = {
     "name": "Blosm",
     "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
     "version": (2, 7, 28),
-    "blender": (4, 5, 0),
+    "blender": (5, 2, 0),
     "location": "Right side panel > \"Blosm\" tab",
     "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
     "warning": "",

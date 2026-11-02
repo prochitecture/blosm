@@ -1,6 +1,6 @@
 {
   "schema": "blosm-padl-roofs-v1",
-  "library": "padl_roofs.blend",
+  "library": "prochitecture_buildings.blend",
   "revision": "b345e120e7cd2e8e9a2eb9dd55be06a2d17dd595f99855f7f0e6b82781af2a6e",
   "sha256": "b345e120e7cd2e8e9a2eb9dd55be06a2d17dd595f99855f7f0e6b82781af2a6e",
   "groups": {
