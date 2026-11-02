@@ -178,7 +178,8 @@ class PreparedPhysicalClusters:
             # Reuse its declared radius, without averaging or shrinking it.
             radius = records[keys[-1]][2].radius
             connectors.append(k.ConnectorInput(cid, tuple(members), len(profiles)-1,
-                radius, k.BUNDLE_ITEM if is_bundle else k.STREET_ITEM, source['leaving'], bid))
+                radius, k.BUNDLE_ITEM if is_bundle else k.STREET_ITEM, source['leaving'], bid,
+                radius_is_style=bool(getattr(records[keys[-1]][2],'radius_is_style',False))))
             origins.append((cid, tuple(keys)))
 
         owner = min(original.logical_junction_ids)

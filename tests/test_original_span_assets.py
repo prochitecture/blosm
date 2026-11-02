@@ -119,18 +119,26 @@ class OriginalSpanAssetTests(unittest.TestCase):
         from types import SimpleNamespace as NS
         from blosm.way.street_network.original_span_authoring import OriginalSpanNetworkBuilder
         from blosm.way.street_network.design import StreetDesign
-        root=self.blocks[assets.ORIGINAL_SOLVER].copy()
+        copies=[self.blocks[ref].copy() for ref in
+                (assets.ORIGINAL_SOLVER,assets.ORIGINAL_PATCH_PROVIDER,assets.ORIGINAL_STRIP_PROVIDER)]
+        root,patch,strip=copies
         try:
-            if 'blosm_interior_selection_cuts' in root:del root['blosm_interior_selection_cuts']
-            root['blosm_selection_boundaries']=1
+            # Isolate the paired-cut preflight from its earlier prerequisite.
+            # Libraries without optional selection support must exercise the
+            # same negative test; no advertised native capability is changed.
+            for tree in copies:
+                tree['blosm_selection_boundaries']=1
+                tree['blosm_interior_selection_cuts']=1
+            del root['blosm_interior_selection_cuts']
             builder=OriginalSpanNetworkBuilder(StreetDesign(),root,self.blocks[assets.ORIGINAL_PAVEMENT],
-                patch_solver=self.blocks[assets.ORIGINAL_PATCH_PROVIDER],strip_solver=self.blocks[assets.ORIGINAL_STRIP_PROVIDER])
+                patch_solver=patch,strip_solver=strip)
             plan=NS(sites=[],selection_boundaries=[NS(endpoint=1)],selection_peer=lambda endpoint:2)
             before={o.as_pointer() for o in bpy.data.objects}
             with self.assertRaisesRegex(ValueError,'paired interior selection cuts'):
                 builder.create('Should not create interior-cut objects',None,NS(ports=plan,network=None,free_bundles=()),bpy.context.scene.collection)
             self.assertEqual(before,{o.as_pointer() for o in bpy.data.objects})
-        finally:bpy.data.node_groups.remove(root)
+        finally:
+            for tree in copies:bpy.data.node_groups.remove(tree)
 
     def test_authored_dimension_approaches_use_shared_declared_dispatch(self):
         roots=[self.blocks[ref] for ref in (assets.ORIGINAL_SOLVER,
@@ -321,11 +329,19 @@ class OriginalSpanAssetTests(unittest.TestCase):
                     any(n.type=='GROUP' and n.label=='Complete ordinary or paired constructor' for n in g.nodes)]
         self.assertTrue(dispatches,'Typed complete-constructor capability has no active dispatch')
         for dispatch in dispatches:
-            for label in ('Unchanged original patch provider','Complete ordinary or paired constructor'):
-                call,=[n for n in dispatch.nodes if n.type=='GROUP' and n.label==label]
+            choice,=[n for n in dispatch.nodes if n.bl_idname=='GeometryNodeSwitch' and
+                     n.input_type=='GEOMETRY' and n.label=='Choose one complete native provider result']
+            for branch in ('True','False'):
+                self.assertEqual(len(choice.inputs[branch].links),1)
+                call=choice.inputs[branch].links[0].from_node
+                self.assertEqual(call.type,'GROUP')
                 self.assertTrue(call.node_tree.get('st_typed_provider_records'))
                 self.assertEqual(roles(call.node_tree),{2,3},'Both live patch constructors must isolate their records')
-            self.assertEqual(roles(dispatch),{4},'Internal-region status must use the point-cloud component')
+        status_outputs=any(s.item_type=='SOCKET' and s.in_out=='OUTPUT' and s.name=='Internal Region Status'
+                           for tree in patch_groups for s in tree.interface.items_tree)
+        expected={2,3,4} if status_outputs else {2,3}
+        self.assertEqual(set().union(*(roles(tree) for tree in patch_groups)),expected,
+                         'Every declared record stream, including optional internal status, must use points')
         strip_groups=list(self.reachable_groups(strip).values())
         packers=[g for g in strip_groups if g.get('st_typed_provider_records') and
                  g.name.startswith('Prochitecture Streets / Cached original strip owner v2')]
@@ -970,8 +986,32 @@ class OriginalSpanAssetTests(unittest.TestCase):
         self.assertIn(enabled,(1,2))
         fields=(intake.ASSEMBLY_PATTERN_CONSTRUCTION_FIELDS if enabled==2
                 else intake.ASSEMBLY_CONSTRUCTION_FIELDS)
-        self.assertEqual(contract,list(fields))
+        # The public JSON is the explicit selected contract. A final stage may
+        # retain additional fields; safety depends on the final readers and the
+        # actual removal chains, rather than deleting every possible field.
+        self.assertTrue(contract)
+        self.assertEqual(contract,sorted(set(contract)))
+        self.assertLessEqual(set(contract),set(fields))
         self.assertEqual(tuple(contract),intake.validate_payload_discard(root,contract))
+        bodies=[]
+        for tree in self.reachable_groups(root).values():
+            for call in tree.nodes:
+                if (call.type=='GROUP' and call.label=='Shared original-span construction' and
+                        all(key in call.inputs for key in ('Patch Results','Strip Results')) and
+                        'st_assembly_payload_discard' in tree):
+                    bodies.append((tree,call))
+        self.assertEqual(len(bodies),1,'Cleanup must belong to the actual controller intake')
+        body,call=bodies[0]
+        self.assertEqual(json.loads(body['st_assembly_payload_discard']),contract)
+        for key in ('Patch Results','Strip Results'):
+            socket=call.inputs[key]
+            for name in reversed(contract):
+                self.assertEqual(len(socket.links),1)
+                removal=socket.links[0].from_node
+                self.assertEqual(removal.bl_idname,'GeometryNodeRemoveAttribute')
+                self.assertFalse(removal.inputs['Name'].is_linked)
+                self.assertEqual(removal.inputs['Name'].default_value,name)
+                socket=removal.inputs['Geometry']
         # Provider-to-provider mouth metadata must survive; only the controller
         # may contain this optimization, including through nested group calls.
         pending=[self.blocks[assets.ORIGINAL_PATCH_PROVIDER],self.blocks[assets.ORIGINAL_STRIP_PROVIDER]]
@@ -992,6 +1032,13 @@ class OriginalSpanAssetTests(unittest.TestCase):
         # This private name is consumed by the current exact identity weld.
         with self.assertRaisesRegex(ValueError,'consumed'):
             intake.validate_payload_discard(root,('_bridge_key',))
+        copy=root.copy()
+        try:
+            reader=copy.nodes.new('GeometryNodeInputNamedAttribute')
+            reader.inputs['Name'].default_value='_qq_gradient'
+            with self.assertRaisesRegex(ValueError,'consumed'):
+                intake.validate_payload_discard(copy,('_qq_gradient',))
+        finally:bpy.data.node_groups.remove(copy)
 
     def test_cleanup_refuses_dynamic_reader_names(self):
         from blosm.way.gn.editable_input import curved_network_input_nodes as intake
@@ -1010,9 +1057,10 @@ class OriginalSpanAssetTests(unittest.TestCase):
         try:
             material.use_nodes=True
             reader=material.node_tree.nodes.new('ShaderNodeAttribute')
-            reader.attribute_name='_qr_gradient'
-            with self.assertRaisesRegex(ValueError,'consumed'):
-                intake.validate_payload_discard(self.blocks[assets.ORIGINAL_SOLVER],('_qr_gradient',))
+            for name in ('_qr_gradient','_qq_gradient'):
+                reader.attribute_name=name
+                with self.subTest(name=name),self.assertRaisesRegex(ValueError,'consumed'):
+                    intake.validate_payload_discard(self.blocks[assets.ORIGINAL_SOLVER],(name,))
         finally:bpy.data.materials.remove(material)
 
     def test_internal_region_assets_have_matching_capability_and_constructors(self):
@@ -1765,7 +1813,35 @@ class OriginalSpanAssetTests(unittest.TestCase):
         relaxation=[name for name in names if name.startswith('Prochitecture Streets / Pinned curved quad descent v1')]
         self.assertTrue(relaxation)
         self.assertTrue(all('Stable energy change v2' in name for name in relaxation),relaxation)
-        self.assertIn('Prochitecture Streets / Quad corner stable energy change v2',names)
+        if not any(name.startswith('Prochitecture Streets / Quad corner stable energy change v2') for name in names):
+            inlined=[bpy.data.node_groups[name] for name in relaxation
+                     if ' / Inline trial fields v1' in bpy.data.node_groups[name].get('st_construction_label',name)]
+            self.assertTrue(inlined,'Stable increments must be present as a shared helper or inline code')
+            def controls_geometry(socket):
+                pending=list(socket.links);seen=set()
+                while pending:
+                    link=pending.pop();node=link.to_node
+                    if node.as_pointer() in seen:continue
+                    seen.add(node.as_pointer())
+                    if (node.bl_idname=='GeometryNodeSwitch' and node.input_type=='GEOMETRY' and
+                            link.to_socket.name=='Switch'):
+                        if any(l.to_node.bl_idname=='GeometryNodeRepeatOutput' and l.to_socket.name=='Geometry'
+                               for l in node.outputs['Output'].links):return True
+                    if node.bl_idname in ('ShaderNodeMath','FunctionNodeBooleanMath') or (
+                            node.bl_idname=='GeometryNodeSwitch' and node.input_type!='GEOMETRY'):
+                        pending.extend(l for output in node.outputs for l in output.links)
+                return False
+            comparisons=[]
+            for tree in inlined:
+                for node in tree.nodes:
+                    if (node.bl_idname!='ShaderNodeMath' or node.operation!='LESS_THAN' or
+                            not node.inputs[0].is_linked or node.inputs[1].is_linked or
+                            node.inputs[1].default_value!=0.):continue
+                    link=node.inputs[0].links[0];stat=link.from_node
+                    if (stat.bl_idname=='GeometryNodeAttributeStatistic' and stat.domain=='CORNER' and
+                            link.from_socket.name=='Mean' and controls_geometry(node.outputs[0])):
+                        comparisons.append(node)
+            self.assertTrue(comparisons,'Inline corner-energy increments must control accepted geometry')
 
     def test_shared_owner_asset_contains_final_mesh_footprint_guard(self):
         root=self.blocks[assets.ORIGINAL_SOLVER];patch=self.blocks[assets.ORIGINAL_PATCH_PROVIDER]

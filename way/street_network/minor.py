@@ -57,7 +57,7 @@ class MinorJunctionAdapter:
                             inputs.SMOOTH_CROWN if self.design.profile_rise else inputs.FLAT))
                         connectors.append(inputs.ConnectorInput(next_connector,
                             (inputs.MemberInput(index, end==0),), index,
-                            radius=wayCategoryProps[section['category']]['radius']))
+                            radius=wayCategoryProps[section['category']]['radius'],radius_is_style=True))
                         next_connector += 1
                     junction = inputs.PreparedJunction(jid, tuple(item['location']), tuple(sources),
                         tuple(connectors), tuple(profiles), 0., self.design.cell_size)

@@ -60,6 +60,7 @@ class PhysicalClusterTests(unittest.TestCase):
             self.assertEqual([p.separator for p in packet.junction.profiles].count(True), 2)
             self.assertTrue(all(not p.half_profile for p in packet.junction.profiles))
             self.assertTrue(all(c.radius == 2. for c in packet.junction.connectors))
+            self.assertTrue(all(c.radius_is_style for c in packet.junction.connectors))
 
     def test_traversal_preserves_cyclic_order_under_rotated_input_rings(self):
         original = self.reader.prepare(fixture(), 100)

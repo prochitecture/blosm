@@ -111,6 +111,7 @@ class EditableNetworkBuilder:
                     record = props.connectors.add(); record.connector_id = c.source_id
                     record.intersection_id = jid
                     record.radius_override = c.radius
+                    record.radius_is_style = bool(getattr(c, 'radius_is_style', False))
                     record.radius_next_connector_id = junction.connectors[(index+1)%len(junction.connectors)].source_id
                     record.use_profile_override = True
                     profile = junction.profiles[c.profile_index]

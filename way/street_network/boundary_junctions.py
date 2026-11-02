@@ -268,7 +268,7 @@ class BoundaryJunctionAdapter:
                 inputs.SMOOTH_CROWN if self.design.profile_rise else inputs.FLAT))
             connectors.append(inputs.ConnectorInput(row['connector_id'],
                 (inputs.MemberInput(rank,end==0),),rank,
-                radius=self.properties[section['category']]['radius']))
+                radius=self.properties[section['category']]['radius'],radius_is_style=True))
         result = inputs.PreparedJunction(plan['junction_id'],plan['position'],tuple(sources),
                                         tuple(connectors),tuple(profiles),0.,self.design.cell_size)
         inputs.validate(result)

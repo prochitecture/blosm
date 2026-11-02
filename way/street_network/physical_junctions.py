@@ -177,7 +177,7 @@ class PreparedPhysicalJunctions:
                 index=len(streets);streets.append(k.StreetInput(sid,sections))
                 profiles.append(k.ProfileInput(self.rise,half_profile=half))
                 connectors.append(k.ConnectorInput(connector['connector_id'],
-                    (k.MemberInput(index,end==0),),index,radius=radius,leaving=end==0))
+                    (k.MemberInput(index,end==0),),index,radius=radius,leaving=end==0,radius_is_style=True))
                 bundles.append((jid,connector['connector_id'],bid))
             junctions.append(k.PreparedJunction(jid,site['location'],tuple(streets),
                 tuple(connectors),tuple(profiles),cell_size=self.cell_size))

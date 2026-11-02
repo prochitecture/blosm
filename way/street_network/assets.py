@@ -1,12 +1,12 @@
 """Street asset declarations; library resolution/loading is feature-independent."""
 from ...app.asset_library import AssetCatalog, AssetRef, LibrarySpec
 
-LIBRARY = LibrarySpec('streets.native.v8', 'prochitecture_streets_v8.blend', revision='8.14')
+LIBRARY = LibrarySpec('streets.native.v8', 'prochitecture_streets_v8.blend', revision='8.18')
 SOLVER = AssetRef(LIBRARY.key, 'node_groups', 'Prochitecture Streets / Editable network v8')
 PAVEMENT = AssetRef(LIBRARY.key, 'materials', 'Prochitecture Streets / Pavement')
 GRASS = AssetRef(LIBRARY.key, 'materials', 'Prochitecture Streets / Grass')
 
-ORIGINAL_LIBRARY = LibrarySpec('streets.original_spans.v1', 'prochitecture_streets_original_spans.blend', revision='1.14')
+ORIGINAL_LIBRARY = LibrarySpec('streets.original_spans.v1', 'prochitecture_streets_original_spans.blend', revision='1.64')
 ORIGINAL_SOLVER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Original span network v1')
 ORIGINAL_PATCH_PROVIDER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Original patch provider v1')
 ORIGINAL_PATCH_CATALOG = AssetRef(ORIGINAL_LIBRARY.key, 'texts', 'Blosm / Street constructor catalog v1')

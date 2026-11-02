@@ -49,6 +49,7 @@ class PhysicalJunctionTests(unittest.TestCase):
                 for street in j.streets:
                     self.assertEqual(street.sections,sections(s,street.source_id))
                 self.assertTrue(all(c.radius==2. for c in j.connectors))
+                self.assertTrue(all(c.radius_is_style for c in j.connectors))
                 self.assertTrue(all(c.leaving==c.members[0].leaving for c in j.connectors))
 
     def test_half_profile_sign_follows_authored_end_and_lateral_role(self):

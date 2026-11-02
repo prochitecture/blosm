@@ -96,7 +96,8 @@ class PreparedBoundedInputs:
                 profiles.append(k.ProfileInput(original_profile.rise,original_profile.preset,
                     original_profile.separator,half_profile=half))
                 connectors.append(k.ConnectorInput(c.source_id,tuple(members),len(profiles)-1,
-                    c.radius,c.item_kind,c.leaving,c.bundle_source_id))
+                    c.radius,c.item_kind,c.leaving,c.bundle_source_id,
+                    radius_is_style=bool(getattr(c,'radius_is_style',False))))
             if any(s is None for s in streets):
                 raise ValueError('Prepared junction contains an unreferenced Street entry')
             junctions.append(k.PreparedJunction(jid,(j.location[0]-origin[0],j.location[1]-origin[1]),
