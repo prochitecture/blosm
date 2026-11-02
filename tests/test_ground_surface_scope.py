@@ -7,21 +7,18 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from blosm.way.street_network.adapter import PreparedNetworkAdapter, StreetDesign
-from blosm.way.street_network.renderer import GeometryNodesStreetRenderer, CarriagewayFeature
-from blosm.way.street_network.original_span_feature import OriginalSpanCarriagewayFeature
+from blosm.way.street_network.python_backend.renderer import PythonStreetRenderer
 
 
 class GroundSurfaceScopeTests(unittest.TestCase):
-    def test_only_opted_in_provider_admits_ground_passages(self):
-        for feature, expected in ((CarriagewayFeature(), False), (OriginalSpanCarriagewayFeature(), True)):
-            renderer = GeometryNodesStreetRenderer(SimpleNamespace(), design=StreetDesign(),
-                                                   features=(feature,), asset_loader=object())
-            self.assertEqual(renderer.adapter.ground_passages, expected)
-            section = dict(kind='Section', category='residential', tags={'tunnel': 'building_passage'},
-                           points=((0., 0.), (20., 0.)), width=6.)
-            original = deepcopy(section)
-            self.assertEqual(renderer.adapter.street_support([section]) is None, expected)
-            self.assertEqual(section, original)
+    def test_python_provider_admits_ground_passages_without_rewriting_tags(self):
+        renderer = PythonStreetRenderer(SimpleNamespace(), design=StreetDesign(), asset_loader=object())
+        self.assertTrue(renderer.adapter.ground_passages)
+        section = dict(kind='Section', category='residential', tags={'tunnel': 'building_passage'},
+                       points=((0., 0.), (20., 0.)), width=6.)
+        original = deepcopy(section)
+        self.assertIsNone(renderer.adapter.street_support([section]))
+        self.assertEqual(section, original)
 
     def test_default_and_ordinary_tunnel_scope_is_unchanged(self):
         section = dict(kind='Section', category='residential', tags={}, points=((0., 0.), (20., 0.)), width=6.)

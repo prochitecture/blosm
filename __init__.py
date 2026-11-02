@@ -778,8 +778,6 @@ def register():
     gui.register()
     ape.register()
     if bpy.app.version >= (5, 2, 0):
-        from .way.gn import editable_input
-        editable_input.register()
         from .way.street_network.python_backend import ui as python_street_ui
         python_street_ui.register()
     if blenderApp.app.has(Keys.mode3dRealistic):
@@ -797,8 +795,6 @@ def register():
 
 def unregister():
     if bpy.app.version >= (5, 2, 0):
-        from .way.gn import editable_input
-        editable_input.unregister()
         from .way.street_network.python_backend import ui as python_street_ui
         python_street_ui.unregister()
     for c in _classes:

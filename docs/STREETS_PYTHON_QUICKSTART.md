@@ -1,5 +1,7 @@
 # Python streets: inspection and editing
 
+**2 November 2026 backend cleanup:** the experimental street GN backend and its GUI controls have been removed from `buildings_gn`. Python remains the default; Legacy remains available. Shared materials, Python Update and building GN are preserved. See [the removal and Git recovery record](STREETS_GEOMETRY_NODES.md). Earlier backend-choice/package statements below describe their dated milestones.
+
 The latest source is now on `buildings_gn` at `C:/dev/workspace/blosm`.
 Runtime dev75 adds [shared rounded Section corners](STREETS_PYTHON_LOCAL_SMOOTHING.md#shared-corner-across-section-seams-dev75)
 to the bounded local smoothing construction.

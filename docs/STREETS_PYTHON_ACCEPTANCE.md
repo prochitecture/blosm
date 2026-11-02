@@ -1,5 +1,7 @@
 # Python streets: deliverable and verification record
 
+**2 November 2026 backend cleanup:** the experimental street GN backend and its GUI controls have been removed from `buildings_gn`. Python remains the default; Legacy remains available. Shared materials, Python Update and building GN are preserved. See [the removal and Git recovery record](STREETS_GEOMETRY_NODES.md). Earlier backend-choice/package statements below describe their dated milestones.
+
 For the current `buildings_gn` dev75 centerline increment, see
 [local smoothing and its verification scope](STREETS_PYTHON_LOCAL_SMOOTHING.md).
 It repairs the shared-corner bulges left by dev74 and passes 89 focused tests,
@@ -7,6 +9,44 @@ three fresh real-network imports and native quality,
 Street 595 editing/restoration, and exact reproduction/quality of all 112
 previous fixtures. It does not replace the broader dev72 installation
 qualification recorded below; the earlier ZIP remains unchanged.
+
+
+## Python-only backend cleanup validation — 2 November 2026
+
+The experimental street GN implementation, its GUI controls and two local GN
+libraries have been removed; [scope and recovery](STREETS_GEOMETRY_NODES.md).
+Building GN, shared materials and the generic asset service remain available.
+
+- **932 tests in 109 modules passed**, with zero failures/errors and no
+  source changes during the numerical/preparation run. GN-only suites were
+  removed from this runner along with their retired implementation.
+- **Three native registration checks passed**, including restricted-context
+  addon startup, absent street GN modules/handlers/controls, preserved building
+  GN integration and Legacy numeric selection, and migration of the retired
+  selection through the file-load handler.
+- **Four native material tests passed**, followed by independent script-disabled
+  reopening; they load only the material library and exercise Python mesh/Update,
+  external selection and retained material identity.
+- **Two native ground-scope tests passed**, preserving ground building passages,
+  unsupported grade/tunnel rejection and input tags. These native tests were
+  adapted after the numerical run; production Python files remained unchanged.
+- A fresh **Karl-Marx-Allee normal import** completes both networks with
+  **361,698 direct quads**, complete coverage and zero GN modifiers. All mesh
+  coordinates/topology/ownership parts match the previous dev75 Berlin scene
+  exactly; convexity, profile/crown envelope, overlap and quad-size checks pass.
+- Independent reopening and actual source editing/Update pass: incremental
+  equals full regeneration, restoration is exact, unrelated components and
+  **323 of 327 output object identities** are retained after the local edit.
+- Executable statements of both relocated shared contracts are identical to
+  their originals. Python geometry sources, building/PADL code, generic asset
+  loading and the material-library bytes are unchanged.
+
+Local receipts and the fresh inspection scene are under workspace
+`tmp/street_gn_removal_20261102/`. These are optional verification artifacts;
+GN recovery depends on the committed sources recorded in the linked guide.
+Blender workers used the 1.5 GiB guard and 1 GiB system reserve. This cleanup
+is not a new geometry release or a benchmark; earlier versioned package/ZIP
+qualification below retains its original scope.
 
 ## Qualified dev72 baseline
 
@@ -369,7 +409,7 @@ publication slope/ratio guards. Both baseline restorations remain exact.
 
 The [22 connector cases](../../streets_dev/experiments/streets/python_v1/combined_bridges_dev66_01/bridge_checks.json)
 weld two full-width dynamic-profile strips to each patch with exact complete
-mouth edges. Joined counts are 369–3,293 quads, including higher resolutions.
+mouth edges. Joined counts are 369â€“3,293 quads, including higher resolutions.
 The connector's maximum checked angular longitudinal/entrance bounds are
 0.348%/0.048%. All three workers are terminal success under 0.25 GiB, one
 numerical thread and the unchanged 1 GiB reserve. Their peak sampled private
@@ -518,7 +558,7 @@ curbs, meets its incoming crown ceiling and complete mouth profile, and forms
 one connected disk. Published float32 quads pass positive-corner/ratio-8 checks
 and the complete bilinear 10% gradient bound. Entrance longitudinal bounds
 checked on the construction mesh are at most 1.147%, below 3%. Both repeated
-baseline meshes are exactly restored. Counts are 337–3,197 quads per patch,
+baseline meshes are exactly restored. Counts are 337â€“3,197 quads per patch,
 including the higher-resolution cases.
 
 The terminal matrix worker peaks at 80,498,688 bytes resident and 103,317,504
@@ -1113,7 +1153,7 @@ Its internal creation receipt stays at the immutable build-time status;
 the detached installed-copy qualification supplies the completed result.
 The broader geometry/performance goal remains active.
 
-**Previous qualified checkpoint — dev52.** Dev52 passes the standard
+**Previous qualified checkpoint â€” dev52.** Dev52 passes the standard
 74-fixture native/quality/reopening checks and all nine fresh real-network jobs.
 The current d8d9 tooling source has exact runtime/unaffected-test equivalence
 with the f34 874-test checkpoint and passes all seven affected numerical tests.
@@ -1245,11 +1285,11 @@ now passes all 12 source inputs, with correct union/hole topology and original
 end cuts retained. Its worker peaks at 54,374,400 resident bytes. The
 [six constant-overlap planar quad fills](../../streets_dev/experiments/streets/python_v1/polar_bundle_quads_03/polar_quad_checks.json)
 also pass positive convex quads, no world overlaps and ratio below 6, using
-863–2,098 quads and 44,126,208 peak resident bytes. These are preparation/planar
+863â€“2,098 quads and 44,126,208 peak resident bytes. These are preparation/planar
 experiments and do not count as runtime support. Subsequent
 [finite-cap profiled construction](../../streets_dev/experiments/streets/python_v1/polar_crown_patches_06/polar_crown_patch_checks.json)
-passes all 12 examples with 1,985–3,772 direct quads per Bundle, including
-180–269 grass quads for each of the six islands. World ratio, physical slopes,
+passes all 12 examples with 1,985â€“3,772 direct quads per Bundle, including
+180â€“269 grass quads for each of the six islands. World ratio, physical slopes,
 an angular longitudinal-direction bound, ceiling, zero outer curbs, drainage
 and complete shared pavement/grass edge partitions pass. The worker peaks at
 62,840,832 resident / 81,473,536 private bytes under the same 1 GiB cap/reserve.
@@ -1760,7 +1800,7 @@ and [fresh reopening](../../streets_dev/experiments/streets/python_v1/reopen_50/
 It has 336,122 convex quads, no overlaps, maximum ratio 7.97745 and all 296
 previous parts exact. The fresh checks include both new fixtures' actual rise
 Update and ownership reversal. All three real-network upgrades and saved-text
-checks also pass on the unchanged `4cb19348…` source. The
+checks also pass on the unchanged `4cb19348â€¦` source. The
 [complete numerical rerun](../../streets_dev/experiments/streets/python_v1/suite_51/suite_checks.json)
 passes 835 tests in 90 modules, zero failures/errors and identical source hashes.
 The [core receipt audit](../../streets_dev/experiments/streets/python_v1/dev45_audit_checks.json)
@@ -1794,7 +1834,7 @@ has one failure: an old route test expects the newly supported rise change to
 raise. The rejection test now checks a genuinely incompatible datum; the
 [four focused route checks](../../streets_dev/experiments/streets/python_v1/dev45_routes_unit_01/unit_checks.json)
 pass. The [source-preimage proof](../../streets_dev/experiments/streets/python_v1/dev45_route_test_source_proof.json)
-reconstructs the preceding `c6f26095…` source exactly with that single test file
+reconstructs the preceding `c6f26095â€¦` source exactly with that single test file
 replaced. Runtime and all other test files are unchanged. A fresh qualification
 queue ran the Blender jobs before the full numerical rerun (`suite_51`). That
 complete rerun now passes; the failed predecessor remains as historical evidence.
@@ -1959,16 +1999,16 @@ controlled performance comparisons.
 
 The [complete numerical suite](../../streets_dev/experiments/streets/python_v1/suite_47/suite_checks.json)
 passes **818 tests across 87 modules** with zero failures/errors and identical
-`9038014b…` before/after fingerprints. Test execution takes 932.04 s; the
+`9038014bâ€¦` before/after fingerprints. Test execution takes 932.04 s; the
 guarded worker peaks at 139,694,080 bytes resident and 156,229,632 bytes sampled
 private memory. The subsequent
 [source preimage proof](../../streets_dev/experiments/streets/python_v1/dev42_scene_instructions_proof.json)
-reconstructs that exact source from the intermediate `29036626…` files by reverting only the
+reconstructs that exact source from the intermediate `29036626â€¦` files by reverting only the
 generated README string in `check_python_street_scene.py`. AST comparison proves
 the Python logic unchanged; production files and numerical tests are identical.
 This updates the inspection instructions without repeating unchanged numerical
 tests. The nine-job `qualify_dev42.py` native queue ran on the intermediate
-`29036626…` fingerprint. All nine jobs in its [completed queue](../../streets_dev/experiments/streets/python_v1/dev42_checks.json)
+`29036626â€¦` fingerprint. All nine jobs in its [completed queue](../../streets_dev/experiments/streets/python_v1/dev42_checks.json)
 pass. The gallery checks are:
 
 - [51-fixture scene and Update](../../streets_dev/experiments/streets/python_v1/native_46/scene_checks.json),
@@ -2308,7 +2348,7 @@ A historical [dev41 recovery checkpoint](../../streets_dev/experiments/streets/p
 preserves all 1,171 Python source files, tracked addon files, the required street
 libraries, current documentation, the 46-fixture inspection scene and selected
 qualification receipts. The [checkpoint check](../../streets_dev/experiments/streets/python_v1/checkpoints/dev41_v1/checkpoint_checks.json)
-verifies every archived payload hash and reconstructs the exact `f101d652…`
+verifies every archived payload hash and reconstructs the exact `f101d652â€¦`
 all-Python fingerprint from the archive. It contains 1,296 archived source/asset/
 evidence files, is 19,620,576 bytes, and has SHA-256
 `d3dd5a4284966d6da7f7e167b6d534aee822b0a985f336a4e2307297f2d7c037`.
@@ -2321,7 +2361,7 @@ extends that baseline with the four changed/added test files, current
 documentation/drawing, current inspection scene and selected new receipts.
 Restore the baseline first, then overlay it. The
 [overlay check](../../streets_dev/experiments/streets/python_v1/checkpoints/dev41_extended_v1/checkpoint_checks.json)
-verifies all payload hashes and reconstructs the exact `689cd567…` Python
+verifies all payload hashes and reconstructs the exact `689cd567â€¦` Python
 fingerprint from both archives together. The overlay is 3,763,620 bytes with
 SHA-256 `85ee4d96d697ec260ec46bf80c25d8c9915d87013772f282276e8f9c217291f9`.
 It is also a local recovery artifact, with no install or publication claim.

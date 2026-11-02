@@ -251,7 +251,7 @@ class BoundaryJunctionAdapter:
                     influence_m=influence)
 
     def _junction(self, snapshot, plan):
-        from ..gn.kernel import inputs
+        from .contracts import inputs
         sources,connectors,profiles = [],[],[]
         all_streets = {**snapshot.streets,**plan['changed'],**plan['added']}
         for rank,row in enumerate(plan['ring']):
@@ -304,7 +304,7 @@ class BoundaryJunctionAdapter:
                 # local kernel's stricter angle domain cannot represent it.
                 # This matches ordinary Blosm preparation: the original-span
                 # planner can use the physical ring and prove its own guards.
-                from ..gn.kernel import inputs
+                from .contracts import inputs
                 local_reason = None
                 try:inputs.validate_initial_scope(junction)
                 except ValueError as exc:local_reason=str(exc)

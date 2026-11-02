@@ -1,7 +1,7 @@
 """Native regression for shared street materials and Python-only installation.
 
 Use factory-startup background Blender. --asset-root can select a freshly
-built three-library set before installation. --output retains a small Python
+material library before installation. --output retains a small Python
 scene to reopen independently with --reopen (no editing scripts required).
 """
 import argparse
@@ -41,17 +41,12 @@ def temporary_library_directory():
 
 
 class StreetMaterialLibraryTests(unittest.TestCase):
-    def test_libraries_separate_shaders_from_geometry(self):
+    def test_material_library_contains_no_geometry(self):
         with bpy.data.libraries.load(str(OPTIONS.asset_root/assets.MATERIAL_LIBRARY.path)) as (data, _):
             self.assertEqual(set(data.materials), {assets.PAVEMENT.name, assets.GRASS.name,
-                                                 assets.DIAGNOSTICS.name, assets.V8_DIAGNOSTICS.name})
+                                                 assets.DIAGNOSTICS.name, assets.DIAGNOSTIC_RED.name})
             for kind in ('node_groups', 'objects', 'meshes', 'texts', 'images'):
                 self.assertEqual(getattr(data, kind), [], kind)
-        for spec in (assets.LIBRARY, assets.ORIGINAL_LIBRARY):
-            with bpy.data.libraries.load(str(OPTIONS.asset_root/spec.path)) as (data, _):
-                self.assertTrue(data.node_groups)
-                self.assertEqual(data.materials, [], spec.path)
-                self.assertEqual(data.objects, [], spec.path)
 
     def test_python_mesh_and_update_need_only_the_material_library(self):
         initial_groups = set(bpy.data.node_groups)
@@ -59,12 +54,11 @@ class StreetMaterialLibraryTests(unittest.TestCase):
             root = Path(directory)
             (root/'assets').mkdir()
             shutil.copy2(OPTIONS.asset_root/assets.MATERIAL_LIBRARY.path, root/'assets'/assets.MATERIAL_LIBRARY.path)
-            app = SimpleNamespace(basePath=str(root), assetLibraryMode='APPEND',
-                streetAssetFile=str(root/'missing_solver.blend'))
+            app = SimpleNamespace(basePath=str(root), assetLibraryMode='APPEND')
             renderer = PythonStreetRenderer(app, design=StreetDesign())
             renderer.prepare()
             with self.assertRaises(AssetUnavailable):
-                renderer.loader.resolve(assets.LIBRARY.key)
+                renderer.loader.resolve('streets.native.v8')
             blocks = renderer.loader.load_many((assets.PAVEMENT, assets.GRASS))
             materials = {'pavement': blocks[assets.PAVEMENT], 'grass': blocks[assets.GRASS]}
             sections = (model.Section(1, 1, ((0., 0., 0.), (12., 0., 0.), (24., 0., 0.))),
@@ -95,7 +89,7 @@ class StreetMaterialLibraryTests(unittest.TestCase):
 
     def test_external_material_selection_is_independent_of_solver(self):
         path = str((OPTIONS.asset_root/assets.MATERIAL_LIBRARY.path).resolve())
-        loader = BlenderAssetLoader(ROOT/'assets', assets.catalog('missing_solver.blend', path))
+        loader = BlenderAssetLoader(ROOT/'assets', assets.material_catalog(path))
         self.assertEqual(loader.resolve(assets.MATERIAL_LIBRARY.key)[1], Path(path))
         material = loader.load(assets.PAVEMENT)
         self.assertEqual(material.name.split('.')[0], assets.PAVEMENT.name)
@@ -108,8 +102,8 @@ class StreetMaterialLibraryTests(unittest.TestCase):
             catalog = assets.material_catalog()
             catalog.register(spec, replace=True)
             loader = BlenderAssetLoader(OPTIONS.asset_root, catalog, policy='RETAINED', linked_root=directory)
-            loaded = loader.load_many((assets.PAVEMENT, assets.ORIGINAL_PAVEMENT, assets.DIAGNOSTICS))
-            self.assertEqual(loaded[assets.PAVEMENT], loaded[assets.ORIGINAL_PAVEMENT])
+            loaded = loader.load_many((assets.PAVEMENT, assets.GRASS, assets.DIAGNOSTICS))
+            self.assertIs(loader.load(assets.PAVEMENT), loaded[assets.PAVEMENT])
             self.assertIsNotNone(loaded[assets.PAVEMENT].library)
             for material in set(loaded.values()):
                 bpy.data.materials.remove(material)

@@ -938,10 +938,6 @@ class StreetRenderer:
             from .street_network.python_backend.renderer import PythonStreetRenderer
             self.implementation = PythonStreetRenderer(app, design=design,
                 features=features, asset_loader=asset_loader)
-        elif self.backend == 'geometry_nodes':
-            from .street_network.renderer import GeometryNodesStreetRenderer
-            self.implementation = GeometryNodesStreetRenderer(app, design=design,
-                features=features, asset_loader=asset_loader)
         elif self.backend == 'legacy':
             if itemRenderers is None:
                 raise ValueError('Legacy street renderer requires item renderers')

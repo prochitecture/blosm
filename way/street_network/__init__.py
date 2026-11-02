@@ -1,1 +1,1 @@
-"""Blosm-specific integration of the reusable native street GN implementation."""
+"""Shared street preparation, material assets and Python mesh generation."""

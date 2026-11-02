@@ -6,7 +6,7 @@ the inventory and inspection geometry, never coerced into a compatible fixture.
 from dataclasses import dataclass, field, replace
 import math
 
-from ..gn.kernel import adapter as junction_adapter, inputs
+from .contracts import blosm_adapter as junction_adapter, inputs
 from ..way_properties import wayCategoryProps
 from .design import StreetDesign
 from .physical_ports import GroundSurfacePolicy

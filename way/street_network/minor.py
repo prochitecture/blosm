@@ -1,12 +1,12 @@
-"""Map vehicle attachments inside a Blosm Street to the ordinary GN kernel.
+"""Map vehicle attachments inside a Blosm Street to shared junction inputs.
 
 Semantic Street ownership survives an internal junction. Its two through
-Section ends become separate connectors and the kernel owns their join.
+Section ends become separate connectors and the surface backend owns their join.
 Non-carriageway attachments remain explicitly deferred feature records.
 """
 import math
 from .adapter import PreparedNetworkAdapter
-from ..gn.kernel import inputs
+from .contracts import inputs
 from ..way_properties import wayCategoryProps
 
 

@@ -11,8 +11,7 @@ for name,path in (
         ('_boundary_adapter_tests',root),
         ('_boundary_adapter_tests.way',root/'way'),
         ('_boundary_adapter_tests.way.street_network',root/'way/street_network'),
-        ('_boundary_adapter_tests.way.gn',root/'way/gn'),
-        ('_boundary_adapter_tests.way.gn.kernel',root/'way/gn/kernel')):
+        ('_boundary_adapter_tests.way.street_network.contracts',root/'way/street_network/contracts')):
     package = ModuleType(name); package.__path__ = [str(path)]; sys.modules[name] = package
 m = importlib.import_module('_boundary_adapter_tests.way.street_network.boundary_junctions')
 c = importlib.import_module('_boundary_adapter_tests.way.clipped_context')

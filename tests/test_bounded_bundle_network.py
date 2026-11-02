@@ -19,7 +19,7 @@ def load(name, path):
 ROOT = Path(__file__).resolve().parents[1]
 plans = load('tested_bounded_plans', ROOT/'way/street_network/bundle_junctions.py')
 topology = load('tested_bounded_topology', ROOT/'way/street_network/bundle_topology.py')
-inputs = load('tested_bounded_inputs', ROOT/'way/gn/kernel/inputs.py')
+inputs = load('tested_bounded_inputs', ROOT/'way/street_network/contracts/inputs.py')
 bounded_inputs = load('tested_bounded_adapter', ROOT/'way/street_network/bounded_inputs.py')
 
 

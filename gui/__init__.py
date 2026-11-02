@@ -110,6 +110,7 @@ def _onRegister(scene):
     # the handler isn't needed anymore, so we remove it
     bpy.app.handlers.scene_update_post.remove(_onRegister)
 def _onRegister280():
+    _migrateStreetBackend()
     addDefaultLevels()
     return
 # This handler is needed to set the defaults for <context.scene.blosm.defaultLevels>
@@ -117,7 +118,16 @@ def _onRegister280():
 # That's why the persistent decorator is used
 @persistent
 def _onFileLoaded(scene):
+    _migrateStreetBackend()
     addDefaultLevels()
+
+
+def _migrateStreetBackend():
+    """Retired selection falls back to Python; Legacy keeps its saved value."""
+    for scene in bpy.data.scenes:
+        settings = scene.blosm
+        if settings.get('streetBackend') in (1, 'geometry_nodes'):
+            settings.streetBackend = 'python'
 
 
 class BLOSM_UL_DefaultLevels(bpy.types.UIList):
@@ -510,18 +520,12 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             streets_box.prop(addon, "highways")
             if addon.highways:
                 streets_box.prop(addon, "streetBackend")
-                if addon.streetBackend in ('geometry_nodes', 'python'):
+                if addon.streetBackend == 'python':
                     streets_box.label(text="Experimental: flat-ground carriageways")
-                    if addon.streetBackend == 'geometry_nodes':
-                        streets_box.prop(addon, "streetConstruction")
-                    if addon.streetBackend == 'geometry_nodes' and addon.streetConstruction == 'original_spans':
-                        streets_box.label(text="Preview: incomplete coverage; smooth inputs only")
                     streets_box.prop(addon, "streetProfileRise")
                     streets_box.prop(addon, "streetCellSize")
                     streets_box.prop(addon, "streetResolution")
                     streets_box.prop(addon, "streetExaggeration")
-                    if addon.streetBackend == 'geometry_nodes':
-                        streets_box.prop(addon, "streetAssetFile")
                     streets_box.prop(addon, "streetMaterialFile")
                     library_box = streets_box.box()
                     library_box.prop(addon, "assetLibraryMode")
@@ -921,23 +925,15 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
     streetBackend: bpy.props.EnumProperty(
         name="Street backend",
-        items=(('python', 'Python (experimental)', 'Direct mesh generation; edit centerlines and press Update'),
-               ('geometry_nodes', 'Geometry Nodes (experimental)', 'Shared editable flat-ground street solver'),
-               ('legacy', 'Legacy', 'Previous street renderer')),
+        items=(('python', 'Python (experimental)', 'Direct mesh generation; edit centerlines and press Update', 0),
+               ('legacy', 'Legacy', 'Previous street renderer', 2)),
         default='python')
     streetProfileRise: bpy.props.FloatProperty(name="Crown rise", default=.08, min=0., subtype='DISTANCE')
-    streetConstruction: bpy.props.EnumProperty(name="Street construction",
-        items=(('current','Current','Established experimental carriageway and Bundle construction'),
-               ('original_spans','Connected junctions (preview)',
-                'New shared connected-junction construction; incomplete coverage and no managed topology edits yet')),
-        default='current')
     streetCellSize: bpy.props.FloatProperty(name="Mesh cell size", default=.7, min=.05, subtype='DISTANCE')
     streetResolution: bpy.props.IntProperty(name="Mesh resolution", default=1, min=1, max=4)
     streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=1., min=0.)
-    streetAssetFile: bpy.props.StringProperty(name="Street library", subtype='FILE_PATH',
-        description="Optional compatible external .blend library; empty uses the bundled street library")
     streetMaterialFile: bpy.props.StringProperty(name="Street materials", subtype='FILE_PATH',
-        description="Optional compatible material .blend library shared by Python and Geometry Nodes; empty uses bundled materials")
+        description="Optional compatible material .blend library for streets; empty uses bundled materials")
 
     assetLibraryMode: bpy.props.EnumProperty(name="Asset storage",
         items=(('AUTO', 'Automatic', 'Retain certified library revisions to reduce scene storage; embed other assets'),
@@ -1392,6 +1388,8 @@ def register():
     bpy.app.handlers.load_post.append(_onFileLoaded)
 
 def unregister():
+    if bpy.app.timers.is_registered(_onRegister280):
+        bpy.app.timers.unregister(_onRegister280)
     for c in _classes:
         bpy.utils.unregister_class(c)
     del bpy.types.Scene.blosm
