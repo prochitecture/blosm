@@ -1,5 +1,29 @@
 # Experimental Geometry Nodes streets
 
+**Current checkpoint — 2 November 2026.** Python streets are implemented and
+are the default. The user is prioritizing Python and plans to remove the GN
+street backend temporarily. The [long-pause handoff and independent rebuild
+procedure](../../prochitecture_gn/docs/streets/blosm_integration/GN_RESTART.md)
+records the exact matching commits and preserves recovery independently of the
+future contents of this branch. Recovery reads Git history directly; it requires
+no checkpoint folder. No GN removal was performed by this review.
+
+Current distribution files are `assets/prochitecture_streets_v8.blend` **8.19**,
+`assets/prochitecture_streets_original_spans.blend` **1.65**, and
+`assets/prochitecture_street_materials.blend` **1.0**. GN libraries contain no
+materials; Python and GN share the material library. Current GN uses the first
+solver by default; **Street construction → Connected junctions (preview)**
+selects the second. **Street materials** is an independent optional override.
+Use Blender 5.2; current GN scope and the existing v8 seam assertion are
+explicitly recorded in the handoff. Do not delete shared Python preparation or
+material/asset services when removing GN-specific rendering.
+
+## Historical integration notes (through 19 October)
+
+The following version numbers, private-scene paths and next-action statements
+belong to their dated records. Use the current handoff above for resuming,
+packaging and source recovery.
+
 **Development checkpoint, 19 October 2026:** the current GN sources, exact
 private catalogs, inspection scenes and outstanding limitations are documented
 in the [GN handover and restart guide](../../prochitecture_gn/docs/streets/blosm_integration/GN_HANDOVER_2026_10_19.md)
