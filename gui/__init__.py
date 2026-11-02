@@ -520,7 +520,9 @@ class BLOSM_PT_Settings(bpy.types.Panel):
                     streets_box.prop(addon, "streetCellSize")
                     streets_box.prop(addon, "streetResolution")
                     streets_box.prop(addon, "streetExaggeration")
-                    streets_box.prop(addon, "streetAssetFile")
+                    if addon.streetBackend == 'geometry_nodes':
+                        streets_box.prop(addon, "streetAssetFile")
+                    streets_box.prop(addon, "streetMaterialFile")
                     library_box = streets_box.box()
                     library_box.prop(addon, "assetLibraryMode")
                     if addon.assetLibraryMode != 'APPEND':
@@ -934,6 +936,8 @@ class BlosmProperties(bpy.types.PropertyGroup):
     streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=1., min=0.)
     streetAssetFile: bpy.props.StringProperty(name="Street library", subtype='FILE_PATH',
         description="Optional compatible external .blend library; empty uses the bundled street library")
+    streetMaterialFile: bpy.props.StringProperty(name="Street materials", subtype='FILE_PATH',
+        description="Optional compatible material .blend library shared by Python and Geometry Nodes; empty uses bundled materials")
 
     assetLibraryMode: bpy.props.EnumProperty(name="Asset storage",
         items=(('AUTO', 'Automatic', 'Retain certified library revisions to reduce scene storage; embed other assets'),

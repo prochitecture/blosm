@@ -66,7 +66,7 @@ def surface_evidence(obj):
 
 class OriginalSpanCarriagewayFeature(StreetFeature):
     """An explicit newer solver option; no input file or fixture IDs in policy."""
-    required_libraries=(assets.ORIGINAL_LIBRARY,)
+    required_libraries=(assets.ORIGINAL_LIBRARY,assets.MATERIAL_LIBRARY)
     ground_passages=True
 
     def __init__(self, *, physical_ids=None, interior_ids=(), expand=True, compound_spans=()):

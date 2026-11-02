@@ -1,4 +1,4 @@
-"""Load both street libraries together through the normal shared asset service.
+"""Load both street GN libraries and shared materials through the asset service.
 
 Run in a fresh background Blender. Optional candidate paths/revisions exercise
 the exact pair before installation; with no overrides, use the real bundled
@@ -58,7 +58,7 @@ class StreetAssetPairTests(unittest.TestCase):
 
     def test_pair_preserves_identity_interfaces_catalog_and_reuse(self):
         scene_objects = {obj.as_pointer() for obj in bpy.context.scene.objects}
-        references = (assets.SOLVER, assets.PAVEMENT, assets.GRASS,
+        references = (assets.SOLVER, assets.PAVEMENT, assets.GRASS, assets.V8_DIAGNOSTICS,
                       assets.ORIGINAL_SOLVER, assets.ORIGINAL_PATCH_PROVIDER,
                       assets.ORIGINAL_STRIP_PROVIDER, assets.ORIGINAL_FAILURE_DISPLAY,
                       assets.ORIGINAL_PAVEMENT, assets.ORIGINAL_GRASS, assets.ORIGINAL_DIAGNOSTICS)
@@ -66,12 +66,13 @@ class StreetAssetPairTests(unittest.TestCase):
         self.assertEqual(set(loaded), set(references))
         self.assertEqual(scene_objects, {obj.as_pointer() for obj in bpy.context.scene.objects})
         self.assertTrue(all(block.library is None for block in loaded.values()))
-        # These public materials deliberately have the same names in both
-        # files. Their asset origins must remain distinct when loaded together.
+        # All geometry backends share the same independent material assets.
         self.assertEqual(assets.PAVEMENT.name, assets.ORIGINAL_PAVEMENT.name)
         self.assertEqual(assets.GRASS.name, assets.ORIGINAL_GRASS.name)
-        self.assertNotEqual(loaded[assets.PAVEMENT], loaded[assets.ORIGINAL_PAVEMENT])
-        self.assertNotEqual(loaded[assets.GRASS], loaded[assets.ORIGINAL_GRASS])
+        self.assertEqual(loaded[assets.PAVEMENT], loaded[assets.ORIGINAL_PAVEMENT])
+        self.assertEqual(loaded[assets.GRASS], loaded[assets.ORIGINAL_GRASS])
+        self.assertEqual(assets.PAVEMENT.library, assets.MATERIAL_LIBRARY.key)
+        self.assertNotEqual(assets.PAVEMENT.library, assets.SOLVER.library)
         before_validation = inventory()
         assets.validate_solver(loaded[assets.SOLVER])
         root = loaded[assets.ORIGINAL_SOLVER]

@@ -38,7 +38,7 @@ class StreetFeature(ABC):
 
 
 class CarriagewayFeature(StreetFeature):
-    required_libraries = (assets.LIBRARY,)
+    required_libraries = (assets.LIBRARY, assets.MATERIAL_LIBRARY)
     def __init__(self, *, junction_ids=None, street_ids=(), boundary_clearance=0., open_bundle_clearance=0.):
         # Optional qualification/selection boundary, never sample-specific logic.
         self.junction_ids = None if junction_ids is None else frozenset(junction_ids)
@@ -54,12 +54,12 @@ class CarriagewayFeature(StreetFeature):
 
     def render(self, context):
         load_started = time.perf_counter()
-        loaded = context.loader.load_many((assets.SOLVER, assets.PAVEMENT, assets.GRASS))
+        loaded = context.loader.load_many((assets.SOLVER, assets.PAVEMENT, assets.GRASS, assets.V8_DIAGNOSTICS))
         group = loaded[assets.SOLVER]
         assets.validate_solver(group)
         context.timings['asset_loading_seconds'] = time.perf_counter()-load_started
         builder = EditableNetworkBuilder(context.design, dict(solver=group,
-            pavement=loaded[assets.PAVEMENT], grass=loaded[assets.GRASS]))
+            pavement=loaded[assets.PAVEMENT], grass=loaded[assets.GRASS], diagnostics=loaded[assets.V8_DIAGNOSTICS]))
         snapshot = context.snapshot
         selected = self.junction_ids
         if selected is not None:
@@ -196,7 +196,8 @@ class GeometryNodesStreetRenderer:
             features=(OriginalSpanCarriagewayFeature(),)
         self.features = tuple(features) if features is not None else (CarriagewayFeature(),)
         self.loader = asset_loader or BlenderAssetLoader.for_app(app,
-            assets.catalog(getattr(app, 'streetAssetFile', None)))
+            assets.catalog(getattr(app, 'streetAssetFile', None),
+                           getattr(app, 'streetMaterialFile', None)))
         self.adapter = PreparedNetworkAdapter(self.design,
             ground_passages=any(getattr(feature, 'ground_passages', False) for feature in self.features))
         self.context = None

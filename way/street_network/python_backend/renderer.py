@@ -24,7 +24,7 @@ class PythonStreetRenderer:
         self.app = app
         self.design = design or StreetDesign.from_app(app)
         self.loader = asset_loader or BlenderAssetLoader.for_app(app,
-            assets.catalog(getattr(app, 'streetAssetFile', None)))
+            assets.material_catalog(getattr(app, 'streetMaterialFile', None)))
         self.adapter = PreparedNetworkAdapter(self.design, ground_passages=True)
         self.converter = PreparedPythonAdapter(self.design.categories, GroundSurfacePolicy.reason, wayCategoryProps)
         self.context = None
@@ -34,7 +34,7 @@ class PythonStreetRenderer:
         if bpy.app.version < (5, 2, 0):
             raise ValueError('The Python street backend targets Blender 5.2 or newer')
         ui.register()
-        self.loader.resolve(assets.LIBRARY.key)
+        self.loader.resolve(assets.MATERIAL_LIBRARY.key)
 
     def render(self, manager, data):
         with ImportTransaction():

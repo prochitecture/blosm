@@ -77,6 +77,7 @@ class EditableNetworkBuilder:
         props.solver_group = self.assets['solver']
         props.pavement_material = self.assets['pavement']
         props.grass_material = self.assets['grass']
+        props.diagnostics_material = self.assets.get('diagnostics')
         sources = bpy.data.collections.new(name+' / editable Streets')
         collection.children.link(sources)
         props.source_collection = sources

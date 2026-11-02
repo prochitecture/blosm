@@ -1,12 +1,15 @@
 """Street asset declarations; library resolution/loading is feature-independent."""
 from ...app.asset_library import AssetCatalog, AssetRef, LibrarySpec
 
-LIBRARY = LibrarySpec('streets.native.v8', 'prochitecture_streets_v8.blend', revision='8.18')
+LIBRARY = LibrarySpec('streets.native.v8', 'prochitecture_streets_v8.blend', revision='8.19')
 SOLVER = AssetRef(LIBRARY.key, 'node_groups', 'Prochitecture Streets / Editable network v8')
-PAVEMENT = AssetRef(LIBRARY.key, 'materials', 'Prochitecture Streets / Pavement')
-GRASS = AssetRef(LIBRARY.key, 'materials', 'Prochitecture Streets / Grass')
+MATERIAL_LIBRARY = LibrarySpec('streets.materials', 'prochitecture_street_materials.blend', revision='1.0')
+PAVEMENT = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Pavement')
+GRASS = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Grass')
+DIAGNOSTICS = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Diagnostics')
+V8_DIAGNOSTICS = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Diagnostic red')
 
-ORIGINAL_LIBRARY = LibrarySpec('streets.original_spans.v1', 'prochitecture_streets_original_spans.blend', revision='1.64')
+ORIGINAL_LIBRARY = LibrarySpec('streets.original_spans.v1', 'prochitecture_streets_original_spans.blend', revision='1.65')
 ORIGINAL_SOLVER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Original span network v1')
 ORIGINAL_PATCH_PROVIDER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Original patch provider v1')
 ORIGINAL_PATCH_CATALOG = AssetRef(ORIGINAL_LIBRARY.key, 'texts', 'Blosm / Street constructor catalog v1')
@@ -17,17 +20,28 @@ ORIGINAL_INTAKE_CATALOG = AssetRef(ORIGINAL_LIBRARY.key, 'texts', 'Blosm / Stree
 ORIGINAL_FREE_BUNDLE_PROVIDER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Free Bundle provider v1')
 ORIGINAL_SEPARATOR_OWNERSHIP_PROVIDER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Separator ownership provider v1')
 ORIGINAL_SEPARATOR_FILL_PROVIDER = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Separator fill provider v1')
-ORIGINAL_PAVEMENT = AssetRef(ORIGINAL_LIBRARY.key, 'materials', PAVEMENT.name)
-ORIGINAL_GRASS = AssetRef(ORIGINAL_LIBRARY.key, 'materials', GRASS.name)
+# Compatibility names for existing original-span consumers. All backends use
+# the same material identities, independently of their geometry libraries.
+ORIGINAL_PAVEMENT = PAVEMENT
+ORIGINAL_GRASS = GRASS
 ORIGINAL_FAILURE_DISPLAY = AssetRef(ORIGINAL_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Original failure display v1')
-ORIGINAL_DIAGNOSTICS = AssetRef(ORIGINAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Diagnostics')
+ORIGINAL_DIAGNOSTICS = DIAGNOSTICS
 
 
-def catalog(external_path=None):
+def material_catalog(external_path=None):
+    from dataclasses import replace
+    library = replace(MATERIAL_LIBRARY, path=external_path, source='external') if external_path else MATERIAL_LIBRARY
+    return AssetCatalog((library,))
+
+
+def catalog(external_path=None, material_path=None):
     from dataclasses import replace
     library = replace(LIBRARY, path=external_path, source='external') if external_path else LIBRARY
     original = replace(ORIGINAL_LIBRARY, path=external_path, source='external') if external_path else ORIGINAL_LIBRARY
-    return AssetCatalog((library, original))
+    result = material_catalog(material_path)
+    result.register(library)
+    result.register(original)
+    return result
 
 
 def optional_original_programs(loader, *, bundles=False, aggregate=False, original=True, defer_linked=False):
@@ -449,7 +463,7 @@ def validate_solver(group):
         'Cell Size':'NodeSocketFloat', 'Mesh Resolution':'NodeSocketInt', 'Height Exaggeration':'NodeSocketFloat',
         'Enabled':'NodeSocketBool', 'Show Diagnostics':'NodeSocketBool',
         'Pavement':'NodeSocketMaterial', 'Grass':'NodeSocketMaterial', 'Metres to Blender Units':'NodeSocketFloat',
-        'Minimum Separator Width':'NodeSocketFloat'}
+        'Minimum Separator Width':'NodeSocketFloat', 'Diagnostics Material':'NodeSocketMaterial'}
     sockets = {s.name:s.socket_type for s in group.interface.items_tree
                if s.item_type=='SOCKET' and s.in_out=='INPUT'}
     mismatches = [name for name,kind in required.items() if sockets.get(name)!=kind]

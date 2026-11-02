@@ -70,8 +70,9 @@ class StreetIntegrationTests(unittest.TestCase):
     def setUpClass(cls):
         model.register()
         cls.loader = BlenderAssetLoader(Path(blosm.__file__).parent/'assets', assets.catalog())
-        loaded = cls.loader.load_many((assets.SOLVER,assets.PAVEMENT,assets.GRASS))
-        cls.blocks = dict(solver=loaded[assets.SOLVER],pavement=loaded[assets.PAVEMENT],grass=loaded[assets.GRASS])
+        loaded = cls.loader.load_many((assets.SOLVER,assets.PAVEMENT,assets.GRASS,assets.V8_DIAGNOSTICS))
+        cls.blocks = dict(solver=loaded[assets.SOLVER],pavement=loaded[assets.PAVEMENT],grass=loaded[assets.GRASS],
+                         diagnostics=loaded[assets.V8_DIAGNOSTICS])
 
     def test_registration_is_repeatable(self):
         model.register(); model.register()
@@ -264,7 +265,8 @@ class StreetIntegrationTests(unittest.TestCase):
         collection=bpy.data.collections.new('Metre conversion');bpy.context.scene.collection.children.link(collection)
         try:
             bpy.context.scene.unit_settings.scale_length=.1
-            obj=EditableNetworkBuilder(StreetDesign(),self.blocks).create('Decimetre scene',sample(),{0,1,2},{0},collection)
+            # Keep the intended inspection scale explicit; physical-height mode is the default.
+            obj=EditableNetworkBuilder(StreetDesign(exaggeration=10.),self.blocks).create('Decimetre scene',sample(),{0,1,2},{0},collection)
             self.assertEqual(obj.st_network.status,'READY',obj.st_network.diagnostic)
             source=next(o for o in obj.st_network.source_collection.objects if o.name.endswith('Street 0'))
             self.assertAlmostEqual((source.matrix_world@source.data.vertices[-1].co).y*.1,30.,places=5)
@@ -416,6 +418,20 @@ class StreetIntegrationTests(unittest.TestCase):
         valid()
         source.data.vertices[1].co=source.data.vertices[0].co
         self.assertTrue(evidence()['diagnostics'],'A collapsed input edge must be diagnosed')
+        runtime._set_modifier(obj,'Show Diagnostics',True)
+        obj.update_tag()
+        bpy.context.view_layer.update()
+        evaluated=obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        warning_mesh=evaluated.to_mesh()
+        try:
+            warning=self.blocks['diagnostics']
+            self.assertTrue(any(warning_mesh.materials[f.material_index] is not None and
+                                warning_mesh.materials[f.material_index].original==warning.original
+                                for f in warning_mesh.polygons),
+                            ('Rejected-input labels must use the separate warning material',
+                             [m.name if m else None for m in warning_mesh.materials],
+                             obj.st_network.diagnostics_material))
+        finally:evaluated.to_mesh_clear()
         for vertex,coordinate in zip(source.data.vertices,original):vertex.co=coordinate
         for row in source.data.attributes['st_width'].data:row.value=6.
         for row in source.data.attributes['st_offset'].data:row.value=0.
