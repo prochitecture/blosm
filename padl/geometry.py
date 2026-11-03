@@ -4,6 +4,7 @@ import math
 from typing import Mapping
 
 from .errors import PadlError
+from .bindings import FaceType
 
 EPSILON = 1e-6
 
@@ -41,8 +42,17 @@ class Footprint:
     outer: tuple
     holes: tuple = ()
     attributes: Mapping = field(default_factory=dict)
+    face_type: int = 1
+    parent_id: int = 0
+    elevation_reference: 'Footprint | None' = field(default=None, repr=False, compare=False)
 
     def validate(self):
+        if type(self.face_type) not in (int, FaceType) or not (FaceType.is_building(self.face_type) or self.face_type == FaceType.PART):
+            raise PadlError('Footprint must be a building or part face', code='invalid_attribute')
+        if type(self.parent_id) is not int or not 0 <= self.parent_id < 2**31 or (
+                FaceType.is_building(self.face_type) and self.parent_id != 0) or (
+                self.face_type == FaceType.PART and self.parent_id == 0):
+            raise PadlError('Invalid footprint parent association', code='invalid_identity')
         if not isinstance(self.identity, str) or not self.identity or type(self.footprint_id) is not int or not 0 < self.footprint_id < 2**31:
             raise PadlError('Footprint requires a stable identity and positive signed-32-bit association ID', code='invalid_identity')
         rings = (self.outer, *self.holes)

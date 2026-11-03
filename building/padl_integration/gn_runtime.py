@@ -58,42 +58,66 @@ def attach(owner, tree, terrain, collection):
     return mod
 
 
+class StatusReader:
+    """One temporary graph for an import batch; inputs remain per modifier."""
+    def __init__(self, tree):
+        import bpy
+        self.wrapper = bpy.data.node_groups.new('PADL temporary status reader', 'GeometryNodeTree')
+        try:
+            for item in tree.interface.items_tree:
+                if item.item_type == 'SOCKET' and item.in_out == 'INPUT':
+                    self.wrapper.interface.new_socket(name=item.name, in_out='INPUT', socket_type=item.socket_type)
+            self.wrapper.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+            incoming = self.wrapper.nodes.new('NodeGroupInput')
+            outgoing = self.wrapper.nodes.new('NodeGroupOutput')
+            group = self.wrapper.nodes.new('GeometryNodeGroup')
+            group.node_tree = tree
+            for item in tree.interface.items_tree:
+                if item.item_type == 'SOCKET' and item.in_out == 'INPUT':
+                    self.wrapper.links.new(incoming.outputs[item.name],group.inputs[item.name])
+            self.wrapper.links.new(group.outputs['Status'],outgoing.inputs['Geometry'])
+        except Exception:
+            bpy.data.node_groups.remove(self.wrapper)
+            raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        import bpy
+        bpy.data.node_groups.remove(self.wrapper)
+
+    def read(self, owner, modifier):
+        import bpy
+        temporary, evaluated = None, None
+        try:
+            temporary = owner.copy()
+            temporary.name = 'PADL temporary status owner'
+            temporary.hide_render = True
+            bpy.context.collection.objects.link(temporary)
+            found = False
+            for item in list(temporary.modifiers):
+                if item.name == modifier.name:
+                    item.node_group = self.wrapper
+                    for value in iterGnInputs(modifier):
+                        setGnInput(item, socket_id(self.wrapper,value.name),getGnInput(modifier,value.identifier))
+                    found = True
+                elif found:
+                    temporary.modifiers.remove(item)
+            bpy.context.view_layer.update()
+            evaluated = temporary.evaluated_get(bpy.context.evaluated_depsgraph_get())
+            mesh = evaluated.to_mesh()
+            return [{attr.name: attr.data[i].value for attr in mesh.attributes
+                     if attr.domain == 'POINT' and not attr.name.startswith('.') and hasattr(attr.data[i], 'value')}
+                    for i in range(len(mesh.vertices))]
+        finally:
+            if evaluated:
+                evaluated.to_mesh_clear()
+            if temporary:
+                bpy.data.objects.remove(temporary,do_unlink=True)
+
+
 def read_status(owner, modifier):
-    """Evaluate the separate Status geometry without touching the visible group."""
-    import bpy
-    wrapper = bpy.data.node_groups.new('PADL temporary status reader', 'GeometryNodeTree')
-    temporary, evaluated = None, None
-    try:
-        wrapper.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
-        wrapper.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
-        incoming = wrapper.nodes.new('NodeGroupInput')
-        outgoing = wrapper.nodes.new('NodeGroupOutput')
-        group = wrapper.nodes.new('GeometryNodeGroup')
-        group.node_tree = modifier.node_group
-        wrapper.links.new(incoming.outputs['Geometry'], group.inputs['Geometry'])
-        wrapper.links.new(group.outputs['Status'], outgoing.inputs['Geometry'])
-        for item in iterGnInputs(modifier):
-            group.inputs[item.name].default_value = getGnInput(modifier, item.identifier)
-        temporary = owner.copy()
-        temporary.name = 'PADL temporary status owner'
-        temporary.hide_render = True
-        bpy.context.collection.objects.link(temporary)
-        found = False
-        for item in list(temporary.modifiers):
-            if item.name == modifier.name:
-                item.node_group = wrapper
-                found = True
-            elif found:
-                temporary.modifiers.remove(item)
-        bpy.context.view_layer.update()
-        evaluated = temporary.evaluated_get(bpy.context.evaluated_depsgraph_get())
-        mesh = evaluated.to_mesh()
-        return [{attr.name: attr.data[i].value for attr in mesh.attributes
-                 if attr.domain == 'POINT' and not attr.name.startswith('.') and hasattr(attr.data[i], 'value')}
-                for i in range(len(mesh.vertices))]
-    finally:
-        if evaluated:
-            evaluated.to_mesh_clear()
-        if temporary:
-            bpy.data.objects.remove(temporary, do_unlink=True)
-        bpy.data.node_groups.remove(wrapper)
+    """Evaluate separate Status geometry without touching the visible group."""
+    with StatusReader(modifier.node_group) as reader:
+        return reader.read(owner,modifier)

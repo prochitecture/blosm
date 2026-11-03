@@ -69,7 +69,7 @@ class BuildingUseRule(TagRule):
         if tags.get('building:use'):
             value = self.uses.get(tags['building:use'], 'unknown')
         else:
-            form = tags.get('building', 'yes')
+            form = tags.get('building', tags.get('building:part', 'yes'))
             value = self.uses.get(form, 'unknown')
             # An office POI inside an apartment block doesn't reclassify it.
             if form == 'yes' and tags.get('office') not in (None, '', 'no', 'vacant'):

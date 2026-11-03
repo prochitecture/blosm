@@ -1,8 +1,30 @@
 """The explicit Blosm FACE attribute contract, separate from PADL name lookup."""
 from dataclasses import dataclass
+from enum import IntEnum
 import math
 
 from .errors import PadlError
+
+
+class FaceType(IntEnum):
+    BUILDING = 1
+    HOLE = 2
+    PART = 3
+    VOLUME = 4
+    BUILDING_WITH_PARTS = 5
+    BUILDING_ALSO_PART = 6
+
+    @classmethod
+    def is_building(cls, value):
+        return value in (cls.BUILDING, cls.BUILDING_WITH_PARTS, cls.BUILDING_ALSO_PART)
+
+    @classmethod
+    def generates_volume(cls, value):
+        return value in (cls.BUILDING, cls.PART, cls.BUILDING_ALSO_PART)
+
+    @classmethod
+    def scans_parts(cls, value):
+        return value in (cls.BUILDING_WITH_PARTS, cls.BUILDING_ALSO_PART)
 
 BUILDING_USE = {0: 'unknown', 1: 'apartments', 2: 'house', 3: 'office'}
 ROOF_TYPE = {1: 'flat', 2: 'skillion', 3: 'gabled', 4: 'hipped'}
@@ -25,7 +47,7 @@ class ParameterBinding:
 
 
 class FootprintBindings:
-    version = 1
+    version = 2
 
     def __init__(self, extra=()):
         self.parameters = {
@@ -83,13 +105,18 @@ class FootprintBindings:
             result[name] = value
         return result
 
-    def encode(self, inputs, *, footprint_id, has_holes=False):
+    def encode(self, inputs, *, footprint_id, has_holes=False, face_type=1, parent_id=0):
         """Initialize an outer row from current supplied logical inputs only."""
         self.check('footprint_id', footprint_id, 'INT')
         if footprint_id <= 0:
             raise PadlError('Outer footprint_id must be positive', code='invalid_identity')
         self.check('has_holes', has_holes, 'BOOLEAN')
-        row = {'face_type': 1, 'footprint_id': footprint_id, 'parent_id': 0, 'has_holes': has_holes,
+        if type(face_type) not in (int, FaceType) or not (FaceType.is_building(face_type) or face_type == FaceType.PART):
+            raise PadlError('Expected a building or part face type', code='invalid_attribute')
+        self.check('parent_id', parent_id, 'INT')
+        if (FaceType.is_building(face_type) and parent_id != 0) or (face_type == FaceType.PART and parent_id <= 0):
+            raise PadlError('Invalid footprint parent association', code='invalid_identity')
+        row = {'face_type': int(face_type), 'footprint_id': footprint_id, 'parent_id': parent_id, 'has_holes': has_holes,
                'building_use': 0, 'roof_type': 0, 'min_elevation': 0,
                **{'has_' + name: False for name in OPTIONAL}}
         unknown = inputs.keys() - self.parameters.keys()
@@ -126,12 +153,10 @@ class FootprintBindings:
         holes = {}
         for index, row in enumerate(rows):
             role = row['face_type']
-            if role == 3:
-                raise PadlError('Building-part footprints are not supported in v1', code='unsupported_part')
-            if role == 1:
+            if FaceType.is_building(role) or role == FaceType.PART:
                 fid = row['footprint_id']
-                if fid <= 0 or fid in outer or row['parent_id'] != 0:
-                    raise PadlError('Outer footprint IDs must be unique positive integers, with parent_id=0', code='invalid_identity')
+                if fid <= 0 or fid in outer or (FaceType.is_building(role) and row['parent_id'] != 0):
+                    raise PadlError('Footprint IDs must be unique and positive; buildings require parent_id=0', code='invalid_identity')
                 outer[fid] = index
                 self.decode(row)
             elif role == 2:
@@ -144,6 +169,14 @@ class FootprintBindings:
             if parent not in outer:
                 raise PadlError(f'Hole has no outer footprint {parent}', code='invalid_identity')
         for fid, index in outer.items():
+            row = rows[index]
+            if row['face_type'] == FaceType.PART:
+                parent = outer.get(row['parent_id'])
+                if parent is None or not FaceType.scans_parts(rows[parent]['face_type']):
+                    raise PadlError(f'Part {fid} requires a type-5 or type-6 building parent', code='invalid_identity')
+            if row['face_type'] == FaceType.BUILDING_WITH_PARTS and not any(
+                    r['face_type'] == FaceType.PART and r['parent_id'] == fid for r in rows):
+                raise PadlError(f'Type-5 building {fid} has no associated parts', code='invalid_identity')
             if rows[index]['has_holes'] != bool(holes.get(fid)):
                 raise PadlError(f'has_holes does not match the associated holes of {fid}', code='invalid_identity')
         return rows, outer, holes

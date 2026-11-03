@@ -1,6 +1,6 @@
 """Python geometry backend using PADL evaluation and independent roof adapters.
 
-The hipped adapter reuses Blosm's existing bpypolyskel kernel directly, without
+The gabled adapter reuses Blosm's profile geometry; the hipped adapter reuses Blosm's existing bpypolyskel kernel directly, without
 PML, legacy building orchestration, GN compilation, or silent flat-roof fallback.
 Triangulation and skeleton math use Blender's mathutils at geometry-execution time.
 """
@@ -8,8 +8,9 @@ from dataclasses import dataclass
 import math
 
 from .errors import PadlError
+from .bindings import FaceType
 from .evaluation import Evaluator, FootprintContext
-from .geometry import MeshData, contains, cross, signed_area
+from .geometry import MeshData, contains, signed_area
 
 
 def direction(footprint, options):
@@ -47,6 +48,13 @@ def wall_faces(mesh, ring, height, bottom, footprint_id):
 
 class PlanarRoofAdapter:
     def generate(self, footprint, volume, datum=0):
+        if volume.roof_type == 'flat' and not footprint.holes:
+            mesh = MeshData()
+            ring = footprint.oriented_rings()[0]
+            height = datum + volume.roof_min_elevation
+            mesh.polygon([(p[0], p[1], height) for p in ring], 2, footprint.footprint_id)
+            wall_faces(mesh, ring, lambda p: height, datum + volume.min_elevation, footprint.footprint_id)
+            return mesh
         from mathutils import Vector
         from mathutils.geometry import delaunay_2d_cdt
         mesh = MeshData()
@@ -85,32 +93,44 @@ class PlanarRoofAdapter:
 
 
 class GabledRoofAdapter:
+    """Adapt Blosm's shared profile geometry to already resolved PADL dimensions."""
+    profile = (((0., 0.), (.5, 1.), (1., 0.)), {'numSamples': 10, 'angleToHeight': .5})
+
     def generate(self, footprint, volume, datum=0):
         if footprint.holes:
             raise PadlError('Gabled roofs do not support holes in the initial profile', code='unsupported_geometry')
-        ring = list(footprint.oriented_rings()[0])
-        if any(cross(ring[i - 1], ring[i], ring[(i + 1) % len(ring)]) < -1e-6 for i in range(len(ring))):
-            raise PadlError('Gabled roofs require a convex footprint', code='unsupported_geometry')
+        from .profile_geometry import ProfiledRoofGeometry
+        kernel = ProfiledRoofGeometry(self.profile)
+        ring = footprint.oriented_rings()[0]
         axis = direction(footprint, volume.roof_options)
-        project = lambda p: p[0] * axis[0] + p[1] * axis[1]
-        low, high = min(map(project, ring)), max(map(project, ring))
-        if high - low <= 0.0001:
-            raise PadlError('Gabled roof has a degenerate direction span', code='invalid_geometry')
-        mid = (low + high) / 2
-        base = datum + volume.roof_min_elevation
-        height = lambda p: base + volume.roof_height * (1 - abs((project(p) - mid) / ((high - low) / 2)))
-        split_ring = []
-        for a, b in zip(ring, ring[1:] + ring[:1]):
-            split_ring.append(a)
-            ta, tb = project(a) - mid, project(b) - mid
-            if ta * tb < -1e-12:
-                t = ta / (ta - tb)
-                split_ring.append((a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])))
+        # Keep kernel float32 coordinates near zero, independent of packing.
+        ox = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2
+        oy = (min(p[1] for p in ring) + max(p[1] for p in ring)) / 2
+        local = tuple((p[0] - ox, p[1] - oy) for p in ring)
+        try:
+            kernel.prepare(local, bottom=volume.min_elevation,
+                           roof_base=volume.roof_min_elevation,
+                           roof_height=volume.roof_height, direction=axis)
+            if not kernel.make(None):
+                raise ValueError('Profile geometry generation did not complete')
+        except Exception as exc:
+            raise PadlError(f'Python gabled profile solver failed: {exc}', code='solver_failure') from exc
         mesh = MeshData()
-        for side in (-1, 1):
-            polygon = [p for p in split_ring if side * (project(p) - mid) >= -1e-7]
-            mesh.polygon([(p[0], p[1], height(p)) for p in polygon], 2, footprint.footprint_id)
-        wall_faces(mesh, split_ring, height, datum + volume.min_elevation, footprint.footprint_id)
+        roof_area = 0.
+        for kind, faces in ((1, kernel.wallIndices), (2, kernel.roofIndices)):
+            for face in faces:
+                points = [tuple(kernel.verts[i]) for i in face]
+                if kind == 2:
+                    area = signed_area(points)
+                    roof_area += abs(area)
+                    if area < 0:
+                        points.reverse()
+                mesh.polygon([(p[0] + ox, p[1] + oy, p[2] + datum) for p in points],
+                             kind, footprint.footprint_id)
+        if abs(roof_area - footprint.area) > max(1e-4, footprint.area * 1e-5):
+            raise PadlError('Python gabled output failed footprint coverage validation', code='solver_failure')
+        if not mesh.faces or abs(max(v[2] for v in mesh.vertices) - (datum + volume.max_elevation)) > max(1e-4, abs(datum + volume.max_elevation)*1e-6):
+            raise PadlError('Python gabled output failed height validation', code='solver_failure')
         return mesh
 
 
@@ -164,6 +184,8 @@ class PythonBackend:
         self.available = frozenset(self.adapters if available is None else available)
 
     def generate(self, program, footprints, *, seed=None, global_inputs=None, terrain=None):
+        footprints = tuple(footprints)
+        by_id = {f.footprint_id: f for f in footprints}
         evaluator = Evaluator(program, seed=seed, global_inputs=global_inputs)
         from .terrain import TerrainSample
         output, results, samples = MeshData(), [], []
@@ -174,8 +196,18 @@ class PythonBackend:
                 raise PadlError('Repeated footprint association ID or source identity', code='invalid_identity')
             seen_ids.add(footprint.footprint_id)
             seen_keys.add(footprint.identity)
+            if not FaceType.generates_volume(footprint.face_type):
+                continue
             result = evaluator.evaluate(FootprintContext(footprint.identity, footprint.attributes))
-            sample = terrain.sample(footprint) if terrain is not None else TerrainSample()
+            reference = footprint
+            if footprint.face_type == FaceType.PART:
+                reference = by_id.get(footprint.parent_id) or footprint.elevation_reference
+                if reference is None or reference.footprint_id != footprint.parent_id or not FaceType.is_building(reference.face_type):
+                    raise PadlError('Part elevation requires its owning building footprint', code='invalid_identity')
+            # Coverage is required for both the part and the common datum rings.
+            if terrain is not None and reference is not footprint:
+                terrain.sample(footprint)
+            sample = terrain.sample(reference) if terrain is not None else TerrainSample()
             datum = sample.minimum
             for volume in result.volumes:
                 if volume.roof_type not in self.available:

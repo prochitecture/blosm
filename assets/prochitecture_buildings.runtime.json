@@ -4,7 +4,7 @@
       "tree": "PADL simple_3d",
       "document": "prochitecture_buildings.simple_3d.json",
       "program_sha256": "ef96776480c2fb58801a27ed209314f6f6c42d3a488a552b30864515b5db65e0",
-      "fingerprint": "624779e7eee2f0114eb807637558709d00c430aeeecf732a56d3303235701908",
+      "fingerprint": "2ac11169d0cf257edb5f83dba9c67ed3a65af82b40895031ce4a80f79a24ddfd",
       "available_roofs": [
         "flat",
         "gabled",
@@ -17,6 +17,6 @@
   "schema": "blosm.buildings.v1",
   "library": {
     "file": "prochitecture_buildings.blend",
-    "sha256": "b345e120e7cd2e8e9a2eb9dd55be06a2d17dd595f99855f7f0e6b82781af2a6e"
+    "sha256": "a69fdf23aa613b34f2f3abf6f7674c6058f0f68e338d6ac841d2cc2852294d9c"
   }
 }

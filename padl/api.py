@@ -30,7 +30,8 @@ def create_input_object(footprints, *, name='PADL Footprints', collection=None):
             vertices.extend((v[0], v[1], v[2] if len(v) > 2 else 0) for v in ring)
             faces.append(tuple(range(start, len(vertices))))
             if i == 0:
-                rows.append(bindings.encode(footprint.attributes, footprint_id=footprint.footprint_id, has_holes=bool(footprint.holes)))
+                rows.append(bindings.encode(footprint.attributes, footprint_id=footprint.footprint_id,
+                    has_holes=bool(footprint.holes), face_type=footprint.face_type, parent_id=footprint.parent_id))
             else:
                 rows.append({'face_type': 2, 'footprint_id': 0, 'parent_id': footprint.footprint_id, 'has_holes': False})
     mesh = bpy.data.meshes.new(name)
@@ -39,6 +40,12 @@ def create_input_object(footprints, *, name='PADL Footprints', collection=None):
         attr = mesh.attributes.new(name, FACE_TYPES[name], 'FACE')
         attr.data.foreach_set('value', [row.get(name, False if FACE_TYPES[name] == 'BOOLEAN' else 0) for row in rows])
     owner = bpy.data.objects.new(mesh.name, mesh)
+    try:
+        bindings.validate_mesh(mesh)
+    except Exception:
+        bpy.data.objects.remove(owner)
+        bpy.data.meshes.remove(mesh)
+        raise
     (collection or bpy.context.collection).objects.link(owner)
     return owner
 

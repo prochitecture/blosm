@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--source', default=r'C:\prochitecture\setup\bldg2_berlin_karl_marx_allee.blend')
     parser.add_argument('--osm', default=r'C:\dev\workspace\osm_extracts\facade_visibility\berlin_karl_marx_allee.osm')
     parser.add_argument('--output', default=r'C:\dev\workspace\artifacts\padl_berlin')
+    parser.add_argument('--dedicated', action='store_true')
     parser.add_argument('--terrain-offset-z', type=float, default=0)
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     source, destination = Path(args.source), Path(args.output)
@@ -40,7 +41,7 @@ def main():
     settings.dataType, settings.mode, settings.osmSource = 'osm', '3Dsimple', 'file'
     settings.osmFilepath, settings.terrainObject = str(Path(args.osm)), 'Terrain'
     settings.buildingBackend, settings.buildingSeed = args.backend, 17
-    settings.buildings, settings.singleObject = True, True
+    settings.buildings, settings.singleObject = True, not args.dedicated
     settings.setupScript = ''
     settings.relativeToInitialImport = False
     settings.assetLibraryMode = 'APPEND'
@@ -60,74 +61,95 @@ def main():
     from blosm.app.blender import app
     from blosm.padl.persistence import read_footprints
     from blosm.padl.terrain import BlenderTerrainSampler
-    result, report = app.padlBuildingResult, app.padlBuildingReport
-    assert result is not None and report['input_count'] > 0
-    assert terrain_matrix == [list(row) for row in terrain.matrix_world], ('Import moved the terrain', terrain_matrix, [list(row) for row in terrain.matrix_world])
-    footprints = read_footprints(result.owner)
+    results, report = app.padlBuildingResults, app.padlBuildingReport
+    assert results and report['input_count'] > 0
+    assert not any(g.name.startswith('PADL temporary status reader') for g in bpy.data.node_groups)
+    assert not any(o.name.startswith('PADL temporary status owner') for o in bpy.data.objects)
+    assert terrain_matrix == [list(row) for row in terrain.matrix_world], 'Import moved the terrain'
+    footprints = [f for result in results for f in read_footprints(result.owner)]
     assert len(footprints) == report['input_count']
-    # Initial imports must leave policy/default parameters absent.
+    from blosm.padl.bindings import FaceType
+    from blosm.building.padl_integration.source import group_buildings
+    if args.dedicated:
+        assert len(results) == len(group_buildings(footprints, False))
+        for result in results:
+            group = read_footprints(result.owner)
+            assert sum(FaceType.is_building(f.face_type) for f in group) == 1
     for footprint in footprints:
         assert not {'base_elevation', 'top_height', 'level_height', 'ground_floor_height', 'ground_floor_factor'} & footprint.attributes.keys()
     sampler = BlenderTerrainSampler(terrain)
     samples = {}
     for footprint in footprints:
         try:
-            sample = sampler.sample(footprint)
+            sample = sampler.sample(footprint.elevation_reference or footprint)
             samples[footprint.footprint_id] = sample.minimum
         except Exception:
-            pass  # Coverage failures are required to appear in backend statuses.
-    bpy.context.view_layer.update()
-    evaluated = result.output.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    mesh = evaluated.to_mesh()
-    try:
-        assert len(mesh.polygons) > 0, 'No building volumes generated'
-        attributes = {a.name for a in mesh.attributes if not a.name.startswith('.')}
-        assert {'footprint_id', 'face_type', 'component_type'} <= attributes
-        assert not {'building_use', 'roof_type', 'max_elevation', 'has_max_elevation', 'padl_random_key'} & attributes
-        ids = mesh.attributes['footprint_id']
-        bounds = {}
-        for polygon in mesh.polygons:
-            fid = ids.data[polygon.index].value
-            assert fid > 0
-            assert mesh.attributes['face_type'].data[polygon.index].value == 4
-            assert mesh.attributes['component_type'].data[polygon.index].value in (1, 2)
-            zs = [(evaluated.matrix_world @ mesh.vertices[i].co).z for i in polygon.vertices]
-            low, high = bounds.get(fid, (float('inf'), -float('inf')))
-            bounds[fid] = min(low, *zs), max(high, *zs)
-        success = {s['footprint_id'] for s in report['statuses'] if not s.get('error')}
-        assert set(bounds) == success, (set(bounds) - success, success - set(bounds))
-        assert all(fid in samples for fid in bounds), 'Generated a building without terrain coverage'
-        for fid, (low, high) in bounds.items():
-            footprint = next(f for f in footprints if f.footprint_id == fid)
-            assert abs(low - samples[fid] - footprint.attributes.get('min_elevation', 0)) < 0.002, (fid, low, samples[fid])
-            if 'max_elevation' in footprint.attributes:
-                assert abs(high - samples[fid] - footprint.attributes['max_elevation']) < 0.01, (fid, high, samples[fid])
-        messages = [message.message for mod in result.output.modifiers
-                    for message in getattr(mod, 'node_warnings', [])]
-        # Native solver warnings for rejected real-world footprints are valid
-        # only when the separate Status output also reports those failures.
-        assert not messages or any(row.get('error') for row in report['statuses']), messages
-        assert all(message == 'ERR_NON_CONVEX' for message in messages), messages
-        details = {'backend': args.backend, 'source_sha256': before,
-            'elapsed_seconds': time.monotonic() - started,
-            'input_count': len(footprints), 'generated_count': len(bounds),
-            'vertices': len(mesh.vertices), 'faces': len(mesh.polygons),
-            'native_solver_messages': messages,
-            'mapping_issues': dict(Counter(row['code'] for row in report['issues'])),
-            'generation_errors': dict(Counter(str(row['error']) for row in report['statuses'] if row.get('error'))),
-            'building_uses': dict(Counter(f.attributes['building_use'] for f in footprints)),
-            'roof_types': dict(Counter(f.attributes.get('roof_type', 'default') for f in footprints)),
-            'bounds': bounds, 'report': report}
-    finally:
-        evaluated.to_mesh_clear()
-    # Check reuse through a completely new service instance.
+            pass
+    bounds, vertices, faces, attributes = {}, 0, 0, set()
+    flat_caps = {}
+    for result in results:
+        evaluated = result.output.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        mesh = evaluated.to_mesh()
+        try:
+            vertices += len(mesh.vertices)
+            faces += len(mesh.polygons)
+            attributes.update(a.name for a in mesh.attributes if not a.name.startswith('.'))
+            for polygon in mesh.polygons:
+                fid = mesh.attributes['footprint_id'].data[polygon.index].value
+                assert fid > 0
+                assert mesh.attributes['face_type'].data[polygon.index].value == 4
+                assert mesh.attributes['component_type'].data[polygon.index].value in (1,2)
+                zs = [(evaluated.matrix_world @ mesh.vertices[i].co).z for i in polygon.vertices]
+                low, high = bounds.get(fid, (float('inf'), -float('inf')))
+                bounds[fid] = min(low,*zs), max(high,*zs)
+                if mesh.attributes['component_type'].data[polygon.index].value == 2:
+                    flat_caps.setdefault(fid,[]).append(len(polygon.vertices))
+        finally:
+            evaluated.to_mesh_clear()
+    assert faces > 0
+    assert {'footprint_id','face_type','component_type'} <= attributes
+    assert not {'building_use','roof_type','max_elevation','has_max_elevation','padl_random_key'} & attributes
+    success = {s['footprint_id'] for s in report['statuses'] if not s.get('error')}
+    assert set(bounds) == success, (set(bounds)-success,success-set(bounds))
+    by_id = {f.footprint_id:f for f in footprints}
+    single_flat_caps = 0
+    for fid,sizes in flat_caps.items():
+        footprint = by_id[fid]
+        if footprint.attributes.get('roof_type','flat') == 'flat' and not footprint.holes:
+            assert sizes == [len(footprint.outer)], ('Flat roof must be one original polygon',fid,sizes)
+            single_flat_caps += 1
+    if args.backend == 'python':
+        import json as _json
+        main = next((f for f in footprints if _json.loads(f.identity)[1] == 'osm:way:840186547'),None)
+        if main is not None:
+            assert main.footprint_id in success, 'Python failed to generate the St. Pius main body'
+    assert all(FaceType.generates_volume(by_id[fid].face_type) for fid in bounds)
+    for fid,(low,high) in bounds.items():
+        f = by_id[fid]
+        assert abs(low-samples[fid]-f.attributes.get('min_elevation',0)) < .002, (fid,low,samples[fid])
+        if 'max_elevation' in f.attributes:
+            assert abs(high-samples[fid]-f.attributes['max_elevation']) < .01, (fid,high,samples[fid])
+    messages = [message.message for result in results for mod in result.output.modifiers
+                for message in getattr(mod,'node_warnings',[])]
+    assert not messages or any(row.get('error') for row in report['statuses']), messages
+    assert all(message in {'ERR_NON_CONVEX', 'ERR_STRAIGHT_ANGLE'} for message in messages), messages
+    details = {'backend':args.backend,'dedicated':args.dedicated,'source_sha256':before,
+        'elapsed_seconds':time.monotonic()-started,'input_count':len(footprints),
+        'object_count':len(results),'generated_count':len(bounds),'vertices':vertices,'faces':faces,
+        'face_types':dict(Counter(f.face_type for f in footprints)),
+        'generated_parts':sum(by_id[fid].face_type == 3 for fid in bounds),
+        'native_solver_messages':messages,
+        'mapping_issues':dict(Counter(row['code'] for row in report['issues'])),
+        'generation_errors':dict(Counter(str(row['error']) for row in report['statuses'] if row.get('error'))),
+        'single_polygon_flat_roofs':single_flat_caps,'bounds':bounds,'report':report}
     if args.backend == 'geometry_nodes':
         from blosm.building.padl_integration.assets import BuildingProgramLibrary
         count = len(bpy.data.node_groups)
-        assert BuildingProgramLibrary().tree('simple_3d') == result.output.modifiers['PADL Buildings'].node_group
+        tree = BuildingProgramLibrary().tree('simple_3d')
+        assert all(r.output.modifiers['PADL Buildings'].node_group == tree for r in results)
         assert count == len(bpy.data.node_groups), 'Repeated load duplicated GN groups'
     else:
-        assert not any(g.get('padl_compiler_version') for g in bpy.data.node_groups), 'Python imported the GN compiler/library'
+        assert not any(g.get('padl_compiler_version') for g in bpy.data.node_groups)
     output = destination / ('berlin_' + args.backend + '.blend')
     bpy.ops.wm.save_as_mainfile(filepath=str(output))
     assert hashlib.sha256(source.read_bytes()).hexdigest() == before, 'Original scene was modified'

@@ -1,5 +1,6 @@
 """User-approved minimal Blender persistence; source inputs remain editable."""
 import json
+from dataclasses import replace
 
 from .bindings import FACE_TYPES, OPTIONAL, FootprintBindings
 from .errors import PadlError
@@ -98,5 +99,7 @@ def read_footprints(owner):
         expected = stable_key(('footprint', identity))
         if rows[index].get('padl_random_key') != expected:
             raise PadlError('Random identity binding does not match source identity; prepare the owner again', code='invalid_identity')
-        result.append(Footprint(identity, fid, ring(index), tuple(ring(i) for i in holes.get(fid, [])), bindings.decode(rows[index])))
-    return result
+        result.append(Footprint(identity, fid, ring(index), tuple(ring(i) for i in holes.get(fid, [])),
+                                bindings.decode(rows[index]), rows[index]['face_type'], rows[index]['parent_id']))
+    by_id = {f.footprint_id: f for f in result}
+    return [replace(f, elevation_reference=by_id[f.parent_id]) if f.face_type == 3 else f for f in result]

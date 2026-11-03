@@ -3,11 +3,12 @@ import json
 
 from ...manager import Manager
 from ...parse.osm.relation.multipolygon import Multipolygon
+from ...parse.osm.relation.building import Building as BuildingRelation
 from ...renderer import Renderer
 from .assets import BuildingProgramLibrary
 from .backends import BuildingGenerationService
 from .mapping import OsmFaceAttributeMapper
-from .source import ImportReport, OsmFootprintSource
+from .source import ImportReport, OsmFootprintSource, group_buildings, tag_enabled
 
 
 class PadlBuildingManager(Manager):
@@ -26,19 +27,12 @@ class PadlBuildingManager(Manager):
 
     @staticmethod
     def accepts(tags, element):
-        return (tags.get('building') not in (None, 'no', 'demolished', 'razed', 'construction', 'proposed')
-                or tags.get('building:part') not in (None, 'no'))
-
-    def _part(self, element, source):
-        if element.tags.get('building:part') not in (None, 'no'):
-            self.report.issue(source, 'building_part_deferred', 'Building parts require a future part-aware PADL adapter; the whole-building outline is used when available')
-            return True
-        return False
+        return isinstance(element, BuildingRelation) or tag_enabled(tags, 'building') or tag_enabled(tags, 'building:part')
 
     def parseWay(self, element, elementId):
         source = 'osm:way:' + str(elementId)
-        if self._part(element, source):
-            return
+        if tag_enabled(element.tags, 'building'):
+            element.b = self  # Allows the parser's building-relation ownership pass.
         if element.closed:
             self.ways[source] = element
         else:
@@ -46,9 +40,11 @@ class PadlBuildingManager(Manager):
 
     def parseRelation(self, element, elementId):
         source = 'osm:relation:' + str(elementId)
-        if self._part(element, source):
+        if isinstance(element, BuildingRelation):
             return
         if isinstance(element, Multipolygon):
+            if tag_enabled(element.tags, 'building'):
+                element.b = self
             self.relations[source] = element
         else:
             self.report.issue(source, 'unsupported_relation', 'Only building multipolygons are supported in this profile')
@@ -59,13 +55,14 @@ class PadlBuildingManager(Manager):
         results = []
         if footprints:
             terrain = self.app.terrain.terrain if self.app.terrain else None
-            groups = [footprints] if self.app.singleObject else [(footprint,) for footprint in footprints]
-            for group in groups:
-                result = self.service.generate(group, collection=Renderer.collection, terrain=terrain,
-                    seed=getattr(self.app, 'buildingSeed', 0),
-                    name='Buildings simple 3D' if self.app.singleObject else group[0].identity)
-                results.append(result)
-                self.report.statuses.extend(result.statuses)
+            groups = group_buildings(footprints, self.app.singleObject)
+            with self.service.batch():
+                for group in groups:
+                    result = self.service.generate(group, collection=Renderer.collection, terrain=terrain,
+                        seed=getattr(self.app, 'buildingSeed', 0),
+                        name='Buildings simple 3D' if self.app.singleObject else group[0].identity)
+                    results.append(result)
+                    self.report.statuses.extend(result.statuses)
         text = bpy.data.texts.new('PADL building import report')
         text.write(json.dumps(self.report.as_dict(), indent=2) + '\n')
         for result in results:

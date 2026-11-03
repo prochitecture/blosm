@@ -1,10 +1,12 @@
 """Backend strategies share inputs, identity, PADL evaluation and terrain rules."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from contextlib import contextmanager
 
 from ...padl import services
 from ...padl.api import create_input_object
 from ...padl.errors import PadlError
+from ...padl.bindings import FaceType
 from ...padl.geometry import MeshData
 from ...padl.persistence import prepare_owner, read_footprints
 from ...padl.python_backend import PythonBackend
@@ -20,19 +22,35 @@ class GenerationResult:
 
 
 class BuildingBackend(ABC):
+    @contextmanager
+    def batch(self, library, role):
+        yield
+
     @abstractmethod
     def generate(self, owner, program, *, library, role, terrain, collection, output_object=None):
         """Return an output and per-footprint diagnostics, retaining the input."""
 
 
 class GeometryNodesBackend(BuildingBackend):
+    @contextmanager
+    def batch(self, library, role):
+        from .gn_runtime import StatusReader
+        tree = library.tree(role)
+        with StatusReader(tree) as reader:
+            self._batch_tree, self._batch_reader = tree, reader
+            try:
+                yield
+            finally:
+                self._batch_tree = self._batch_reader = None
+
     def generate(self, owner, program, *, library, role, terrain, collection, output_object=None):
         from .gn_runtime import attach, read_status
-        tree = library.tree(role)
+        tree = getattr(self, '_batch_tree', None) or library.tree(role)
         if tree.get('padl_program_sha256') != program.fingerprint:
             raise PadlError('This PADL document needs a matching precompiled GN program', code='program_mismatch')
         modifier = attach(owner, tree, terrain, collection)
-        statuses = read_status(owner, modifier)
+        reader = getattr(self, '_batch_reader', None)
+        statuses = reader.read(owner, modifier) if reader else read_status(owner, modifier)
         return GenerationResult(owner, owner, statuses)
 
 
@@ -43,6 +61,8 @@ class PythonBuildingBackend(BuildingBackend):
         sampler = BlenderTerrainSampler(terrain)
         backend = PythonBackend(available=library.available_roofs(role))
         for footprint in read_footprints(owner):
+            if not FaceType.generates_volume(footprint.face_type):
+                continue
             try:
                 result = backend.generate(program, [footprint], seed=owner['padl_seed'], terrain=sampler)
                 mesh.extend(result.mesh)
@@ -77,6 +97,10 @@ class BuildingGenerationService:
         self.library = library or BuildingProgramLibrary()
         self.backend = self.backends[backend]() if isinstance(backend, str) else backend
         self.role = role
+
+    def batch(self):
+        """Scope verified assets and temporary inspection helpers to one import."""
+        return self.backend.batch(self.library, self.role)
 
     def generate(self, footprints, *, collection, terrain=None, seed=0, namespace='osm', name='Buildings'):
         import bpy

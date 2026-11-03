@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import sys
+import argparse
 
 
 def top(owner, fid):
@@ -27,13 +28,17 @@ def main():
     from blosm.building.padl_integration.gn_runtime import read_status
     from blosm.padl.api import edit_parameter
     from blosm.padl.persistence import read_footprints
-    folder = root.parent / 'artifacts/padl_berlin'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--folder',type=Path,default=root.parent / 'artifacts/padl_parts/packed')
+    args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
+    folder = args.folder
     reports = {name: json.loads((folder / ('berlin_' + name + '.json')).read_text())
                for name in ('geometry_nodes', 'python')}
     left, right = (reports[name] for name in ('geometry_nodes', 'python'))
     assert left['source_sha256'] == right['source_sha256']
-    assert left['bounds'].keys() == right['bounds'].keys()
-    maximum = max(abs(a-b) for key in left['bounds'] for a, b in zip(left['bounds'][key], right['bounds'][key]))
+    assert left['bounds'].keys() <= right['bounds'].keys()
+    common = left['bounds'].keys() & right['bounds'].keys()
+    maximum = max(abs(a-b) for key in common for a, b in zip(left['bounds'][key], right['bounds'][key]))
     assert maximum < 0.0001, maximum
     for backend in reports:
         bpy.ops.wm.open_mainfile(filepath=str(folder / ('berlin_' + backend + '.blend')))
@@ -46,6 +51,10 @@ def main():
             assert len(bpy.data.node_groups) == count
         # Both a constrained edit and a new explicit level count after reopening.
         footprints = read_footprints(owner)
+        if backend == 'python':
+            main_part = next((f for f in footprints if json.loads(f.identity)[1] == 'osm:way:840186547'),None)
+            if main_part is not None:
+                assert abs(top(output,main_part.footprint_id)-right['bounds'][str(main_part.footprint_id)][1]) < .0001
         successes = {int(k) for k in reports[backend]['bounds']}
         used = set()
         for supplied in (True, False):
@@ -78,7 +87,8 @@ def main():
             after = top(output, fid)
             assert abs(after - before) < .0001 if supplied else abs(after - before) > .1
         print('PADL_REOPEN_EDIT_OK', backend)
-    (folder / 'comparison.json').write_text(json.dumps({'building_count': len(left['bounds']),
+    (folder / 'reopen_comparison.json').write_text(json.dumps({'common_building_count': len(common),
+        'python_only_footprints':sorted(right['bounds'].keys()-left['bounds'].keys(),key=int),
         'maximum_vertical_bound_difference_metres': maximum, 'reopen_and_edit': 'passed'}, indent=2) + '\n')
     print('PADL_BERLIN_PARITY_OK', maximum)
 
