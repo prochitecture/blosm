@@ -39,7 +39,7 @@ class Path:
             raise ValueError('Source-deviation limit must be positive and finite')
         self.deviation_limit = max(4. * tolerance, section.width if deviation_limit is None else deviation_limit)
         if np.max(abs(np.asarray(section.points)[:, 2])) > 1e-7:
-            raise ValueError('Terrain/graded alignment is outside the initial flat-ground provider')
+            raise ValueError('Source centerlines must remain in the construction XY plane; terrain placement derives elevation separately')
         if np.linalg.norm(self.points[0] - self.points[-1]) < 1e-7:
             raise ValueError('Closed Section requires a dedicated loop provider')
         delta = np.diff(self.points, axis=0)

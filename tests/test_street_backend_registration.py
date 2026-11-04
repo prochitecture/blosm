@@ -47,6 +47,9 @@ class PythonStreetBackendTests(unittest.TestCase):
         for retired in ('streetConstruction', 'streetAssetFile'):
             self.assertNotIn(retired, props)
         self.assertIn('streetMaterialFile', props)
+        self.assertEqual({item.identifier for item in props['streetTerrainMode'].enum_items}, {'PROFILE', 'DIRECT'})
+        self.assertEqual(bpy.context.scene.blosm.streetTerrainMode, 'PROFILE')
+        self.assertTrue(hasattr(bpy.types.Object, 'blosm_street_terrain'))
         self.assertIn('geometry_nodes', {item.identifier for item in props['buildingBackend'].enum_items})
         from blosm.building.padl_integration.backends import BuildingGenerationService
         from blosm.building.padl_integration.gn_runtime import read_status
@@ -66,6 +69,30 @@ class PythonStreetBackendTests(unittest.TestCase):
         finally:
             bpy.data.scenes.remove(legacy)
             bpy.data.scenes.remove(retired)
+
+    def test_terrain_configuration_uses_explicit_selection(self):
+        from types import SimpleNamespace
+        from blosm.way.street_network.python_backend.terrain.blender import configure
+        terrain=bpy.data.objects.new('Terrain configuration test',bpy.data.meshes.new('Terrain configuration test'))
+        controller=bpy.data.objects.new('Terrain controller test',None)
+        bpy.context.scene.collection.objects.link(terrain)
+        bpy.context.scene.collection.objects.link(controller)
+        try:
+            app=SimpleNamespace(terrain=SimpleNamespace(terrain=terrain),terrainObject='')
+            configure(controller,app)
+            self.assertIsNone(controller.blosm_street_terrain.target)
+            app.terrainObject=terrain.name;app.streetTerrainMode='DIRECT'
+            configure(controller,app)
+            self.assertEqual(controller.blosm_street_terrain.target,terrain)
+            self.assertEqual(controller.blosm_street_terrain.mode,'DIRECT')
+            del app.terrainObject
+            configure(controller,app)
+            self.assertEqual(controller.blosm_street_terrain.target,terrain)
+        finally:
+            mesh=terrain.data
+            bpy.data.objects.remove(terrain,do_unlink=True)
+            bpy.data.objects.remove(controller,do_unlink=True)
+            bpy.data.meshes.remove(mesh)
 
     def test_new_backend_appears_in_real_rna_and_is_used_without_setup_branches(self):
         calls = []

@@ -127,7 +127,12 @@ class SourceObjects:
                 role = bm.verts.layers.int.get('st_endpoint_role')
                 if role is None or bm.faces or any(not v.link_edges for v in bm.verts):
                     raise ValueError('Inputs require marked open edge chains without faces or loose metadata vertices')
-                transform = controller.matrix_world.inverted() @ obj.matrix_world
+                # Blender matrices are float32. Inverting/multiplying them in
+                # float32 can introduce a spurious source Z after translating
+                # a controller, especially in centimetre scenes. Cancel the
+                # shared frame in double precision before reading controls.
+                transform = np.linalg.solve(np.asarray(controller.matrix_world, dtype=float),
+                                            np.asarray(obj.matrix_world, dtype=float))
                 groups = {}
                 for edge in bm.edges:
                     groups.setdefault(edge[layers['st_section_id']], []).append(edge)
@@ -162,7 +167,8 @@ class SourceObjects:
                         if max(data) - min(data) > 1e-6:
                             raise ValueError('Section attributes must be uniform along its edges')
                         values[field] = data[0]
-                    points = tuple(tuple(float(v) * scale for v in transform @ vertex.co) for vertex in ordered)
+                    coordinates = np.asarray([vertex.co for vertex in ordered], dtype=float)
+                    points = tuple(map(tuple, (coordinates @ transform[:3,:3].T + transform[:3,3]) * scale))
                     sections[identity] = replace(known[identity], points=points, **values)
             finally:
                 if temporary:
@@ -202,6 +208,9 @@ class SceneWriter:
                  if obj.get('st_py_controller') == controller and obj.get('st_py_key')}
         if len(owned) != sum(obj.get('st_py_controller') == controller for obj in collection.objects):
             raise ValueError('Duplicate or invalid generated ownership')
+        from .terrain.blender import ScenePlacement
+        placement = ScenePlacement(controller, network, update, owned, _scale())
+        update = placement.update
         changed = {key: p.mesh for key, p in update.products.items()
                    if key in update.rebuilt and isinstance(p, Part) and p.mesh is not None}
         scale = _scale()
@@ -233,7 +242,8 @@ class SceneWriter:
             cell_size=max(1., network.settings.spacing * 2.), tolerance=2e-5)
         staged = []
         snapshots = {name: controller.get(name) for name in
-                     ('st_py_source_data', 'st_py_manifest', 'st_py_last_update', 'st_py_error', 'st_py_features')}
+                     ('st_py_source_data', 'st_py_manifest', 'st_py_last_update', 'st_py_error', 'st_py_features',
+                      'st_py_terrain_signature', 'st_py_terrain_report', 'st_py_terrain_mode')}
         try:
             for key in update.rebuilt:
                 product = update.products[key]
@@ -254,6 +264,7 @@ class SceneWriter:
                         mesh.materials.append(material)
                     obj['st_py_owner'] = product.owner.text()
                     product.metadata['bounds'] = product.mesh.bounds
+                    product.metadata['terrain_material'] = product.mesh.material
                     obj['st_py_metadata'] = json.dumps(product.metadata, separators=(',', ':'), allow_nan=False)
                 elif isinstance(product, AnchorTransform):
                     obj = bpy.data.objects.new(key.text(), None)
@@ -268,6 +279,7 @@ class SceneWriter:
                 obj.parent = controller
                 obj['st_py_controller'] = controller
                 obj['st_py_key'] = key.text()
+                placement.decorate(obj, key)
             for obj in staged:
                 collection.objects.link(obj)
             update.timings['published_objects'] = len(staged)
@@ -286,7 +298,11 @@ class SceneWriter:
             controller['st_py_last_update'] = json.dumps(dict(rebuilt=[k.text() for k in update.rebuilt],
                 removed=[k.text() for k in update.removed], timings=update.timings), separators=(',', ':'))
             controller['st_py_error'] = ''
-            engine.commit(update)
+            controller['st_py_terrain_signature'] = placement.signature
+            controller['st_py_terrain_mode'] = placement.mode
+            if placement.report is not None:
+                controller['st_py_terrain_report'] = json.dumps(placement.report, separators=(',', ':'))
+            engine.commit(placement.raw)
         except Exception:
             for obj in staged:
                 data = obj.data
@@ -375,7 +391,8 @@ class NetworkScene:
                                 json.loads(obj['st_py_metadata']))
                         elif key.kind == 'placement':
                             engine.updates.products[key] = AnchorTransform(
-                                tuple(float(v) * _scale() for v in obj.location),
+                                tuple(obj.get('st_terrain_prepared_position',
+                                    tuple(float(v) * _scale() for v in obj.location))),
                                 float(obj.rotation_euler.z), obj.get('st_py_asset', 'placeholder'))
                 _ENGINES[network.uuid] = engine
             update = engine.prepare(network, force=force)

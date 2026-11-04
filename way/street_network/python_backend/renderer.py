@@ -59,6 +59,8 @@ class PythonStreetRenderer(StreetRenderBackend):
             network = preparation.network
             controller = NetworkScene.create(network, collection, name=f'Python streets / Network {number}',
                                              materials=materials, generate=False, features=self.features)
+            from .terrain.blender import configure
+            configure(controller, self.app)
             controller['st_py_source_support'] = json.dumps(preparation.report, separators=(',', ':'), allow_nan=False)
             ids = {s.id for s in network.sections}
             result = dict(network_uuid=network.uuid, sections=sorted(ids),

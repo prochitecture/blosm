@@ -221,7 +221,8 @@ class CarriagewayProvider(FeatureProvider):
         quality = mesh.validate()
         metadata = dict(start=first, end=last, quality=quality,
                     transverse_intervals=across, profile_half=profile.half, compound_spans=covered,
-                    junction_spans=junction_spans, transition_spans=transition_spans)
+                    junction_spans=junction_spans, transition_spans=transition_spans,
+                    terrain_stations=stations.tolist(), terrain_datum=float(profile.datum))
         if refine_sampling:
             metadata['local_curvature_sampling'] = True
         if getattr(path, 'localized', False):

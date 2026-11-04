@@ -201,18 +201,18 @@ unchanged remote output and restoration.
 
 Development receipts and newly generated Blender scenes are kept outside the
 addon repository in
-`C:/dev/workspace/streets_dev/experiments/streets/python_local_smoothing` and
-`C:/dev/workspace/tmp/streets_python_local_smoothing`.
+`C:/dev/workspace/artifacts/streets/streets_dev/experiments/streets/python_local_smoothing` and
+`C:/dev/workspace/artifacts/streets/development_runs/streets_python_local_smoothing`.
 
 ### Current dev75 inspection files and results
 
 Reviewed 27 October 2026 on `buildings_gn`, runtime `0.1.0.dev75`:
 
-- [Focused inspection scene](../../streets_dev/experiments/streets/python_shared_rounds/shared_rounds_inspection.blend):
+- [Focused inspection scene](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/shared_rounds_inspection.blend):
   the complete Berlin network, with `Street 595` selected and the viewport
   centered on the repaired lower-right courtyard corner.
-- [Actual generated corner](../../streets_dev/experiments/streets/python_shared_rounds/corner_after.png)
-  and [complete courtyard view](../../streets_dev/experiments/streets/python_shared_rounds/courtyard_after.png).
+- [Actual generated corner](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/corner_after.png)
+  and [complete courtyard view](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/courtyard_after.png).
   These views use the actual saved float32 mesh buffers, without regenerating
   or fitting a substitute surface for the drawing. The close-up was visually
   inspected after the repair.
@@ -221,25 +221,25 @@ Reviewed 27 October 2026 on `buildings_gn`, runtime `0.1.0.dev75`:
   at these positive turns is removed; the old endpoint bulges reached about
   $-0.167\,\mathrm{m}^{-1}$. Both generated seam points move inside their
   corresponding source corner, and both Section halves join exactly.
-- [Normal-pipeline import](../../streets_dev/experiments/streets/python_shared_rounds/berlin/python_street_import.blend):
+- [Normal-pipeline import](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/berlin/python_street_import.blend):
   complete Berlin network, 361,698 quads, 59.29 seconds of generation plus
   0.47 seconds of OSM preparation. Fresh Nashville and Canal Street imports
   remain complete, with 262,509 and 21,818 quads respectively. These are single
   one-thread measurements, rather than a controlled performance comparison.
-- All three [saved-mesh checks](../../streets_dev/experiments/streets/python_shared_rounds/qualification.json)
+- All three [saved-mesh checks](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/qualification.json)
   pass the actual float32 convex-quad, ratio, overlap and crown-envelope guards.
-- [Native editing/restoration](../../streets_dev/experiments/streets/python_shared_rounds/berlin_edit/native_checks.json):
+- [Native editing/restoration](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/berlin_edit/native_checks.json):
   actual Edit Mode vertex movement, width changes, manual Update and exact
   restoration pass, with 320 unrelated mesh objects retained. The width edit
   keeps the shared rounded centerline and uses the dimensional transition.
-- [Current combined gallery](../../streets_dev/experiments/streets/python_shared_rounds/gallery/python_streets_gallery.blend):
+- [Current combined gallery](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/gallery/python_streets_gallery.blend):
   all 112 fixtures match the qualified dev72 source, mesh and furniture records
   exactly; 726,698 direct quads. The independently loaded saved gallery passes
   quality checks. No GN modifiers are used.
-- [Focused regression](../../streets_dev/experiments/streets/python_shared_rounds/regression_final/checks.json):
+- [Focused regression](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/regression_final/checks.json):
   89 tests pass, including all 13 local/shared-bend tests, the affected profile
   seams, route, source-support, editing and Bundle checks. The
-  [source-curve audit](../../streets_dev/experiments/streets/python_shared_rounds/curve_audit.json)
+  [source-curve audit](../../artifacts/streets/streets_dev/experiments/streets/python_shared_rounds/curve_audit.json)
   records the changed real-network paths. This increment does not claim a new complete
   suite or installed ZIP qualification; the historical dev72 ZIP is unchanged.
 
@@ -254,7 +254,7 @@ The terminated render attempt and successful resource receipts are retained.
 
 Reviewed 26 October 2026 on `buildings_gn`, runtime `0.1.0.dev74`:
 
-- [Karl-Marx-Allee](../../streets_dev/experiments/streets/python_local_smoothing/berlin_dev74/python_street_import.blend):
+- [Karl-Marx-Allee](../../artifacts/streets/streets_dev/experiments/streets/python_local_smoothing/berlin_dev74/python_street_import.blend):
   complete two-component import, 364,683 quads, 61.77 seconds of generation
   plus 0.46 seconds of OSM preparation, one numerical thread. These are single
   measurements, not a controlled performance comparison.
@@ -262,20 +262,20 @@ Reviewed 26 October 2026 on `buildings_gn`, runtime `0.1.0.dev74`:
   Sections **337, 359 and 431**. Its middle Section's sampled centerline
   deviation drops from 21.12 m to 0.87 m; the outer Sections drop from 8.23 /
   8.64 m to about 0.87 m. The three source polylines and all their IDs remain.
-- [Street 595 editing/restoration scene](../../streets_dev/experiments/streets/python_local_smoothing/berlin_edit_final_02/local_smoothing_editable.blend):
+- [Street 595 editing/restoration scene](../../artifacts/streets/streets_dev/experiments/streets/python_local_smoothing/berlin_edit_final_02/local_smoothing_editable.blend):
   actual Edit Mode movement of both coincident endpoint copies, the Update
   operator, Section width editing, exact restoration and 320 retained remote
   mesh objects pass. Select `Street 595` and frame the selection for inspection.
-- [Complete 112-fixture gallery](../../streets_dev/experiments/streets/python_local_smoothing/gallery_dev74/python_streets_gallery.blend):
+- [Complete 112-fixture gallery](../../artifacts/streets/streets_dev/experiments/streets/python_local_smoothing/gallery_dev74/python_streets_gallery.blend):
   all source/mesh/furniture records match the qualified dev72 reference exactly;
   726,698 direct quads, nonoverlapping fixture layout and no GN modifiers.
 - Fresh normal-pipeline imports and actual saved-mesh quality checks also pass
   for Canal Street and Nashville. No OSM filename chooses a runtime branch.
-- The final [73-test regression](../../streets_dev/experiments/streets/python_local_smoothing/regression_final/checks.json)
+- The final [73-test regression](../../artifacts/streets/streets_dev/experiments/streets/python_local_smoothing/regression_final/checks.json)
   passes the new ten smoothing tests and the affected core, junction, mixed,
   height-correction, Smooth seam, source-support and editing groups. It includes
   all groups that failed during the initial wider experiment.
-- The [final native checks](../../streets_dev/experiments/streets/python_local_smoothing/qualification_dev74_final.json)
+- The [final native checks](../../artifacts/streets/streets_dev/experiments/streets/python_local_smoothing/qualification_dev74_final.json)
   reconcile all three real imports, their quality checks, the two native
   courtyard editing checks, gallery generation and gallery quality.
 

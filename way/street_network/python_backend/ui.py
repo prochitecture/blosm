@@ -2,6 +2,20 @@
 import bpy
 import bmesh
 from .scene import controller_for, NetworkScene, register_runtime, unregister_runtime
+from .terrain.blender import MODE_ITEMS
+
+
+class BLOSM_PG_StreetTerrain(bpy.types.PropertyGroup):
+    target: bpy.props.PointerProperty(name='Original terrain', type=bpy.types.Object,
+        poll=lambda self,obj: obj.type == 'MESH' and not obj.get('st_py_controller'),
+        description='Unmodified terrain surface; empty keeps the prepared street elevation')
+    mode: bpy.props.EnumProperty(name='Terrain placement', items=MODE_ITEMS, default='PROFILE')
+    clearance: bpy.props.FloatProperty(name='Clearance (m)',default=.02,min=0.)
+    maximum_grade: bpy.props.FloatProperty(name='Maximum reference grade',default=.10,min=.001,max=1.,subtype='FACTOR',
+        description='Rise/run of the added longitudinal baseline; existing crown relief is preserved')
+    control_spacing: bpy.props.FloatProperty(name='Reference spacing (m)',default=4.,min=.1)
+    sample_spacing: bpy.props.FloatProperty(name='Terrain sample spacing (m)',default=1.,min=.05)
+    maximum_lift: bpy.props.FloatProperty(name='Maximum lift above ground (m)',default=25.,min=.01)
 
 
 class BLOSM_OT_UpdatePythonStreets(bpy.types.Operator):
@@ -116,23 +130,42 @@ class BLOSM_PT_PythonStreets(bpy.types.Panel):
         for key, label in (('st_py_cell_size', 'Cell size (m)'), ('st_py_resolution', 'Resolution'),
                            ('st_py_exaggeration', 'Exaggeration')):
             self.layout.prop(controller, '["' + key + '"]', text=label)
+        terrain = controller.blosm_street_terrain
+        box = self.layout.box()
+        box.prop(terrain, 'target')
+        if terrain.target:
+            box.prop(terrain, 'mode')
+            box.prop(terrain, 'clearance')
+            box.prop(terrain, 'sample_spacing')
+            if terrain.mode == 'PROFILE':
+                box.prop(terrain, 'maximum_grade')
+                box.prop(terrain, 'maximum_lift')
+                box.prop(terrain, 'control_spacing')
+                box.label(text='Junctions and complete Bundles move together')
+            else:
+                box.label(text='Terrain cross-slopes affect road profiles')
+            box.label(text='Press Update to apply settings and validate')
         self.layout.label(text='Edit source controls, then press Update')
         if controller.get('st_py_error'):
             self.layout.label(text='Output is outdated: see error', icon='ERROR')
             self.layout.label(text=controller['st_py_error'][:70])
 
 
-CLASSES = (BLOSM_OT_UpdatePythonStreets, BLOSM_OT_PythonStreetSection, BLOSM_PT_PythonStreets)
+CLASSES = (BLOSM_PG_StreetTerrain, BLOSM_OT_UpdatePythonStreets, BLOSM_OT_PythonStreetSection, BLOSM_PT_PythonStreets)
 
 
 def register():
     for cls in CLASSES:
         if not cls.is_registered:
             bpy.utils.register_class(cls)
+    if not hasattr(bpy.types.Object, 'blosm_street_terrain'):
+        bpy.types.Object.blosm_street_terrain = bpy.props.PointerProperty(type=BLOSM_PG_StreetTerrain)
     register_runtime()
 
 
 def unregister():
+    if hasattr(bpy.types.Object, 'blosm_street_terrain'):
+        del bpy.types.Object.blosm_street_terrain
     for cls in reversed(CLASSES):
         if cls.is_registered:
             bpy.utils.unregister_class(cls)

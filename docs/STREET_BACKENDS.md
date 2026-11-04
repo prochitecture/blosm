@@ -1,9 +1,13 @@
 # Street rendering backends
 
-Updated 2 November 2026. **Python is the only installed street backend.**
+Updated 4 November 2026. **Python is the only installed street backend.**
 Both the old Legacy renderer and the experimental GN renderer are removed from
 `buildings_gn`. Building GN, shared street preparation, street materials and the
 feature-independent asset service remain available.
+
+The [terrain placement stage](STREETS_TERRAIN.md) now offers profile-preserving
+Python placement or a small shared direct-projection GN modifier. This modifier
+acts on Python-generated meshes; it is independent of street backend selection.
 
 ## Stable entry point and common preparation
 
@@ -67,7 +71,8 @@ registry.register(StreetBackendDefinition(
 
 `GeometryNodesStreetRenderer` in this example must inherit `StreetRenderBackend`
 and implement its lifecycle. This is a future registration example; no GN
-implementation or GN library is installed by this cleanup. The preserved GN
+street-generation implementation is installed by this cleanup. The separate
+terrain-projection modifier described above is available. The preserved GN
 integration still needs reconciling with the current shared contracts and assets
 when it is restored; registration alone does not establish geometry parity.
 

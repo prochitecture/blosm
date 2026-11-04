@@ -524,12 +524,19 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             if addon.highways:
                 if len(street_backends) > 1:
                     streets_box.prop(addon, "streetBackend")
-                streets_box.label(text="Experimental: flat-ground carriageways")
+                streets_box.label(text="Experimental carriageways")
                 streets_box.prop(addon, "streetProfileRise")
                 streets_box.prop(addon, "streetCellSize")
                 streets_box.prop(addon, "streetResolution")
                 streets_box.prop(addon, "streetExaggeration")
                 streets_box.prop(addon, "streetMaterialFile")
+                streets_box.prop(addon, "streetTerrainMode")
+                streets_box.prop(addon, "streetTerrainClearance")
+                streets_box.prop(addon, "streetTerrainSampling")
+                if addon.streetTerrainMode == 'PROFILE':
+                    streets_box.prop(addon, "streetTerrainGrade")
+                    streets_box.prop(addon, "streetTerrainLift")
+                streets_box.label(text="Uses the selected import terrain, when present")
                 library_box = streets_box.box()
                 library_box.prop(addon, "assetLibraryMode")
                 if addon.assetLibraryMode != 'APPEND':
@@ -939,6 +946,14 @@ class BlosmProperties(bpy.types.PropertyGroup):
     streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=1., min=0.)
     streetMaterialFile: bpy.props.StringProperty(name="Street materials", subtype='FILE_PATH',
         description="Optional compatible material .blend library for streets; empty uses bundled materials")
+    streetTerrainMode: bpy.props.EnumProperty(name="Terrain placement", items=(
+        ('PROFILE', 'Preserve profiles (Python)', 'Fit complete cross-sections and coordinated junction heights'),
+        ('DIRECT', 'Direct projection (GN)', 'Project vertices and restore relative heights; terrain affects cross-sections')),
+        default='PROFILE')
+    streetTerrainClearance: bpy.props.FloatProperty(name="Terrain clearance (m)", default=.02, min=0.)
+    streetTerrainSampling: bpy.props.FloatProperty(name="Terrain sample spacing (m)", default=1., min=.05)
+    streetTerrainGrade: bpy.props.FloatProperty(name="Maximum reference grade", default=.10, min=.001,max=1.,subtype='FACTOR')
+    streetTerrainLift: bpy.props.FloatProperty(name="Maximum lift above ground (m)", default=25., min=.01)
 
     assetLibraryMode: bpy.props.EnumProperty(name="Asset storage",
         items=(('AUTO', 'Automatic', 'Retain certified library revisions to reduce scene storage; embed other assets'),

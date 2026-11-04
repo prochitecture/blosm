@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--osm', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--capture-separator-boundaries', action='store_true')
+    parser.add_argument('--terrain-mode', choices=('PROFILE', 'DIRECT'))
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     args.output.mkdir(parents=True, exist_ok=True)
     captures = []
@@ -61,6 +62,22 @@ def main():
     osm.parse(str(args.osm.resolve()), forceExtentCalculation=True)
     app.initLayers()
     app.process()
+    if args.terrain_mode:
+        # Known synthetic rolling ground isolates placement from DEM download,
+        # while all street topology still comes from the selected real OSM.
+        import numpy as np
+        from types import SimpleNamespace
+        axis=np.linspace(-5000.,5000.,101)
+        x,y=np.meshgrid(axis,axis)
+        z=3.+.001*x+.002*y+.4*np.sin(x/260.)*np.cos(y/220.)
+        xyz=np.column_stack((x.ravel(),y.ravel(),z.ravel()))
+        quads=[(j*101+i,j*101+i+1,(j+1)*101+i+1,(j+1)*101+i) for j in range(100) for i in range(100)]
+        mesh=bpy.data.meshes.new('Original rolling test terrain');mesh.from_pydata(xyz,[],quads)
+        terrain=bpy.data.objects.new('Original rolling test terrain',mesh)
+        bpy.context.scene.collection.objects.link(terrain)
+        app.terrain=SimpleNamespace(terrain=terrain)
+        app.streetTerrainMode=args.terrain_mode
+        bpy.context.view_layer.update()
     prepare_seconds = time.perf_counter() - start
     renderer = StreetRenderer(app)
     renderer.prepare()
@@ -78,7 +95,12 @@ def main():
     numerical = [SourceObjects.read(o).to_dict() for o in controllers]
     (args.output / 'prepared_input_templates.json').write_text(json.dumps(templates, indent=2), encoding='utf8')
     (args.output / 'numerical_inputs.json').write_text(json.dumps(numerical, indent=2), encoding='utf8')
-    assert report['gn_modifiers'] == 0
+    if args.terrain_mode == 'DIRECT':
+        assert report['gn_modifiers'] > 0
+    else:
+        assert report['gn_modifiers'] == 0
+    report['terrain_mode']=args.terrain_mode
+    report['terrain_placement']=[json.loads(o['st_py_terrain_report']) for o in controllers if o.get('st_py_terrain_report')]
     bpy.context.preferences.filepaths.file_preview_type = 'NONE'
     scene = args.output / 'python_street_import.blend'
     bpy.ops.wm.save_as_mainfile(filepath=str(scene.resolve()))

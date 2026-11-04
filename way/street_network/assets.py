@@ -7,6 +7,12 @@ PAVEMENT = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / 
 GRASS = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Grass')
 DIAGNOSTICS = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Diagnostics')
 DIAGNOSTIC_RED = AssetRef(MATERIAL_LIBRARY.key, 'materials', 'Prochitecture Streets / Diagnostic red')
+TERRAIN_LIBRARY = LibrarySpec('streets.terrain', 'prochitecture_street_terrain.blend', revision='1.0')
+TERRAIN_PROJECTION = AssetRef(TERRAIN_LIBRARY.key, 'node_groups', 'Prochitecture Streets / Direct terrain projection')
+
+
+def terrain_catalog():
+    return AssetCatalog((TERRAIN_LIBRARY,))
 
 
 def material_catalog(external_path=None):
