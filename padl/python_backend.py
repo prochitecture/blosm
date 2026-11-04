@@ -11,33 +11,7 @@ from .errors import PadlError
 from .bindings import FaceType
 from .evaluation import Evaluator, FootprintContext
 from .geometry import MeshData, contains, signed_area
-
-
-def direction(footprint, options):
-    ring = footprint.outer
-    reference = options.get('reference_source', 'longest_edge')
-    alignment = options.get('alignment', 'along')
-    orientation = options.get('orientation', 'ccw').lower()
-    if reference not in ('longest_edge', 'edge_index') or alignment not in ('along', 'perpendicular') or orientation not in ('ccw', 'cw'):
-        raise PadlError('Unsupported roof direction configuration', code='unsupported_feature')
-    lengths = [math.dist(a[:2], b[:2]) for a, b in zip(ring, ring[1:] + ring[:1])]
-    if reference == 'longest_edge':
-        maximum = max(lengths)
-        index = next(i for i, length in enumerate(lengths) if length >= maximum - 0.0001)
-    else:
-        index = options.get('edge_index', 0)
-        if type(index) not in (int, float) or int(index) != index:
-            raise PadlError('roof.edge_index must be integral', code='invalid_input')
-        index = int(index) % len(ring)
-    a, b = ring[index], ring[(index + 1) % len(ring)]
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    length = math.hypot(dx, dy)
-    dx, dy = dx / length, dy / length
-    if orientation == 'cw':
-        dx, dy = -dx, -dy
-    if alignment == 'perpendicular':
-        dx, dy = -dy, dx
-    return dy, -dx  # uphill is ridge direction cross Z, matching public GN groups
+from .roof_settings import direction, PROFILES, RoundProfilePolicy
 
 
 def wall_faces(mesh, ring, height, bottom, footprint_id):
@@ -48,12 +22,21 @@ def wall_faces(mesh, ring, height, bottom, footprint_id):
 
 class PlanarRoofAdapter:
     def generate(self, footprint, volume, datum=0):
-        if volume.roof_type == 'flat' and not footprint.holes:
+        base = datum + volume.roof_min_elevation
+        if volume.roof_type == 'flat':
+            height = lambda p: base
+        else:
+            axis = direction(footprint, volume.roof_options)
+            project = lambda p: p[0] * axis[0] + p[1] * axis[1]
+            low, high = min(map(project, footprint.outer)), max(map(project, footprint.outer))
+            if high - low <= 0.0001 or volume.roof_height <= 0.0001:
+                raise PadlError('Skillion direction span and rise must exceed 0.0001 m', code='invalid_geometry')
+            height = lambda p: base + volume.roof_height * (project(p) - low) / (high - low)
+        if not footprint.holes:
             mesh = MeshData()
             ring = footprint.oriented_rings()[0]
-            height = datum + volume.roof_min_elevation
-            mesh.polygon([(p[0], p[1], height) for p in ring], 2, footprint.footprint_id)
-            wall_faces(mesh, ring, lambda p: height, datum + volume.min_elevation, footprint.footprint_id)
+            mesh.polygon([(p[0], p[1], height(p)) for p in ring], 2, footprint.footprint_id)
+            wall_faces(mesh, ring, height, datum + volume.min_elevation, footprint.footprint_id)
             return mesh
         from mathutils import Vector
         from mathutils.geometry import delaunay_2d_cdt
@@ -65,16 +48,6 @@ class PlanarRoofAdapter:
             edges.extend((start + i, start + (i + 1) % len(ring)) for i in range(len(ring)))
             start += len(ring)
         verts, _, faces, *_ = delaunay_2d_cdt(points, edges, [], 0, 1e-7)
-        base = datum + volume.roof_min_elevation
-        if volume.roof_type == 'flat':
-            height = lambda p: base
-        else:
-            axis = direction(footprint, volume.roof_options)
-            project = lambda p: p[0] * axis[0] + p[1] * axis[1]
-            low, high = min(map(project, footprint.outer)), max(map(project, footprint.outer))
-            if high - low <= 0.0001 or volume.roof_height <= 0.0001:
-                raise PadlError('Skillion direction span and rise must exceed 0.0001 m', code='invalid_geometry')
-            height = lambda p: base + volume.roof_height * (project(p) - low) / (high - low)
         roof_area = 0
         for face in faces:
             polygon = [verts[i] for i in face]
@@ -94,19 +67,25 @@ class PlanarRoofAdapter:
 
 class GabledRoofAdapter:
     """Adapt Blosm's shared profile geometry to already resolved PADL dimensions."""
-    profile = (((0., 0.), (.5, 1.), (1., 0.)), {'numSamples': 10, 'angleToHeight': .5})
+
+    def __init__(self, profile_policy=None):
+        self.profile_policy = profile_policy or RoundProfilePolicy()
 
     def generate(self, footprint, volume, datum=0):
         if footprint.holes:
             raise PadlError('Gabled roofs do not support holes in the initial profile', code='unsupported_geometry')
         from .profile_geometry import ProfiledRoofGeometry
-        kernel = ProfiledRoofGeometry(self.profile)
         ring = footprint.oriented_rings()[0]
         axis = direction(footprint, volume.roof_options)
         # Keep kernel float32 coordinates near zero, independent of packing.
         ox = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2
         oy = (min(p[1] for p in ring) + max(p[1] for p in ring)) / 2
         local = tuple((p[0] - ox, p[1] - oy) for p in ring)
+        points = volume.roof_options.get('roof_profile', PROFILES.get(1).points)
+        if volume.roof_options.get('roof_profile_mode') == 3:
+            stations = [p[0]*axis[0] + p[1]*axis[1] for p in local]
+            points = self.profile_policy.points(max(stations)-min(stations), volume.roof_height)
+        kernel = ProfiledRoofGeometry((points, {'numSamples': 0, 'angleToHeight': None}))
         try:
             kernel.prepare(local, bottom=volume.min_elevation,
                            roof_base=volume.roof_min_elevation,
@@ -177,9 +156,9 @@ class PythonResult:
 
 
 class PythonBackend:
-    def __init__(self, adapters=None, available=None):
+    def __init__(self, adapters=None, available=None, *, profile_policy=None):
         planar = PlanarRoofAdapter()
-        self.adapters = {'flat': planar, 'skillion': planar, 'gabled': GabledRoofAdapter(), 'hipped': HippedRoofAdapter()}
+        self.adapters = {'flat': planar, 'skillion': planar, 'gabled': GabledRoofAdapter(profile_policy), 'hipped': HippedRoofAdapter()}
         self.adapters.update(adapters or {})
         self.available = frozenset(self.adapters if available is None else available)
 

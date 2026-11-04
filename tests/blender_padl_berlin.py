@@ -86,7 +86,7 @@ def main():
         except Exception:
             pass
     bounds, vertices, faces, attributes = {}, 0, 0, set()
-    flat_caps = {}
+    roof_caps = {}
     for result in results:
         evaluated = result.output.evaluated_get(bpy.context.evaluated_depsgraph_get())
         mesh = evaluated.to_mesh()
@@ -103,7 +103,7 @@ def main():
                 low, high = bounds.get(fid, (float('inf'), -float('inf')))
                 bounds[fid] = min(low,*zs), max(high,*zs)
                 if mesh.attributes['component_type'].data[polygon.index].value == 2:
-                    flat_caps.setdefault(fid,[]).append(len(polygon.vertices))
+                    roof_caps.setdefault(fid,[]).append(len(polygon.vertices))
         finally:
             evaluated.to_mesh_clear()
     assert faces > 0
@@ -112,12 +112,13 @@ def main():
     success = {s['footprint_id'] for s in report['statuses'] if not s.get('error')}
     assert set(bounds) == success, (set(bounds)-success,success-set(bounds))
     by_id = {f.footprint_id:f for f in footprints}
-    single_flat_caps = 0
-    for fid,sizes in flat_caps.items():
+    single_planar_caps = Counter()
+    for fid,sizes in roof_caps.items():
         footprint = by_id[fid]
-        if footprint.attributes.get('roof_type','flat') == 'flat' and not footprint.holes:
-            assert sizes == [len(footprint.outer)], ('Flat roof must be one original polygon',fid,sizes)
-            single_flat_caps += 1
+        roof = footprint.attributes.get('roof_type','flat')
+        if roof in ('flat','skillion') and not footprint.holes:
+            assert sizes == [len(footprint.outer)], ('Planar roof must be one original polygon',roof,fid,sizes)
+            single_planar_caps[roof] += 1
     if args.backend == 'python':
         import json as _json
         main = next((f for f in footprints if _json.loads(f.identity)[1] == 'osm:way:840186547'),None)
@@ -141,7 +142,8 @@ def main():
         'native_solver_messages':messages,
         'mapping_issues':dict(Counter(row['code'] for row in report['issues'])),
         'generation_errors':dict(Counter(str(row['error']) for row in report['statuses'] if row.get('error'))),
-        'single_polygon_flat_roofs':single_flat_caps,'bounds':bounds,'report':report}
+        'single_polygon_flat_roofs':single_planar_caps['flat'],
+        'single_polygon_skillion_roofs':single_planar_caps['skillion'],'bounds':bounds,'report':report}
     if args.backend == 'geometry_nodes':
         from blosm.building.padl_integration.assets import BuildingProgramLibrary
         count = len(bpy.data.node_groups)

@@ -1,27 +1,28 @@
 {
   "files": {
     "__init__.py": "bf6e7060242aa318a57d733219ea06f31c4268c9d8bd8727f121f4e631ef19ec",
-    "api.py": "67bb08afefc17cfa317ddee8ff7b00952b7ed56bb0db5a46eb9bcef877e5b5a5",
-    "bindings.py": "ca061e57d4aa3d7100b6502c2911a287966017bba880ae7454ab71c11dbd3da9",
+    "api.py": "e9fd462db1bd4402b06f86582e2285109caf3a2056051e686c8aecdb50f85cf7",
+    "bindings.py": "91f7dd91e7b29212759d096b6dd910d89f6104a77584086e127544fded9a5e45",
     "errors.py": "47297fb671a3fdd839e40cec270e78308416f36cd3c81e78dd576a5ea4fe42d7",
     "evaluation.py": "a3a36e9596561e6bb6993cc53b86ff0b09d1b61d561a5291334e96b0d1e4c734",
     "geometry.py": "7eea04098b36c8b02fbc0d0561a5911e489ce17b4e5b8543599e0758f4cfe635",
-    "heights.py": "8f289bb84bea12500f6e5decae03459c1a4c1816d66ce0714775747d1ac64a0e",
+    "heights.py": "b1ec9b0808599624370da58409daaa7cf0fdafb3ac8b7be7902055ff12bc6a92",
     "jsonc.py": "06ea6c8717a86a7319b5d9f4d706cac94f62ca313c212ac45ecf6dedce834178",
     "model.py": "f449b2e8da270cfd9a78e76ebffa0e40a84606a7004bb453f2c973e622efff47",
-    "parser.py": "81ff40cad6090cc777868b53ae50f325601de92923d14699a9ff716f5e0593ad",
-    "persistence.py": "f92ed9e250504ab27406f17e2646afdd635a0b6c3a20f13d4039b3b6a3a81aa8",
-    "profile_geometry.py": "f682cfc8569ffe11259851b10e1a106ed8f6b36371b08b5e4600a1f0d56ae437",
-    "python_backend.py": "571d8014d7122e0d0dd2e089ca9c3651fb11f83a661960e5391afa1ae5e882c8",
+    "parser.py": "36289daf7a7be0b3a44de4c0d880aec7e9e267712ac8623b252d2f5cdddcca29",
+    "persistence.py": "547da6c318bc3c2e3e3671584fa83e6f06a7af39640f5ade6e466d4fcb234766",
+    "profile_geometry.py": "aa594abd75ae9d4d4fccf9f5819dfd478dc3fc8d5f9c827a0720fb6b056ca98b",
+    "python_backend.py": "564e0a0bcfe863338b90005cc7a871bce1db10f001a904a6a66cf0879e848589",
     "randomness.py": "3924d10d3f9468b9359ac0346bfcc5b115710e460e77ceb4e01d5a50ab08d23f",
+    "roof_settings.py": "e4a215ed4679a6723b2bfddf22e72374723ada785eff9c3ec7509337f1f89955",
     "services.py": "836ca1e64540c75e210e68e31ba3ca2ad874f950a8ab76ba475cec806a726d92",
     "terrain.py": "b5fc92b9112e41a819a4d2b7964f35e109b81ee64ee9bd010ca22f95656285c9"
   },
   "profile": "python",
   "schema": "padl-python-runtime-bundle-v1",
   "source": {
-    "content_sha256": "e74f146bb166fe6cd5ff48e6cda7357f1d0b74762f0d67da7583110d499b497c",
-    "git_revision": "5a51b4e93000795ddc2dcf3c3e54024cfdb10acb",
+    "content_sha256": "17de50d2b96759c83e5008e36014d33ec1f6800ee8cab5c2419f50710b20d5c6",
+    "git_revision": "b3bf6906c0f808a0cdb20d17f14f540af7384d07",
     "version": "0.1.0"
   }
 }

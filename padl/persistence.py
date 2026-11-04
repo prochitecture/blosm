@@ -99,7 +99,12 @@ def read_footprints(owner):
         expected = stable_key(('footprint', identity))
         if rows[index].get('padl_random_key') != expected:
             raise PadlError('Random identity binding does not match source identity; prepare the owner again', code='invalid_identity')
+        inputs = bindings.decode(rows[index])
+        if 'roof_ridge_vector' in inputs:
+            from mathutils import Vector
+            world_axis = owner.matrix_world.to_3x3() @ Vector(inputs['roof_ridge_vector'])
+            inputs['roof_ridge_vector'] = (world_axis.x, world_axis.y, 0.)
         result.append(Footprint(identity, fid, ring(index), tuple(ring(i) for i in holes.get(fid, [])),
-                                bindings.decode(rows[index]), rows[index]['face_type'], rows[index]['parent_id']))
+                                inputs, rows[index]['face_type'], rows[index]['parent_id']))
     by_id = {f.footprint_id: f for f in result}
     return [replace(f, elevation_reference=by_id[f.parent_id]) if f.face_type == 3 else f for f in result]

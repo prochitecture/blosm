@@ -4,6 +4,7 @@ from typing import Mapping
 
 from .evaluation import is_number
 from .model import Value
+from .roof_settings import RoofInputResolver
 
 
 def close(a, b):
@@ -67,6 +68,7 @@ class HeightResolver:
         kind = roof.pop('type')
         if kind not in ('flat', 'skillion', 'gabled', 'hipped'):
             raise self.source.error(p + ('roof', 'type'), f'Unsupported roof {kind!r}', 'unsupported_roof')
+        roof = RoofInputResolver().resolve(kind, roof, context.attributes)
         b, m = scalar('base_elevation'), scalar('min_elevation')
         if 'roof_height' not in spec.values and kind != 'flat':
             raise self.source.error(p, 'A non-flat roof requires roof_height', 'unresolved_height')

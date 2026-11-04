@@ -17,7 +17,7 @@ class PadlBuildingManager(Manager):
         self.id, self.layerClass, self.app = 'padl_buildings', False, app
         self.ways, self.relations = {}, {}
         self.report = ImportReport()
-        self.mapper = mapper or OsmFaceAttributeMapper()
+        self.mapper = mapper or OsmFaceAttributeMapper(projection=osm.projection or app.projection)
         self.service = service or BuildingGenerationService(
             library=BuildingProgramLibrary(app.assetPath, app=app),
             backend=getattr(app, 'buildingBackend', 'geometry_nodes'))

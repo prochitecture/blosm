@@ -50,6 +50,9 @@ def length_metres(value):
 
 
 class TagRule:
+    def apply_to(self, tags, result, footprint=None):
+        self.apply(tags, result)
+
     def apply(self, tags, result):
         raise NotImplementedError
 
@@ -83,15 +86,88 @@ class BuildingUseRule(TagRule):
 class RoofShapeRule(TagRule):
     def __init__(self, shapes=None):
         self.shapes = (dict(shapes) if shapes is not None else
-                       {name: name for name in ('flat', 'skillion', 'gabled', 'hipped')})
+                       {**{name: name for name in ('flat', 'skillion', 'gabled', 'hipped')},
+                        **{name: 'gabled' for name in ('gambrel', 'round', 'saltbox')}})
+        self.profiles = {'gabled': 1, 'gambrel': 2, 'round': 3, 'saltbox': 4}
 
     def apply(self, tags, result):
         shape = tags.get('roof:shape')
         if shape:
             if shape in self.shapes:
                 result.attributes['roof_type'] = self.shapes[shape]
+                if self.shapes[shape] == 'gabled' and shape in self.profiles:
+                    result.attributes['roof_profile_mode'] = self.profiles[shape]
             else:
                 result.issues.append(MappingIssue('unsupported_roof', f'Unsupported roof:shape={shape}', True))
+
+
+def bearing_degrees(raw):
+    text = str(raw).strip().upper()
+    compass = ('N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+               'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW')
+    if text in compass:
+        return compass.index(text)*22.5
+    if not re.fullmatch(r'(?:\d+(?:\.\d*)?|\.\d+)', text):
+        raise ValueError('Expected a compass point or bearing from 0 to 360 degrees')
+    value = float(text)
+    if not math.isfinite(value) or not 0 <= value <= 360:
+        raise ValueError('Bearing must be from 0 to 360 degrees')
+    return value % 360
+
+
+class ProjectedRoofBearing:
+    """Convert geographical downhill bearings to the import projection's XY."""
+    def __init__(self, projection):
+        self.projection = projection
+
+    def __call__(self, degrees, footprint=None):
+        theta = math.radians(degrees)
+        downhill = math.sin(theta), math.cos(theta)
+        if self.projection is not None and footprint is not None:
+            # Local finite difference handles meridian convergence away from
+            # the projection origin. Input owners are created in this frame.
+            ring = footprint.outer
+            x, y = (sum(p[i] for p in ring)/len(ring) for i in (0,1))
+            lat, lon = self.projection.toGeographic(x, y)
+            delta = math.degrees(10/6378137.)
+            a = self.projection.fromGeographic(lat, lon)
+            b = self.projection.fromGeographic(lat+delta*downhill[1], lon+delta*downhill[0]/math.cos(math.radians(lat)))
+            downhill = b[0]-a[0], b[1]-a[1]
+        length = math.hypot(*downhill)
+        if not math.isfinite(length) or length == 0:
+            raise ValueError('Cannot project the roof bearing')
+        # Ridge cross +Z is uphill, opposite the OSM downhill direction.
+        return downhill[1]/length, -downhill[0]/length, 0.
+
+
+class RoofDirectionRule(TagRule):
+    def __init__(self, bearing_transform=None):
+        self.bearing_transform = bearing_transform or ProjectedRoofBearing(None)
+
+    def apply(self, tags, result):
+        self.apply_to(tags, result)
+
+    def apply_to(self, tags, result, footprint=None):
+        if result.attributes.get('roof_type') in ('flat', 'hipped'):
+            return
+        orientation = tags.get('roof:orientation')
+        if orientation is not None:
+            modes = {'along': 1, 'across': 2}
+            if orientation in modes:
+                result.attributes['roof_direction_mode'] = modes[orientation]
+            else:
+                result.issues.append(MappingIssue('invalid_tag', f'roof:orientation={orientation!r}: expected along or across; input left absent'))
+        if 'roof:direction' in tags:
+            try:
+                bearing = bearing_degrees(tags['roof:direction'])
+                vector = self.bearing_transform(bearing, footprint)
+                result.attributes.update(roof_direction_mode=3, roof_ridge_vector=vector)
+                if orientation in ('along', 'across'):
+                    result.issues.append(MappingIssue('roof_direction_priority', 'roof:direction takes precedence over roof:orientation'))
+            except (ValueError, OverflowError, ZeroDivisionError) as exc:
+                result.issues.append(MappingIssue('invalid_tag', f'roof:direction={tags["roof:direction"]!r}: {exc}; using valid roof:orientation or PADL settings'))
+        if result.attributes.get('roof_type') == 'skillion' and result.attributes.get('roof_direction_mode') in (1,2):
+            result.issues.append(MappingIssue('incomplete_roof_direction', 'roof:orientation supplies a skillion axis but no downhill side; using PADL orientation'))
 
 
 class LengthTagRule(TagRule):
@@ -127,18 +203,18 @@ class WallLevelsRule(TagRule):
 
 
 class OsmFaceAttributeMapper:
-    def __init__(self, rules=None):
+    def __init__(self, rules=None, *, projection=None):
         self.rules = tuple(rules) if rules is not None else (
-            BuildingUseRule(), RoofShapeRule(),
+            BuildingUseRule(), RoofShapeRule(), RoofDirectionRule(ProjectedRoofBearing(projection)),
             LengthTagRule('height', 'max_elevation', allow_zero=False),
             LengthTagRule('min_height', 'min_elevation'),
             LengthTagRule('roof:height', 'roof_height'), WallLevelsRule(),
         )
 
-    def map(self, tags):
+    def map(self, tags, *, footprint=None):
         result = MappingResult()
         for rule in self.rules:
-            rule.apply(tags, result)
+            rule.apply_to(tags, result, footprint)
         if result.attributes.get('roof_type') == 'flat':
             result.attributes.pop('roof_height', None)  # OSM roof height is immaterial for flat roofs.
         return result

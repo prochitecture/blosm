@@ -6,6 +6,7 @@ from types import MappingProxyType
 
 from .jsonc import JsonReader
 from .model import Choice, Condition, LevelSpec, Operation, Program, Value, VolumeSpec
+from .roof_settings import normalized_profile, ridge_vector
 
 
 SCOPES = ('global', 'footprint', 'footprint_edge')
@@ -197,8 +198,22 @@ class PadlParser:
         self.object(obj, path, fields | {'roof', 'levels', 'height_type'}, ('roof',))
         values = {k: self.value(obj[k], path + (k,)) for k in fields if k in obj}
         roof = obj['roof']
-        self.object(roof, path + ('roof',), {'type', 'reference_source', 'alignment', 'orientation', 'edge_index'}, ('type',))
-        roof_values = {k: self.value(v, path + ('roof', k)) for k, v in roof.items()}
+        self.object(roof, path + ('roof',), {'type', 'reference_source', 'alignment', 'orientation', 'edge_index',
+                                           'ridge_vector', 'roof_profile'}, ('type',))
+        roof_values = {}
+        for k, v in roof.items():
+            p = path + ('roof', k)
+            if k in ('ridge_vector', 'roof_profile'):
+                # PADL authored section/axis arrays; scalar ValueSpecs continue
+                # to use the existing lazy resolver unchanged.
+                from .errors import PadlError
+                try:
+                    points = ridge_vector(v) if k == 'ridge_vector' else normalized_profile(v)
+                except PadlError as exc:
+                    raise self.source.error(p, str(exc), exc.code) from exc
+                roof_values[k] = Value('literal', points, p)
+            else:
+                roof_values[k] = self.value(v, p)
         wall = None
         if 'levels' in obj:
             levels = obj['levels']

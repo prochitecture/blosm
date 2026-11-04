@@ -56,7 +56,9 @@ FLOAT heights and BOOLEAN presence flags. Add rules without changing backends.
 | `min_height` | `min_elevation`; absent becomes zero, without a flag |
 | `roof:height` | `roof_height` plus its flag; already included in total height; ignored for explicitly flat roofs |
 | `building:levels` | Positive integral `levels_wall_count` plus its flag; includes ground floor, excludes roof/basement floors |
-| `roof:shape` | Flat/skillion/gabled/hipped; absent uses PADL default; unsupported supplied shapes are reported and omitted |
+| `roof:shape` | Flat/skillion/hipped select their solver; gabled/gambrel/round/saltbox select the gabled solver with profile modes 1/2/3/4; absent uses PADL default; unsupported supplied shapes are reported and omitted |
+| `roof:orientation=along/across` | `roof_direction_mode=1/2`; longest-edge alignment while preserving PADL CW/CCW |
+| `roof:direction` | `roof_direction_mode=3`, plus directed `roof_ridge_vector`; downhill compass or degree bearing converted through the import projection; takes precedence over relative orientation |
 
 The current [OSM height definition](https://wiki.openstreetmap.org/wiki/Key:height)
 measures from the lowest terrain contact point, matching PADL's T_min. Do not
@@ -76,7 +78,39 @@ Initial import leaves `base_elevation`, `wall_min_height`, `top_height`,
 definitions/formulas supply them. Inferred, random and fitted outputs never
 become supplied inputs automatically.
 
-Official sources checked on 2026-10-31:
+The profile selector is FACE INT `roof_profile_mode`: 0 retains the PADL
+operation's section, 1 triangular gabled, 2 gambrel, 3 round, 4 OSM saltbox.
+Saltbox has unequal eaves and an offset ridge, with the lower/longer side facing
+an explicit downhill bearing. Its preset is not the legacy trapezoid historically
+called `saltboxRoof`. `flat_top` and `bellcast_gable` are excluded for now.
+Profile proportions are rendering defaults; OSM's shape name does not specify
+them. Both backends use the shared `padl/roof_settings.py` catalogue.
+
+Mode 0 for direction retains authored settings; relative modes preserve PADL
+CW/CCW, and explicit-vector mode ignores CW/CCW and uses neutral alignment.
+For skillion, relative orientation leaves the downhill side unspecified and is
+reported; an explicit bearing supplies it. Direction vectors are stored in the
+input owner's local XY frame. Invalid tags are reported without inventing a
+bearing. Holes have no independent roof settings; parts use their own roof tags.
+
+Round sections adapt at runtime to profile span and allocated roof height, with
+a default 0.025 m chord-error target and 12..512 even segments. Increasing ridge
+length alone does not increase the section resolution. Exceeding the quality
+limit is diagnosed rather than silently using a coarse roof. Python recomputes
+on regeneration; GN responds live to footprint/height edits. Execution quality
+is configurable through `RoundProfilePolicy` in backend/compiler construction.
+`roof:angle`-derived height remains outside this binding; in particular a single
+angle does not uniquely define gambrel or round sections. `roof:height` continues
+to supply roof rise through its existing presence flag.
+
+Official roof sources checked on 2026-11-03:
+[direction](https://wiki.openstreetmap.org/wiki/Key:roof:direction),
+[orientation](https://wiki.openstreetmap.org/wiki/Key:roof:orientation),
+[gambrel](https://wiki.openstreetmap.org/wiki/Tag:roof:shape=gambrel),
+[round](https://wiki.openstreetmap.org/wiki/Tag:roof:shape=round),
+[saltbox](https://wiki.openstreetmap.org/wiki/Tag:roof:shape=saltbox).
+
+Earlier height/use sources checked on 2026-10-31:
 [building use](https://wiki.openstreetmap.org/wiki/Key:building:use),
 [house types](https://wiki.openstreetmap.org/wiki/Tag:building%3Dhouse),
 [office](https://wiki.openstreetmap.org/wiki/Key:office),
@@ -94,7 +128,7 @@ courtyard ownership and duplicate member suppression, preserving corner order
 and winding. Full OSM way/relation keys determine samples independently of the
 integer face association IDs.
 
-Building outlines and parts use the [v2 footprint contract](../../padl/docs/FOOTPRINT_CONTRACT.md):
+Building outlines and parts use the [footprint contract](../../padl/docs/FOOTPRINT_CONTRACT.md):
 type 1 is a standalone building, type 3 a separate part, type 5 a building with
 parts whose outline is context only, and type 6 an outline that also generates
 its own part volume. Types 5 and 6 scan for type-3 faces with matching `parent_id`.
@@ -116,8 +150,8 @@ automatic removal of internal/shared walls.
 and hole boundaries. Its elevation inputs are offsets from that common datum,
 including raised `min_height`. Its own lower terrain samples do not shift it.
 Strict terrain coverage is checked for the reference rings and each part's own
-rings. With no terrain, the common datum is world Z=0. GN compiler version 2 is
-required for these roles and placement rules; rebuild older compiled programs.
+rings. With no terrain, the common datum is world Z=0. GN compiler version 3 is
+required for the current roles, placement and roof-input binding; rebuild older compiled programs.
 
 `BuildingBackend` has GN and Python strategies consuming the same document,
 inputs, identities and seed. `blosm/padl` remains a synchronized shared-core and
@@ -135,7 +169,7 @@ provides dimensions, direction and placement explicitly, preserving source corne
 GN gabled roofs currently require convex, hole-free inputs. Geometry failures are reported
 per footprint without silently choosing a different roof.
 
-Flat roofs without holes are native single n-gons in both backends, built
+Flat and skillion roofs without holes are native single n-gons in both backends, built
 directly from their footprint boundary, including concave/collinear corners.
 Courtyard roofs keep their multi-face fill; no roof triangles are merged to
 construct the hole-free cap. Source footprints remain editable.
@@ -145,6 +179,15 @@ Use the bundled API to set values and presence together:
 ```python
 from blosm.padl.api import edit_parameter
 edit_parameter(owner, footprint_id, 'levels_wall_count', 6)
+```
+
+Roof overrides use the same API. Supply a vector before activating its mode:
+
+```python
+edit_parameter(owner, footprint_id, 'roof_ridge_vector', (1.0, 0.0, 0.0))
+edit_parameter(owner, footprint_id, 'roof_direction_mode', 3)
+edit_parameter(owner, footprint_id, 'roof_profile_mode', 4)  # saltbox
+edit_parameter(owner, footprint_id, 'roof_profile_mode', clear=True)  # authored PADL section
 ```
 
 GN reevaluates live, including branches. Supplied `max_elevation` remains fixed

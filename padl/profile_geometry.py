@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # Shared by the legacy roof renderer and PADL's Python adapter.
 # Geometry construction has no OSM, PML, app, material or renderer dependencies.
 import math
+from bisect import bisect_right
 from mathutils import Vector
 
 zero = .001  # Existing profile-slot tolerance, retained for legacy compatibility.
@@ -56,12 +57,12 @@ class ProfiledVert:
         # Note, that a perpendicular to <roof.direction> is equal to <Vector((-d[1], d[0], 0.))
         self.y = -v[0]*d[1] + v[1]*d[0]
         # index in <roof.profileQ>
-        index = roof.profileQ[
-            math.floor(x * roof.numSamples)
-        ]
+        index = (roof.profileQ[math.floor(x * roof.numSamples)] if roof.numSamples else
+                 min(roof.lastProfileIndex-1, max(0, bisect_right(roof.profileXs, x)-1)))
         distance = x - p[index][0]
+        tolerance = getattr(roof, 'profileTolerance', zero)
 
-        if distance < zero:
+        if distance < tolerance:
             # the vertex <i> is located on the profile slot <roof.slots[index]>
             onSlot = True
             if roof.lEndZero and noWalls and not index:
@@ -74,7 +75,7 @@ class ProfiledVert:
             else:
                 # <x> and <z> coordinates for the profile point with the <index>
                 x, h = p[index]
-        elif abs(p[index + 1][0] - x) < zero:
+        elif abs(p[index + 1][0] - x) < tolerance:
             # the vertex <i> is located on the profile slot <roof.slots[index+1]>
             onSlot = True
             # increase <index> by one
@@ -462,6 +463,7 @@ class ProfiledRoofGeometry:
         self.roofVerticalPosition = roof_base
         self.roofHeight = roof_height
         self.noWalls = bottom == roof_base
+        self.profileTolerance = min(zero, .0001/self.polygonWidth)
         self.initProfile()
 
     def __init__(self, data):
@@ -501,6 +503,10 @@ class ProfiledRoofGeometry:
         # Quantization is needed to perform the following action very fast.
         # Given x-coordinate <x> between 0. and 1. in the profile coordinate system,
         # find two neighboring slots between which <x> is located
+        self.profileXs = tuple(p[0] for p in profile)
+        if not self.numSamples:
+            self.profileQ = ()
+            return
         _profile = tuple(math.ceil(p[0]*self.numSamples) for p in profile)
         profileQ = []
         index = 0

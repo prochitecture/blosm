@@ -50,6 +50,55 @@ class OsmMappingTests(unittest.TestCase):
         for form in ('apartments', 'office'):
             self.assertEqual(self.mapper.map({'building': form}).attributes['building_use'], form)
 
+    def test_profile_shapes_use_one_solver_family(self):
+        for mode, shape in enumerate(('gabled', 'gambrel', 'round', 'saltbox'), 1):
+            result = self.mapper.map({'roof:shape': shape})
+            self.assertTrue(result.accepted)
+            self.assertEqual(result.attributes['roof_type'], 'gabled')
+            self.assertEqual(result.attributes['roof_profile_mode'], mode)
+        for shape in ('flat_top', 'bellcast_gable'):
+            self.assertFalse(self.mapper.map({'roof:shape': shape}).accepted)
+
+    def test_bearings_are_downhill_and_keep_their_sign(self):
+        for raw, expected in (('N',(1,0,0)), ('90',(0,-1,0)), ('S',(-1,0,0)),
+                              ('270',(0,1,0)), ('360',(1,0,0)), ('NE',(.5**.5,-.5**.5,0))):
+            result = self.mapper.map({'roof:shape':'skillion','roof:direction':raw})
+            self.assertEqual(result.attributes['roof_direction_mode'],3)
+            for a,b in zip(result.attributes['roof_ridge_vector'],expected):
+                self.assertAlmostEqual(a,b)
+
+    def test_direction_priority_and_invalid_fallback(self):
+        for orientation, mode in (('along',1),('across',2)):
+            tags = {'roof:shape':'gabled','roof:orientation':orientation}
+            self.assertEqual(self.mapper.map(tags).attributes['roof_direction_mode'],mode)
+            self.assertEqual(self.mapper.map({**tags,'roof:direction':'E'}).attributes['roof_direction_mode'],3)
+            for raw in ('-1','361','nan','inf','90;180','~90','east','90 deg',''):
+                result = self.mapper.map({**tags,'roof:direction':raw})
+                self.assertEqual(result.attributes['roof_direction_mode'],mode)
+                self.assertNotIn('roof_ridge_vector',result.attributes)
+                self.assertTrue(result.accepted)
+                self.assertTrue(result.issues)
+        self.assertNotIn('roof_direction_mode',self.mapper.map({'roof:orientation':'bad'}).attributes)
+
+    def test_inactive_direction_is_ignored_for_flat_and_hipped(self):
+        for shape in ('flat','hipped'):
+            result = self.mapper.map({'roof:shape':shape,'roof:direction':'bad','roof:orientation':'bad'})
+            self.assertNotIn('roof_direction_mode',result.attributes)
+            self.assertEqual(result.issues,[])
+
+    def test_projected_bearing_uses_the_local_geographic_basis(self):
+        class RotatedProjection:
+            def toGeographic(self,x,y):
+                return x,-y
+            def fromGeographic(self,lat,lon):
+                return lat,-lon
+        class Footprint:
+            outer = ((45,0),(45.001,0),(45.001,.001),(45,.001))
+        mapper = mapping.OsmFaceAttributeMapper(projection=RotatedProjection())
+        vector = mapper.map({'roof:direction':'N'},footprint=Footprint()).attributes['roof_ridge_vector']
+        self.assertAlmostEqual(vector[0],0)
+        self.assertAlmostEqual(vector[1],-1)
+
     def test_residential_is_not_assumed_to_be_apartments(self):
         self.assertEqual(self.mapper.map({'building': 'residential'}).attributes['building_use'], 'unknown')
 

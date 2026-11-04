@@ -4,6 +4,7 @@ from enum import IntEnum
 import math
 
 from .errors import PadlError
+from .roof_settings import DIRECTION_MODES, PROFILES, ridge_vector
 
 
 class FaceType(IntEnum):
@@ -35,6 +36,7 @@ BRANCH_FLAGS = ('has_max_elevation', 'has_roof_height', 'has_levels_wall_count')
 FACE_TYPES = {'face_type': 'INT', 'footprint_id': 'INT', 'parent_id': 'INT', 'has_holes': 'BOOLEAN',
               'padl_random_key': 'INT',
               'building_use': 'INT', 'roof_type': 'INT', 'min_elevation': 'FLOAT',
+              'roof_direction_mode': 'INT', 'roof_ridge_vector': 'FLOAT_VECTOR', 'roof_profile_mode': 'INT',
               **OPTIONAL, **{'has_' + name: 'BOOLEAN' for name in OPTIONAL}}
 
 
@@ -47,13 +49,16 @@ class ParameterBinding:
 
 
 class FootprintBindings:
-    version = 2
+    version = 3
 
     def __init__(self, extra=()):
         self.parameters = {
             'building_use': ParameterBinding('building_use', 'INT', categories=BUILDING_USE),
             'roof_type': ParameterBinding('roof_type', 'INT', categories=ROOF_TYPE),
             'min_elevation': ParameterBinding('min_elevation', 'FLOAT'),
+            'roof_direction_mode': ParameterBinding('roof_direction_mode', 'INT'),
+            'roof_ridge_vector': ParameterBinding('roof_ridge_vector', 'FLOAT_VECTOR'),
+            'roof_profile_mode': ParameterBinding('roof_profile_mode', 'INT'),
             **{k: ParameterBinding(k, v, 'has_' + k) for k, v in OPTIONAL.items()},
             **{k: ParameterBinding(k, 'BOOLEAN') for k in BRANCH_FLAGS}}
         for binding in extra:
@@ -67,6 +72,12 @@ class FootprintBindings:
             valid = type(value) is bool
         elif kind == 'INT':
             valid = type(value) is int and -(2**31) <= value < 2**31
+        elif kind == 'FLOAT_VECTOR':
+            try:
+                valid = isinstance(value, (tuple, list)) and len(value) == 3 and all(
+                    type(v) in (int, float) and math.isfinite(v) and abs(v) <= 3.4028234663852886e38 for v in value)
+            except OverflowError:
+                valid = False
         else:
             try:
                 valid = type(value) in (int, float) and math.isfinite(value) and abs(value) <= 3.4028234663852886e38
@@ -78,7 +89,19 @@ class FootprintBindings:
     def decode(self, row):
         """Convert one stored FACE row to a sparse logical PADL input namespace."""
         result = {}
+        mode = row.get('roof_direction_mode', 0)
+        self.check('roof_direction_mode', mode, 'INT')
+        if mode not in DIRECTION_MODES:
+            raise PadlError(f'Unknown roof_direction_mode {mode}', code='invalid_category')
+        profile = row.get('roof_profile_mode', 0)
+        self.check('roof_profile_mode', profile, 'INT')
+        if profile:
+            PROFILES.get(profile)
+        if mode == 3:
+            ridge_vector(row.get('roof_ridge_vector'))
         for name, binding in self.parameters.items():
+            if name == 'roof_ridge_vector' and mode != 3:
+                continue
             if binding.presence:
                 flag = row.get(binding.presence, False)
                 self.check(binding.presence, flag, 'BOOLEAN')
@@ -89,7 +112,7 @@ class FootprintBindings:
             if name == 'roof_type' and row.get(name, 0) == 0:
                 continue
             if name not in row:
-                if name == 'min_elevation':
+                if name in ('min_elevation', 'roof_direction_mode', 'roof_profile_mode'):
                     result[name] = 0
                 elif name in BRANCH_FLAGS:
                     result[name] = False
@@ -147,7 +170,8 @@ class FootprintBindings:
         for name in ('face_type', 'footprint_id', 'parent_id', 'has_holes'):
             if mesh.attributes.get(name) is None:
                 raise PadlError(f'Required FACE attribute {name} is absent', code='missing_attribute')
-        rows = [{name: mesh.attributes[name].data[i].value for name in FACE_TYPES if mesh.attributes.get(name) is not None}
+        rows = [{name: (tuple(mesh.attributes[name].data[i].vector) if FACE_TYPES[name] == 'FLOAT_VECTOR'
+                       else mesh.attributes[name].data[i].value) for name in FACE_TYPES if mesh.attributes.get(name) is not None}
                 for i in range(len(mesh.polygons))]
         outer = {}
         holes = {}

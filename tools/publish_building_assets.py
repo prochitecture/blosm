@@ -31,7 +31,7 @@ def main():
         parser.error('Open the compiled library in blosm/assets before publishing')
     tree = bpy.data.node_groups[args.tree]
     program = load_program(tree)
-    if (tree.get('padl_compiler_version') != '2' or tree.get('padl_schema_version') != program.schema_version or
+    if (tree.get('padl_compiler_version') != '3' or tree.get('padl_schema_version') != program.schema_version or
             tree.get('padl_program_sha256') != program.fingerprint):
         parser.error('Compiled document fingerprint differs from the saved document')
     digest = hashlib.sha256(library.read_bytes()).hexdigest()

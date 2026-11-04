@@ -62,7 +62,7 @@ class BuildingProgramLibrary:
         def validate(reference, tree):
             from ...padl.persistence import load_program
             saved = load_program(tree)
-            if (tree.get('padl_compiler_version') != '2' or
+            if (tree.get('padl_compiler_version') != '3' or
                     tree.get('padl_schema_version') != program.schema_version or
                     tree.get('padl_program_sha256') != program.fingerprint or
                     saved.fingerprint != program.fingerprint):

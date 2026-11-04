@@ -38,7 +38,10 @@ def create_input_object(footprints, *, name='PADL Footprints', collection=None):
     mesh.from_pydata(vertices, [], faces)
     for name in sorted({key for row in rows for key in row}):
         attr = mesh.attributes.new(name, FACE_TYPES[name], 'FACE')
-        attr.data.foreach_set('value', [row.get(name, False if FACE_TYPES[name] == 'BOOLEAN' else 0) for row in rows])
+        if FACE_TYPES[name] == 'FLOAT_VECTOR':
+            attr.data.foreach_set('vector', [v for row in rows for v in row.get(name, (0, 0, 0))])
+        else:
+            attr.data.foreach_set('value', [row.get(name, False if FACE_TYPES[name] == 'BOOLEAN' else 0) for row in rows])
     owner = bpy.data.objects.new(mesh.name, mesh)
     try:
         bindings.validate_mesh(mesh)
@@ -91,8 +94,10 @@ def edit_parameter(owner, footprint_id, name, value=None, *, clear=False):
     if clear:
         if binding.presence:
             owner.data.attributes[binding.presence].data[index].value = False
-        elif name == 'roof_type':
-            owner.data.attributes[name].data[index].value = 0
+        elif name in ('roof_type', 'roof_direction_mode', 'roof_profile_mode'):
+            attr = owner.data.attributes.get(name)
+            if attr:
+                attr.data[index].value = 0
         elif name == 'min_elevation':
             owner.data.attributes[name].data[index].value = 0
         else:
@@ -112,7 +117,10 @@ def edit_parameter(owner, footprint_id, name, value=None, *, clear=False):
             candidate[binding.presence] = True
         bindings.decode(candidate)
         attr = owner.data.attributes.get(name) or owner.data.attributes.new(name, binding.data_type, 'FACE')
-        attr.data[index].value = value
+        if binding.data_type == 'FLOAT_VECTOR':
+            attr.data[index].vector = value
+        else:
+            attr.data[index].value = value
         if binding.presence:
             owner.data.attributes[binding.presence].data[index].value = True
     owner.data.update()

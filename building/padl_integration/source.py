@@ -143,7 +143,7 @@ class BuildingFootprintAssembler:
                     mapped_tags['building'] = parent_tags.get('building', 'yes') if form == 'yes' else form
                     if form == 'yes' and parent_tags.get('building:use'):
                         mapped_tags['building:use'] = parent_tags['building:use']
-            mapped = self.mapper.map(mapped_tags)
+            mapped = self.mapper.map(mapped_tags, footprint=footprint)
             if role == FaceType.PART and tags.get('building:part') == 'yes' and not any(
                     tags.get(name) for name in ('building:use', 'office', 'amenity')):
                 mapped.attributes['building_use'] = self.mapper.map(parent_tags).attributes['building_use']
