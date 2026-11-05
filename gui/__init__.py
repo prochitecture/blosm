@@ -1100,8 +1100,8 @@ class BlosmProperties(bpy.types.PropertyGroup):
     )
     
     cache3dFiles: bpy.props.BoolProperty(
-        name = "Cache 3D Files",
-        description = "Cache 3D Files (for example in .glb format)",
+        name = "Use Existing 3D File Cache",
+        description = "Read existing cached 3D files. Newly downloaded GLB and B3DM tiles are imported in memory without saving files",
         default = False
     )
     

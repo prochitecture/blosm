@@ -1,7 +1,5 @@
 from os.path import basename, join as joinStrings, exists as pathExists
-from os import remove as removeFile
 from math import radians, atan, sqrt, pi
-import re
 from operator import itemgetter
 import sys
 
@@ -11,6 +9,7 @@ from mathutils import Vector, Matrix
 from util.blender import createCollection
 
 from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+from .gltf_import import import_gltf
 
 
 def find_layer_collection(layer_col: bpy.types.LayerCollection, target_col: bpy.types.Collection):
@@ -38,7 +37,6 @@ class BlenderRenderer:
         self.calculateHeightOffset = False
         self.heightOffset = 0.
         
-        self.licenseRePattern = re.compile(b'\"copyright\":\s*\"(\w+)\"')
         self.copyrightHolders = {}
         
         # <self._gltfImporterPatched> is used to store some Python objects related to Blender's glTF importer if its patching is performed
@@ -180,90 +178,59 @@ class BlenderRenderer:
         self.collection = None
     
     def renderGlb(self, manager, uri, path, transformMatrix, cacheContent):
-        context = bpy.context
-        
-        filepath = joinStrings(
-            manager.tilesDir,
-            basename(path) if cacheContent else ("current_file_" + self.instanceName + ".glb" if self.instanceName else "current_file.glb")
-        )
-        
-        if cacheContent:
-            if not pathExists(filepath):
-                fileContent = manager.download(uri)
-                with open(filepath, 'wb') as f:
-                    f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+        # Existing caches remain usable, but downloaded tiles are never saved.
+        # The path is also the resource base for external glTF references.
+        filepath = joinStrings(manager.tilesDir, basename(path))
+        if cacheContent and pathExists(filepath):
+            result = import_gltf(filepath)
         else:
-            fileContent = manager.download(uri)
-
-            # check if <fileContent> contains copyright information
-            match = re.search(self.licenseRePattern, fileContent)
-            if match:
-                self.processCopyrightInfo(match.group(1).decode('utf-8'))
-            
-            with open(filepath, 'wb') as f:
-                f.write(fileContent)
-            
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
-
-            if self.collection_import.objects:
-                self.finalize_glb_import(filepath, transformMatrix)
+            result = import_gltf(filepath, content=manager.download(uri))
+        self.processCopyrightInfo(result.copyright)
+        if self.collection_import.objects or self.collection_import.children:
+            self.finalize_glb_import(transformMatrix)
 
     def renderB3dm(self, manager, uri, path, transformMatrix, cacheContent):
         import numpy
         from .py3dtiles.tileset.content.tile_content_reader import read_array
-        
-        filepath = joinStrings(
-            manager.tilesDir,
-            basename(path)[:-4] + "glb" if cacheContent else ("current_file_" + self.instanceName + ".glb" if self.instanceName else "current_file.glb")
-        )
-        
-        if cacheContent:
-            if not pathExists(filepath):
-                fileContent = manager.download(uri)
-                with open(filepath, 'wb') as f:
-                    f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
+
+        filepath = joinStrings(manager.tilesDir, basename(path))
+        # Previous releases saved raw B3DM data under a .glb cache filename.
+        legacyPath = filepath[:-4] + "glb"
+        cachedPath = filepath if pathExists(filepath) else legacyPath
+        if cacheContent and pathExists(cachedPath):
+            with open(cachedPath, 'rb') as f:
+                fileContent = f.read()
         else:
             fileContent = manager.download(uri)
-            # check if <fileContent> contains copyright information
-            match = re.search(self.licenseRePattern, fileContent)
-            if match:
-                self.processCopyrightInfo(match.group(1).decode('utf-8'))
-            
-            b3dmContent = read_array( numpy.frombuffer(fileContent, dtype=numpy.uint8) )
-            if b3dmContent is None or b3dmContent.header is None:
-                raise Exception("The file doesn't contain a valid data.")
-            
-            gltfContent = b3dmContent.body.gltf
-            # RTC means "Relative To Center"
-            rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
-            if rtc_center:
-                from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
-                _patch_convert_functions = glTFImporter._patch_convert_functions
-                # No need to patch Blender's glTF importer if the property <RTC_CENTER> is provided.
-                glTFImporter._patch_convert_functions = False
-            
-            with open(filepath, 'wb') as f:
-                f.write(gltfContent.to_array())
-            
-            try:
-                bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
-            finally:
-                # Restore <glTFImporter._patch_convert_functions> for all possible outcomes
-                # of the import operator including any failures. Remember that the finally clause is
-                # always executed after the try block, even if an exception is raised and not handled.
-                if rtc_center:
-                    glTFImporter._patch_convert_functions = _patch_convert_functions
-            
-            if self.collection_import.objects or self.collection_import.children:
-                if rtc_center:
-                    self.process_rtc(rtc_center)
-                self.finalize_glb_import(filepath, transformMatrix)
-    
+
+        b3dmContent = read_array(numpy.frombuffer(fileContent, dtype=numpy.uint8))
+        if b3dmContent is None or b3dmContent.header is None or not hasattr(b3dmContent.body, 'gltf'):
+            raise ValueError("The file doesn't contain valid B3DM data.")
+
+        # Keep B3DM conversion in memory. RTC is separate from the embedded GLB
+        # and must survive conversion even when reading an existing cache.
+        rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
+        hasRtc = rtc_center is not None
+        if hasRtc:
+            _patch_convert_functions = glTFImporter._patch_convert_functions
+            glTFImporter._patch_convert_functions = False
+        try:
+            result = import_gltf(filepath, content=b3dmContent.body.gltf.to_array())
+        finally:
+            if hasRtc:
+                glTFImporter._patch_convert_functions = _patch_convert_functions
+
+        self.processCopyrightInfo(result.copyright)
+        if self.collection_import.objects or self.collection_import.children:
+            if hasRtc:
+                self.process_rtc(rtc_center)
+            self.finalize_glb_import(transformMatrix)
+
     def processCopyrightInfo(self, info):
         for copyrightHolder in info.split(';'):
             copyrightHolder = copyrightHolder.strip()
+            if not copyrightHolder:
+                continue
             if not copyrightHolder in self.copyrightHolders:
                 self.copyrightHolders[copyrightHolder] = 0
             self.copyrightHolders[copyrightHolder] += 1
@@ -292,8 +259,7 @@ class BlenderRenderer:
                 # See also doc/Transforms.md
                 #
     
-    def finalize_glb_import(self, filepath, transformMatrix):
-        removeFile(filepath)
+    def finalize_glb_import(self, transformMatrix):
 
         # Find Blender collection where the imported objects are located
         collection = self.collection_import
