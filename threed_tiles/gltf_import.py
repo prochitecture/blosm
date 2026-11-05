@@ -96,11 +96,9 @@ def import_gltf(filepath, *, content=None, report=None):
                 raise ImportError('Could not parse the glTF tile: invalid or truncated data') from exc
 
         importer.checks()
-        # bpy.ops normally evaluates pending changes before/after execution.
-        # In particular, Blosm reads matrix_world immediately for RTC and tile
-        # transforms; without this update freshly created objects read as stale.
-        bpy.context.view_layer.update()
         BlenderGlTF.create(importer)
+        # Evaluate newly created objects before Blosm reads matrix_world for
+        # RTC and tile transforms; otherwise these matrices can be stale.
         bpy.context.view_layer.update()
         messages = tuple(importer.log.messages()) if hasattr(importer.log, 'messages') else ()
         if report is not None:

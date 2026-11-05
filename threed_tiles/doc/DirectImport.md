@@ -47,9 +47,10 @@ operator. Enabled glTF import extensions are discovered as before. Old and new
 logger cleanup APIs are handled separately. Release's declared minimum Blender
 version remains 4.5; the legacy adapter was also checked on Blender 3.6.4.
 
-The adapter explicitly updates the view layer around scene creation. The
-operator normally performs these updates; without them, immediate reads of
-new objects' world matrices can lose the geographic offset or RTC placement.
+The adapter explicitly updates the view layer after scene creation. Without
+this update, immediate reads of new objects' world matrices can lose the
+geographic offset or RTC placement. No pre-import update is needed; import
+parity was checked without it on Blender 4.5, 5.0, 5.1 and 5.2.
 
 ## Renderer behavior
 
