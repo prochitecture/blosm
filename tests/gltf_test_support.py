@@ -153,13 +153,15 @@ def fingerprint():
 
 
 @contextmanager
-def no_tile_writes_or_operator():
+def no_tile_writes_or_operator(*, no_dataset_files=False):
     """Guard both actual file writes and invocation of the glTF import operator."""
     import builtins
     old_open, old_io_open, old_op = builtins.open, io.open, bpy.ops._op_call
     def guard_open(original, filename, mode="r", *args, **kwargs):
         if isinstance(filename, (str, bytes, Path)):
             suffix = Path(filename).suffix.lower()
+            if no_dataset_files and suffix in {".json", ".glb", ".gltf", ".b3dm"}:
+                raise AssertionError("3D Tiles import attempted to access a dataset file on disk")
             if suffix in {".glb", ".gltf", ".b3dm"} and any(c in mode for c in "wax+"):
                 raise AssertionError("Direct import attempted to write a tile")
         return original(filename, mode, *args, **kwargs)
@@ -180,22 +182,27 @@ def operator_import(filepath):
     assert bpy.ops.import_scene.gltf(**kwargs) == {"FINISHED"}
 
 
+BASELINE_REF = "4adff00270f4492667f3bf1305d0b338f3cd1268"
+
+
 def baseline_renderer():
-    """Load the exact release renderer without switching a checkout."""
+    """Load the pre-direct-import renderer from its fixed historical revision."""
     source = subprocess.check_output(
-        ["git", "-C", str(REPO), "show", "release:threed_tiles/blender.py"], text=True)
+        ["git", "-C", str(REPO), "show", BASELINE_REF + ":threed_tiles/blender.py"], text=True)
     name = "threed_tiles._release_renderer"
     spec = importlib.util.spec_from_loader(name, loader=None)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
-    exec(compile(source, "release:threed_tiles/blender.py", "exec"), module.__dict__)
+    exec(compile(source, BASELINE_REF + ":threed_tiles/blender.py", "exec"), module.__dict__)
     return module.BlenderRenderer
 
 
 def manager_for(renderer, directory, content):
     manager = BaseManager("https://fixture.invalid/root.json", renderer)
     manager.centerLat, manager.centerLon = 60.17, 24.94
-    manager.tilesDir = str(directory)
+    # Only the historical operator renderer needs a temporary file directory.
+    if renderer.__class__.__module__ == "threed_tiles._release_renderer":
+        manager.tilesDir = str(directory)
     manager.download = lambda uri: content
     return manager
 

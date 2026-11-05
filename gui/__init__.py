@@ -1093,18 +1093,6 @@ class BlosmProperties(bpy.types.PropertyGroup):
         default = ''
     )
     
-    cacheJsonFiles: bpy.props.BoolProperty(
-        name = "Cache JSON Files",
-        description = "Cache JSON Files that define tilesets",
-        default = False
-    )
-    
-    cache3dFiles: bpy.props.BoolProperty(
-        name = "Use Existing 3D File Cache",
-        description = "Read existing cached 3D files. Newly downloaded GLB and B3DM tiles are imported in memory without saving files",
-        default = False
-    )
-    
     replaceMaterialsWith: bpy.props.EnumProperty(
         name = "Replace materials with",
         items = (

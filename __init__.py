@@ -510,12 +510,9 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             renderer
         )
         
-        manager.cacheJsonFiles = addon.cacheJsonFiles
-        manager.cache3dFiles = addon.cache3dFiles
-        
         a = blenderApp.app
         try:
-            a.init3dTiles(context, manager, '')
+            a.init3dTiles(context, manager)
         except Exception as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}

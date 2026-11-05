@@ -1,4 +1,4 @@
-from os.path import basename, join as joinStrings, exists as pathExists
+from os.path import basename
 from math import radians, atan, sqrt, pi
 from operator import itemgetter
 import sys
@@ -178,45 +178,31 @@ class BlenderRenderer:
         
         self.collection = None
     
-    def renderGlb(self, manager, uri, path, transformMatrix, cacheContent):
-        # Existing caches remain usable, but downloaded tiles are never saved.
-        # The path is also the resource base for external glTF references.
-        filepath = joinStrings(manager.tilesDir, basename(path))
-        if cacheContent and pathExists(filepath):
-            result = import_gltf(filepath, report=self.report)
-        else:
-            result = import_gltf(filepath, content=manager.download(uri), report=self.report)
+    def renderGlb(self, manager, uri, path, transformMatrix):
+        # The filename supplies the source identity; the tile stays in memory.
+        result = import_gltf(basename(path), content=manager.download(uri), report=self.report)
         self.processCopyrightInfo(result.copyright)
         if self.collection_import.objects or self.collection_import.children:
             self.finalize_glb_import(transformMatrix)
 
-    def renderB3dm(self, manager, uri, path, transformMatrix, cacheContent):
+    def renderB3dm(self, manager, uri, path, transformMatrix):
         import numpy
         from .py3dtiles.tileset.content.tile_content_reader import read_array
 
-        filepath = joinStrings(manager.tilesDir, basename(path))
-        # Previous releases saved raw B3DM data under a .glb cache filename.
-        legacyPath = filepath[:-4] + "glb"
-        cachedPath = filepath if pathExists(filepath) else legacyPath
-        if cacheContent and pathExists(cachedPath):
-            with open(cachedPath, 'rb') as f:
-                fileContent = f.read()
-        else:
-            fileContent = manager.download(uri)
-
+        fileContent = manager.download(uri)
         b3dmContent = read_array(numpy.frombuffer(fileContent, dtype=numpy.uint8))
         if b3dmContent is None or b3dmContent.header is None or not hasattr(b3dmContent.body, 'gltf'):
             raise ValueError("The file doesn't contain valid B3DM data.")
 
         # Keep B3DM conversion in memory. RTC is separate from the embedded GLB
-        # and must survive conversion even when reading an existing cache.
+        # and must survive conversion.
         rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
         hasRtc = rtc_center is not None
         if hasRtc:
             _patch_convert_functions = glTFImporter._patch_convert_functions
             glTFImporter._patch_convert_functions = False
         try:
-            result = import_gltf(filepath, content=b3dmContent.body.gltf.to_array(), report=self.report)
+            result = import_gltf(basename(path), content=b3dmContent.body.gltf.to_array(), report=self.report)
         finally:
             if hasRtc:
                 glTFImporter._patch_convert_functions = _patch_convert_functions

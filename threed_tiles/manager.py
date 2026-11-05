@@ -1,7 +1,7 @@
 from math import radians, cos, sin, sqrt
 from urllib import request, error
 from urllib.parse import urlparse
-from os.path import splitext, basename, dirname, join as joinStrings, exists as pathExists
+from os.path import splitext, dirname
 import json, ssl, gzip
 from mathutils import Vector, Matrix
 
@@ -48,11 +48,6 @@ class BaseManager:
         # to all subsequent URI requests
         self.uriQuery = ''
         
-        self.tilesDir = ''
-        
-        self.cacheJsonFiles = True
-        self.cache3dFiles = False
-    
     def setGeometricError(self, geometricError):
         self.geometricError = geometricError
     
@@ -63,7 +58,7 @@ class BaseManager:
         self.renderer.prepare(self)
         
         try:
-            tileset = self.getJsonFile(self.rootUri, None, False)
+            tileset = self.getJsonFile(self.rootUri)
             self.renderTileset(tileset, self.baseUri, None)
         except error.HTTPError as e:
             error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
@@ -143,12 +138,12 @@ class BaseManager:
             
             try:
                 if contentExtension == ".json":
-                    tileset = self.getJsonFile(uri, uriComponents.path, self.cacheJsonFiles)
+                    tileset = self.getJsonFile(uri)
                     self.renderTileset(tileset, baseUri, transformMatrix)
                 elif contentExtension == ".glb":
-                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix, self.cache3dFiles)
+                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix)
                 elif contentExtension == ".b3dm":
-                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix, self.cache3dFiles)
+                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix)
             except Exception as e:
                 self.processError(e, uri)
     
@@ -221,22 +216,8 @@ class BaseManager:
         self.areaMaxLon = radians(maxLon)
         self.areaMaxLat = radians(maxLat)
     
-    def getJsonFile(self, uri, path, cacheContent):
-        if cacheContent:
-            filePath = joinStrings(self.tilesDir, basename(path))
-            if pathExists(filePath):
-                with open(filePath, 'r') as jsonFile:
-                    result = json.load(jsonFile)
-            else:
-                result = self.download(uri)
-                with open(filePath, 'wb') as jsonFile:
-                    jsonFile.write(result)
-                result = json.loads(result)
-        else:
-            result = self.download(uri)
-            result = json.loads(result)
-        
-        return result
+    def getJsonFile(self, uri):
+        return json.loads(self.download(uri))
     
     def download(self, url):
         req = request.Request(

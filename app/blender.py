@@ -337,17 +337,11 @@ class BlenderApp(BaseApp):
         
         self.setTerrain(context, createFlatTerrain=True, createBvhTree=False)
     
-    def init3dTiles(self, context, manager, subdirName):
+    def init3dTiles(self, context, manager):
         from threed_tiles.manager import BaseManager
         
         addon = context.scene.blosm
         addonName = self.addonName
-        
-        self.setDataDir(context, self.basePath, addonName)
-        tilesDir = os.path.join(self.dataDir, "3d_tiles", subdirName)
-        if not os.path.exists(tilesDir):
-            os.makedirs(tilesDir)
-        manager.tilesDir = tilesDir
         
         manager.setGeometricError(
             BaseManager.geometricErrors.get(self.lodOf3dTiles)\

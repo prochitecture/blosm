@@ -14,14 +14,13 @@ import json
 from pathlib import Path
 import random
 import statistics
-import subprocess
 import sys
 import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gltf_test_support import (
-    bpy, REPO, BlenderRenderer, fixture, convert_b3dm, reset_scene,
+    bpy, BASELINE_REF, BlenderRenderer, fixture, convert_b3dm, reset_scene,
     operator_import, baseline_renderer, manager_for, install_scene_settings, import_gltf,
 )
 
@@ -87,7 +86,10 @@ def renderer_operation(renderer_type, content):
         manager = manager_for(renderer, args.artifacts, content)
         renderer.prepare(manager)
         try:
-            renderer.renderB3dm(manager, "fixture", "tile.b3dm", None, False)
+            if renderer_type is BlenderRenderer:
+                renderer.renderB3dm(manager, "fixture", "tile.b3dm", None)
+            else:
+                renderer.renderB3dm(manager, "fixture", "tile.b3dm", None, False)
             assert renderer.num_imported_tiles == 1
         finally:
             renderer.finalize(manager)
@@ -119,8 +121,7 @@ for tile in sorted(args.helsinki.glob("*.b3dm")):
 report = {
     "blender": bpy.app.version_string,
     "blender_build_hash": bpy.app.build_hash.decode(),
-    "baseline_ref": subprocess.check_output(
-        ["git", "-C", str(REPO), "rev-parse", "release"], text=True).strip(),
+    "baseline_ref": BASELINE_REF,
     "repeats": args.repeats, "warmups_per_path": args.warmups,
     "timing": "perf_counter wall time; warmed paths; deterministic shuffled order; cleanup and network excluded",
     "scope": "GLB pipeline isolation plus full B3DM renderer, fresh scene per trial, background Blender",

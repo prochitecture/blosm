@@ -5,8 +5,7 @@ threed_tiles/gltf_import.py. Downloaded GLB and B3DM tiles are imported from
 memory. The renderer does not write a temporary tile or invoke
 bpy.ops.import_scene.gltf.
 
-This change is on the progressive_import branch, based on release commit
-4adff00. It establishes a boundary for later progressive importing and concurrent
+The implementation establishes a boundary for later progressive importing and concurrent
 downloading; those features are not implemented by this change.
 
 ## Entry point and version compatibility
@@ -21,7 +20,7 @@ importer's decoded buffers. Optional report accepts an operator-style
 report({level}, message) callback; exceptions propagate to the caller.
 
 The renderer receives the outer Blosm operator's report callback and passes it
-to the adapter for GLB, B3DM and cache reads. Raised errors are reported and
+to the adapter for GLB and B3DM imports. Raised errors are reported and
 re-raised for the manager's per-tile error accounting. Buffered glTF warnings
 and errors are forwarded with their original severity, including on failures.
 Console logging remains active. Console-only messages are not promoted to UI
@@ -54,12 +53,13 @@ new objects' world matrices can lose the geographic offset or RTC placement.
   The temporary RTC conversion switch is restored on exceptions.
 - Attribution is read from parsed glTF asset metadata, preserving spaces,
   punctuation and Unicode. Existing semicolon-separated aggregation remains.
-- Existing tile caches can still be read when cache3dFiles is enabled.
-  Newly downloaded content is never added to that cache. The property's label
-  and description now say "Use Existing 3D File Cache".
-- Both ordinary .b3dm cache files and older raw-B3DM-under-.glb caches are
-  accepted. Cached imports use the same placement and finalization as downloads.
-- JSON manifest caching is unchanged.
+- Root and nested JSON manifests are downloaded and parsed in memory on each
+  import. GLB and B3DM tiles are also downloaded on each import. There are no
+  dataset cache settings, cache reads or cache writes. Existing cache files are
+  ignored; 3D Tiles import does not require or create a data directory.
+- The renderer supplies a tile filename only for glTF source naming. The
+  adapter's file-input mode remains available for comparison benchmarks;
+  production tile imports always supply downloaded content.
 - The outer Blosm import operator still declares REGISTER and UNDO. Individual
   glTF operations no longer create an operator boundary. Like Blender's native
   importer, the adapter does not roll back objects created before an import fails.
@@ -91,14 +91,17 @@ blender --background --factory-startup --disable-autoexec --python-exit-code 1 \
 
 These are argument layouts; shell continuation syntax differs on Windows.
 Do not run benchmark processes concurrently. The baseline renderer is loaded
-from the local release ref, whose exact revision is recorded in the results.
+from fixed historical commit 4adff00270f4492667f3bf1305d0b338f3cd1268,
+before direct importing was introduced. Its revision is recorded in the results.
 
 Correctness checks cover operator/file/byte equivalence, topology, UVs, vertex
 colors, packed images, matrices, attribution, external resources, enabled user
 extensions, invalid input, logger cleanup, RTC with/without/zero center, joining,
-cache hits, and patch restoration after failure. A separate check exercises the
-registered Blosm operator with a mixed GLB/B3DM tileset. Guards reject tile-file
-writes and any invocation of the glTF import operator in the new paths.
+and patch restoration after failure. A separate check exercises the registered
+Blosm operator with root and nested JSON manifests and mixed GLB/B3DM tiles,
+including repeated downloads and continuation after a failed tile. Guards reject
+local dataset reads/writes and any invocation of the glTF import operator in the
+production paths. The operator also works with a nonexistent data directory.
 
 The checks passed on Blender 4.5.0, 5.0.0, 5.1.0 and 5.2.0 LTS, including three
 real Helsinki tiles. Adapter-only checks also passed on Blender 3.6.4.

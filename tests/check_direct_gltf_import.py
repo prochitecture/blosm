@@ -153,28 +153,21 @@ if bpy.app.version >= (4, 5, 0):
     ReleaseRenderer = baseline_renderer()
     transform = Matrix.Translation((5.0, -3.0, 2.0))
 
-    def render(renderer_type, content, kind, cache=False, legacy_cache=False, join=False):
+    def render(renderer_type, content, kind, join=False):
         reset_scene()
         renderer = renderer_type("Tile check", join, "")
-        directory = args.artifacts / ("cache" if cache else "no_cache")
+        directory = args.artifacts / "renderer_baseline"
         directory.mkdir(exist_ok=True)
         filename = "test_tile." + kind
-        if cache:
-            cache_path = directory / ("test_tile.glb" if legacy_cache else filename)
-            cache_path.write_bytes(content)
         manager = manager_for(renderer, directory, content)
-        if cache:
-            def no_download(uri):
-                raise AssertionError("Cache hit unexpectedly downloaded")
-            manager.download = no_download
         renderer.prepare(manager)
         try:
             method = renderer.renderB3dm if kind == "b3dm" else renderer.renderGlb
             if renderer_type is BlenderRenderer:
-                with no_tile_writes_or_operator():
-                    method(manager, "fixture", filename, transform, cache)
+                with no_tile_writes_or_operator(no_dataset_files=True):
+                    method(manager, "fixture", filename, transform)
             else:
-                method(manager, "fixture", filename, transform, cache)
+                method(manager, "fixture", filename, transform, False)
             assert renderer.num_imported_tiles == 1
         finally:
             renderer.finalize(manager)
@@ -190,30 +183,26 @@ if bpy.app.version >= (4, 5, 0):
             assert "City of Test" in attribution and "Café Example" in attribution
         passed("B3DM placement/RTC/join parity: " + str(rtc))
 
-    # GLB and both B3DM cache layouts must finalize and preserve attribution.
+    # Both tile formats import downloaded bytes without local dataset access.
     glb_expected, copyright_expected = render(BlenderRenderer, glb, "glb")
     assert glb_expected
-    assert render(BlenderRenderer, glb, "glb", cache=True) == (glb_expected, copyright_expected)
+    assert "City of Test" in copyright_expected
     b3dm = make_b3dm(glb, [2877435.0, 1343478.0, 5512247.0])
     b3dm_expected = render(BlenderRenderer, b3dm, "b3dm")
-    assert render(BlenderRenderer, b3dm, "b3dm", cache=True) == b3dm_expected
-    # Use a separate legacy file name so it cannot select the .b3dm cache.
-    (args.artifacts / "cache" / "test_tile.b3dm").unlink()
-    assert render(BlenderRenderer, b3dm, "b3dm", cache=True, legacy_cache=True) == b3dm_expected
-    assert not list((args.artifacts / "no_cache").glob("*"))
-    passed("GLB/B3DM cache parity and zero production tile writes")
+    assert b3dm_expected[0] and "City of Test" in b3dm_expected[1]
+    passed("GLB/B3DM imports without local dataset access")
 
     # Renderer restores the RTC patch even if scene construction fails.
     from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
     reset_scene()
     renderer = BlenderRenderer("Failure", False, "")
-    manager = manager_for(renderer, args.artifacts / "no_cache", b3dm)
+    manager = manager_for(renderer, args.artifacts, b3dm)
     renderer.prepare(manager)
     before = handler_counts()
     try:
         with patch.object(BlenderGlTF, "create", side_effect=RuntimeError("injected failure")):
             try:
-                renderer.renderB3dm(manager, "fixture", "failure.b3dm", transform, False)
+                renderer.renderB3dm(manager, "fixture", "failure.b3dm", transform)
             except RuntimeError as error:
                 assert str(error) == "injected failure"
             else:
