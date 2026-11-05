@@ -654,7 +654,7 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             box.label(text="Level of details:")
             box.prop(addon, "lodOf3dTiles", text='')
         
-        layout.prop(addon, "join3dTilesObjects", text='Join tiles when finished' if addon.progressiveImport else 'Join 3D Tiles objects')
+        layout.prop(addon, "join3dTilesObjects", text='Join 3D Tiles objects when finished' if addon.progressiveImport else 'Join 3D Tiles objects')
         layout.prop(addon, "relativeToInitialImport")
     
     def drawGpx(self, context):

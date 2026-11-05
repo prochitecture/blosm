@@ -12,7 +12,7 @@ The status in the Blosm panel shows imported tiles, errors and download waiting.
 **Cancel import** stops outstanding work and retains completed tiles. Esc remains
 available for ordinary Blender interactions and does not cancel this timer job.
 
-**Join tiles when finished** retains the existing join option. Tiles remain
+**Join 3D Tiles objects when finished** retains the existing join option. Tiles remain
 separate while loading; joining happens once on successful completion. Cancelled
 imports keep their separate objects. A large tile or final join can visibly pause
 the viewport: individual Blender API calls are synchronous and cannot be preempted
