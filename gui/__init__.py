@@ -22,6 +22,7 @@ import os, math, webbrowser, importlib.util, importlib
 from bpy.app.handlers import persistent
 from ..app.blender import app
 from ..defs import Keys
+from ..progressive import blender as progressiveImport
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
@@ -416,6 +417,9 @@ class BLOSM_PT_Extent(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(addon, "dataType", text="")
         row.operator("blosm.import_data", text="import")
+        if progressiveImport.active is not None:
+            box.label(text=progressiveImport.active.status)
+            box.operator('blosm.cancel_progressive', text='Cancel import', icon='CANCEL')
 
 
 class PanelRealisticTools():#(bpy.types.Panel):
@@ -648,7 +652,8 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             box.label(text="Level of details:")
             box.prop(addon, "lodOf3dTiles", text='')
         
-        layout.prop(addon, "join3dTilesObjects")
+        layout.prop(addon, "progressiveImport")
+        layout.prop(addon, "join3dTilesObjects", text='Join tiles when finished' if addon.progressiveImport else 'Join 3D Tiles objects')
         layout.prop(addon, "relativeToInitialImport")
     
     def drawGpx(self, context):
@@ -1086,6 +1091,12 @@ class BlosmProperties(bpy.types.PropertyGroup):
         description = "Join 3D Tiles objects and remove double vertices",
         default = True
     )
+
+    progressiveImport: bpy.props.BoolProperty(
+        name = "Progressive import",
+        description = "Show tiles as they load and allow viewport navigation between tile imports. Large tiles and final joining can briefly pause the viewport",
+        default = False
+    )
     
     copyright: bpy.props.StringProperty(
         name = "Copyright message",
@@ -1304,6 +1315,8 @@ def register():
     bpy.app.handlers.load_post.append(_onFileLoaded)
 
 def unregister():
+    if bpy.app.timers.is_registered(_onRegister280):
+        bpy.app.timers.unregister(_onRegister280)
     for c in _classes:
         bpy.utils.unregister_class(c)
     del bpy.types.Scene.blosm

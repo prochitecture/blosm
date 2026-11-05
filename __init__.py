@@ -68,6 +68,7 @@ from .renderer import Renderer
 from .parse.osm import Osm
 from . import gui, ape
 from .defs import Keys
+from .progressive import blender as progressiveImport
 
 
 class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
@@ -252,7 +253,14 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
     bl_description = "Import data of the selected type (OpenStreetMap, Google 3D Tiles, terrain, etc)"
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context):
+        return progressiveImport.active is None
+
     def execute(self, context):
+        if progressiveImport.active is not None:
+            self.report({'WARNING'}, 'A Blosm import is already running')
+            return {'CANCELLED'}
         a = blenderApp.app
         dataType = context.scene.blosm.dataType
         
@@ -485,6 +493,15 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         addon = context.scene.blosm
         google3dTiles = addon.threedTilesSource == "google"
+        progressive = addon.progressiveImport and not addon.commandLineMode
+        if progressive:
+            if bpy.app.background or context.window is None:
+                self.report({'ERROR'}, 'Progressive import requires an interactive Blender window. Disable Progressive import for background jobs.')
+                return {'CANCELLED'}
+            if context.mode != 'OBJECT':
+                self.report({'ERROR'}, 'Start progressive import in Object Mode')
+                return {'CANCELLED'}
+            from .threed_tiles.progressive import ProgressiveRenderer, TilesImport
 
         if not blenderApp.app.isPro and google3dTiles and addon.lodOf3dTiles == "lod6":
             def _draw_pro_popup(self, context):
@@ -499,11 +516,11 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             )
             return {'CANCELLED'}
         
-        renderer = BlenderRenderer(
+        renderer = (ProgressiveRenderer if progressive else BlenderRenderer)(
             "Google 3D Tiles" if google3dTiles else "3D Tiles",
             addon.join3dTilesObjects,
             addon.instanceName,
-            report=self.report
+            report=(lambda levels, message: progressiveImport.notify(next(iter(levels)), message)) if progressive else self.report
         )
         manager = BaseManager(
             "https://tile.googleapis.com/v1/3dtiles/root.json" if google3dTiles else addon.threedTilesUrl,
@@ -524,6 +541,15 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         else:
             renderer.calculateHeightOffset = True
         
+        if progressive:
+            try:
+                task = TilesImport(manager, (a.minLon, a.minLat, a.maxLon, a.maxLat), context, setLatLonHeight)
+                progressiveImport.start(task, context)
+            except Exception as exc:
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
+            return {'FINISHED'}
+
         result = manager.render(a.minLon, a.minLat, a.maxLon, a.maxLat)
         
         if len(result) == 1:
@@ -771,6 +797,7 @@ _classes = (
 )
 
 def register():
+    progressiveImport.register()
     for c in _classes:
         bpy.utils.register_class(c)
     gui.register()
@@ -789,6 +816,7 @@ def register():
             pass
 
 def unregister():
+    progressiveImport.unregister()
     for c in _classes:
         bpy.utils.unregister_class(c)
     gui.unregister()

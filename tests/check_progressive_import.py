@@ -1,0 +1,270 @@
+"""Blender-run progressive adapter/core checks; all outputs stay in artifacts."""
+import argparse
+import importlib
+import json
+from math import radians, frexp, ldexp
+from pathlib import Path
+import sys
+from unittest.mock import patch
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gltf_test_support import bpy, REPO, fixture, make_glb, make_b3dm, reset_scene, no_tile_writes_or_operator
+import addon_utils
+from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--artifacts', type=Path, required=True)
+parser.add_argument('--helsinki', type=Path)
+args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
+args.artifacts.mkdir(parents=True, exist_ok=True)
+sys.path.insert(0, str(REPO.parent))
+package = REPO.name
+addon_utils.enable(package, default_set=True)
+manager_module = importlib.import_module(package + '.threed_tiles.manager')
+renderer_module = importlib.import_module(package + '.threed_tiles.blender')
+adapter_module = importlib.import_module(package + '.threed_tiles.progressive')
+runtime = importlib.import_module(package + '.progressive.blender')
+BaseManager = manager_module.BaseManager
+
+
+class MemoryTransport:
+    def __init__(self, payloads):
+        self.payloads = payloads
+        self.pending = None
+        self.requests = []
+        self.closed = False
+        self.polls = 0
+
+    def submit(self, uri):
+        assert self.pending is None
+        self.pending = uri
+        self.requests.append(uri)
+        self.polls = 0
+
+    def poll(self):
+        self.polls += 1
+        if self.polls < 3:
+            return None
+        uri, self.pending = self.pending, None
+        result = self.payloads[uri]
+        return (None, result) if isinstance(result, Exception) else (result, None)
+
+    def close(self):
+        self.closed = True
+
+
+def geometry():
+    bpy.context.view_layer.update()
+    return sorted(tuple(round(v, 4) for v in obj.matrix_world @ vertex.co)
+                  for obj in bpy.context.scene.objects if obj.type == 'MESH'
+                  for vertex in obj.data.vertices)
+
+
+def inputs():
+    center = BaseManager.fromGeographic(60.17, 24.94, 0)
+    doc, binary, glb = fixture()
+    b3dm = make_b3dm(glb, list(center))
+    doc['nodes'][0]['translation'] = [center.x, center.z, -center.y]
+    glb = make_glb(doc, binary)
+    region = [radians(24.93), radians(60.16), radians(24.95), radians(60.18), -100, 100]
+    children = [{'geometricError': 0, 'boundingVolume': {'region': region}, 'content': {'uri': name}}
+                for name in ('first.glb', 'second.b3dm')]
+    children.append({'geometricError': 0, 'boundingVolume': {'region': [0, 0, .01, .01, 0, 10]},
+                     'content': {'uri': 'excluded.glb'}})
+    tileset = {'root': {'geometricError': 0, 'boundingVolume': {'region': region}, 'children': children}}
+    root = {'root': {'geometricError': 0, 'boundingVolume': {'region': region},
+                    'content': {'uri': 'nested/tileset.json'}}}
+    return {'https://test.invalid/root.json': json.dumps(root).encode(),
+            'https://test.invalid//nested/tileset.json': json.dumps(tileset).encode(),
+            'https://test.invalid//nested/first.glb': glb,
+            'https://test.invalid//nested/second.b3dm': b3dm}
+
+
+def manager(renderer, payloads):
+    result = BaseManager('https://test.invalid/root.json', renderer)
+    result.centerLat, result.centerLon = 60.17, 24.94
+    result.setGeometricError(1)
+    result.download = payloads.__getitem__
+    return result
+
+
+def task(join=False, payloads=None):
+    payloads = inputs() if payloads is None else payloads
+    renderer = adapter_module.ProgressiveRenderer('Progressive test', join, '')
+    renderer.calculateHeightOffset = True
+    transport = MemoryTransport(payloads)
+    operation = adapter_module.TilesImport(manager(renderer, payloads),
+        (24.93, 60.16, 24.95, 60.18), bpy.context, True, transport)
+    return operation, transport
+
+
+def drive(operation, after_step=lambda: None):
+    for _ in range(500):
+        with no_tile_writes_or_operator(no_dataset_files=True):
+            operation.job.step()
+        assert not hasattr(glTFImporter, '_patch_convert_functions')
+        after_step()
+        if operation.job.done:
+            assert operation.job.error is None, operation.job.error
+            return
+    raise AssertionError('Progressive import did not complete')
+
+
+checks = []
+try:
+    for join in (False, True):
+        reset_scene()
+        payloads = inputs()
+        renderer = renderer_module.BlenderRenderer('Baseline', join, '')
+        result = manager(renderer, payloads).render(24.93, 60.16, 24.95, 60.18)
+        assert result == (2, [])
+        expected = geometry()
+        reset_scene()
+        sentinel = bpy.data.objects.new('User selection', None)
+        bpy.context.scene.collection.objects.link(sentinel)
+        sentinel.select_set(True)
+        bpy.context.view_layer.objects.active = sentinel
+        layer_collection = bpy.context.view_layer.active_layer_collection
+        operation, transport = task(join)
+        seen = []
+        first_geometry = []
+        def observe():
+            assert bpy.context.view_layer.objects.active == sentinel
+            assert bpy.context.selected_objects == [sentinel]
+            assert bpy.context.view_layer.active_layer_collection == layer_collection
+            count = operation.renderer.num_imported_tiles
+            if count == 1 and not first_geometry:
+                first_geometry.extend(geometry())
+            seen.append(count)
+        drive(operation, observe)
+        assert 0 in seen and 1 in seen and 2 in seen
+        assert all(vertex in geometry() for vertex in first_geometry)
+        assert geometry() == expected, (geometry(), expected)
+        assert transport.closed and len(transport.requests) == 4
+        assert operation.job.result == (2, [])
+        assert 'City of Test' in bpy.context.scene.blosm.copyright
+        checks.append('incremental geometry/context/blocking parity, join=%s' % join)
+
+    reset_scene()
+    operation, transport = task(True)
+    while operation.renderer.num_imported_tiles == 0:
+        operation.job.step()
+    retained = geometry()
+    operation.cancel()
+    assert operation.job.done and operation.job.cancelled and transport.closed
+    assert geometry() == retained
+    assert not hasattr(glTFImporter, '_patch_convert_functions')
+    checks.append('cancel retains finished tiles and closes transport')
+
+    reset_scene()
+    payloads = inputs()
+    payloads['https://test.invalid//nested/first.glb'] = b'invalid glTF'
+    operation, transport = task(payloads=payloads)
+    drive(operation)
+    assert operation.renderer.num_imported_tiles == 1
+    assert len(operation.manager.errors) == 1
+    assert 'first.glb' in operation.manager.errors[0]
+    checks.append('tile failure continues without individual UI errors')
+
+    reset_scene()
+    payloads['https://test.invalid//nested/second.b3dm'] = b'invalid B3DM'
+    operation, transport = task(payloads=payloads)
+    reports = []
+    operation.renderer.report = lambda level, message: reports.append((level, message))
+    drive(operation)
+    assert reports == [] and len(operation.manager.errors) == 2
+    with patch.object(adapter_module, 'notify', side_effect=lambda level, message: reports.append((level, message))):
+        operation.finish()
+    assert len(reports) == 1 and reports[0][0] == 'ERROR'
+    assert 'No 3D tiles were imported. 2 errors' in reports[0][1]
+    checks.append('all failed tiles produce one aggregate UI error')
+
+    reset_scene()
+    payloads = inputs()
+    payloads['https://test.invalid/root.json'] = RuntimeError('Root unavailable')
+    operation, transport = task(payloads=payloads)
+    drive(operation)
+    assert len(operation.job.result) == 1 and 'Root unavailable' in operation.job.result[0]
+    assert transport.closed and not geometry()
+    checks.append('root download failure closes the job without scene data')
+
+    reset_scene()
+    from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
+    operation, transport = task()
+    create = BlenderGlTF.create
+    calls = []
+    def fail_once(importer):
+        create(importer)
+        calls.append(True)
+        if len(calls) == 1:
+            raise RuntimeError('failure after creating scene data')
+    with patch.object(BlenderGlTF, 'create', side_effect=fail_once):
+        drive(operation)
+    assert len([o for o in bpy.context.scene.objects if o.type == 'MESH']) == 1
+    assert len(bpy.data.meshes) == 1
+    assert not [c for c in bpy.data.collections if '_import' in c.name]
+    checks.append('partial tile objects and temporary collections cleaned on failure')
+
+    if args.helsinki:
+        payloads = inputs()
+        nested_uri = 'https://test.invalid//nested/tileset.json'
+        nested = json.loads(payloads[nested_uri])
+        bounds = nested['root']['boundingVolume']
+        nested['root']['children'] = []
+        for tile in sorted(args.helsinki.glob('*.b3dm')):
+            nested['root']['children'].append({'geometricError': 0, 'boundingVolume': bounds,
+                                               'content': {'uri': tile.name}})
+            payloads['https://test.invalid//nested/' + tile.name] = tile.read_bytes()
+        nested['root']['transform'] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, -3, 2, 1]
+        payloads[nested_uri] = json.dumps(nested).encode()
+        for join in (False, True):
+            reset_scene()
+            renderer = renderer_module.BlenderRenderer('Helsinki', join, '')
+            assert manager(renderer, payloads).render(24.93, 60.16, 24.95, 60.18)[0] == 3
+            expected = geometry()
+            reset_scene()
+            operation, transport = task(join, payloads)
+            drive(operation)
+            assert operation.renderer.num_imported_tiles == 3
+            actual = geometry()
+            assert len(actual) == len(expected)
+            from mathutils.kdtree import KDTree
+            tree = KDTree(len(expected))
+            for index, point in enumerate(expected):
+                tree.insert(point, index)
+            tree.balance()
+            distance = max(tree.find(point)[2] for point in actual)
+            # Joining after geographic rotation changes float32 arithmetic
+            # order from the blocking renderer's join-before-rotation path.
+            # Bound the difference to four float32 ULPs at this coordinate
+            # magnitude (millimetres for these Helsinki fixtures).
+            magnitude = max(abs(v) for point in expected for v in point)
+            tolerance = max(.001, ldexp(4., frexp(magnitude)[1] - 24)) if join else .001
+            print('HELSINKI_DISTANCE', join, distance, 'tolerance', tolerance)
+            assert distance <= tolerance, 'Helsinki world-space geometry changed: %s' % distance
+        checks.append('three Helsinki tiles with nested transform, joined and separate, match blocking')
+
+    reset_scene()
+    operation, transport = task()
+    controller = runtime.start(operation, bpy.context)
+    controller.tick()
+    assert not bpy.ops.blosm.import_data.poll()
+    runtime.stop_for_scene_change()
+    assert runtime.active is None and transport.closed
+    assert not bpy.app.timers.is_registered(runtime._tick)
+    checks.append('single job guard and scene/undo lifecycle cancellation')
+
+    reset_scene()
+    operation, transport = task()
+    controller = runtime.start(operation, bpy.context)
+    controller.tick()
+    addon_utils.disable(package, default_set=True)
+    assert runtime.active is None and transport.closed
+    checks.append('addon disable closes active import')
+    report = {'blender': bpy.app.version_string, 'status': 'passed', 'checks': checks}
+    (args.artifacts / 'checks.json').write_text(json.dumps(report, indent=2))
+    print('PROGRESSIVE_CHECKS', json.dumps(report))
+finally:
+    if addon_utils.check(package)[1]:
+        addon_utils.disable(package, default_set=True)

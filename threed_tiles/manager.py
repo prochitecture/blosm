@@ -52,14 +52,36 @@ class BaseManager:
         self.geometricError = geometricError
     
     def render(self, minLon, minLat, maxLon, maxLat):
+        steps = self.iterRender(minLon, minLat, maxLon, maxLat)
+        value, failure = None, None
+        try:
+            while True:
+                uri = steps.throw(failure) if failure else steps.send(value)
+                value, failure = None, None
+                if uri is not None:
+                    try:
+                        value = self.download(uri)
+                    except Exception as exc:
+                        failure = exc
+        except StopIteration as finished:
+            return finished.value
+        finally:
+            steps.close()
+
+    def iterRender(self, minLon, minLat, maxLon, maxLat):
+        """Yield download URLs or cooperative checkpoints, accepting bytes back.
+
+        Both blocking and progressive modes use the same traversal and errors.
+        The renderer determines whether final positioning happens per tile.
+        """
         self.errors = []
         self.initAreaData(minLon, minLat, maxLon, maxLat)
         
         self.renderer.prepare(self)
         
         try:
-            tileset = self.getJsonFile(self.rootUri)
-            self.renderTileset(tileset, self.baseUri, None)
+            tileset = json.loads((yield self.rootUri))
+            yield from self.renderTileset(tileset, self.baseUri, None)
         except error.HTTPError as e:
             error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
             if self.uriServer == "https://tile.googleapis.com":
@@ -73,20 +95,18 @@ class BaseManager:
                             error_message += "\nMessage from Google Cloud:\n%s" % response["error"]["message"]
                     except json.JSONDecodeError:
                         pass
-            self.renderer.finalize(self)
             return (error_message,)
         except Exception as e:
-            self.renderer.finalize(self)
             # return only a critical error
             return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
-        
-        self.renderer.finalize(self)
+        finally:
+            self.renderer.finalize(self)
         
         # return the number of rendered tiles and uncritical errors
         return self.renderer.num_imported_tiles, self.errors
     
     def renderTileset(self, tileset, baseUri, transformMatrix):
-        self.renderTile(tileset["root"], baseUri, transformMatrix)
+        yield from self.renderTile(tileset["root"], baseUri, transformMatrix)
     
     def renderTile(self, element, baseUri, transformMatrix):
         """
@@ -94,6 +114,7 @@ class BaseManager:
         and if their geometric error is smaller than <self.geometricError>.
         """
         
+        yield None
         transformMatrix = ( transformMatrix @ BaseManager.initMatrixFromTransform(element["transform"]) if transformMatrix else BaseManager.initMatrixFromTransform(element["transform"]) )\
             if "transform" in element else transformMatrix
 
@@ -102,22 +123,22 @@ class BaseManager:
             #if self.geometricErrorMin < geometricError <= self.geometricErrorMax:
             if geometricError <= self.geometricError:
                 if "content" in element:
-                    self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=False)
+                    yield from self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=False)
                 else:
                     children = element.get("children")
                     if children:
-                        self.renderChildren(children, baseUri, transformMatrix)
+                        yield from self.renderChildren(children, baseUri, transformMatrix)
             else:
                 children = element.get("children")
                 if children:
-                    self.renderChildren(children, baseUri, transformMatrix)
+                    yield from self.renderChildren(children, baseUri, transformMatrix)
                 elif "content" in element:
-                    self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=True)
+                    yield from self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=True)
     
     def renderChildren(self, children, baseUri, transformMatrix):
         # render children
         for tile in children:
-            self.renderTile(tile, baseUri, transformMatrix)
+            yield from self.renderTile(tile, baseUri, transformMatrix)
         
     def renderTileContent(self, tile, baseUri, transformMatrix, jsonOnly):
         content = tile["content"]
@@ -138,12 +159,14 @@ class BaseManager:
             
             try:
                 if contentExtension == ".json":
-                    tileset = self.getJsonFile(uri)
-                    self.renderTileset(tileset, baseUri, transformMatrix)
+                    tileset = json.loads((yield uri))
+                    yield from self.renderTileset(tileset, baseUri, transformMatrix)
                 elif contentExtension == ".glb":
-                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix)
+                    data = yield uri
+                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix, content=data)
                 elif contentExtension == ".b3dm":
-                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix)
+                    data = yield uri
+                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix, content=data)
             except Exception as e:
                 self.processError(e, uri)
     
@@ -215,9 +238,6 @@ class BaseManager:
         self.areaMinLat = radians(minLat)
         self.areaMaxLon = radians(maxLon)
         self.areaMaxLat = radians(maxLat)
-    
-    def getJsonFile(self, uri):
-        return json.loads(self.download(uri))
     
     def download(self, url):
         req = request.Request(

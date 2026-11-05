@@ -5,8 +5,9 @@ threed_tiles/gltf_import.py. Downloaded GLB and B3DM tiles are imported from
 memory. The renderer does not write a temporary tile or invoke
 bpy.ops.import_scene.gltf.
 
-The implementation establishes a boundary for later progressive importing and concurrent
-downloading; those features are not implemented by this change.
+The implementation is also used by the optional progressive importer described
+in [ProgressiveImport.md](../../progressive/ProgressiveImport.md). Concurrent
+downloading is not implemented yet.
 
 ## Entry point and version compatibility
 
@@ -71,8 +72,9 @@ new objects' world matrices can lose the geographic offset or RTC placement.
 
 Scene creation still runs synchronously on Blender's main thread. This change
 does not make a single glTF import interruptible or safe in a worker thread.
-Global coordinate patches still belong to the existing whole-import lifecycle;
-the future progressive adapter must manage their lifetime between callbacks.
+The blocking path owns coordinate patches for the whole import. The progressive
+adapter applies and restores them within each synchronous tile step, before
+returning control to Blender.
 
 ## Validation and benchmark
 
