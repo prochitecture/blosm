@@ -67,7 +67,7 @@ settings.threedTilesUrl = 'http://127.0.0.1:%s/root.json' % port
 settings.minLon, settings.maxLon = 24.93, 24.95
 settings.minLat, settings.maxLat = 60.16, 60.18
 settings.geometricError = 1
-settings.progressiveImport = True
+assert settings.progressiveImport is True
 settings.join3dTilesObjects = False
 phase = 'start'
 checks = []

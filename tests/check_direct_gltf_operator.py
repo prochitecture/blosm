@@ -31,6 +31,7 @@ try:
     reset_scene()
     settings = bpy.context.scene.blosm
     settings.dataType = "3d-tiles"
+    settings.progressiveImport = False  # This check exercises the blocking operator.
     settings.threedTilesSource = "custom"
     settings.threedTilesUrl = "https://fixture.invalid/tileset.json"
     settings.minLon, settings.maxLon = 24.93, 24.95

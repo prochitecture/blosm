@@ -414,6 +414,8 @@ class BLOSM_PT_Extent(bpy.types.Panel):
             split.split(factor=0.67).prop(addon, "minLat")
         
         box = layout.box()
+        if addon.dataType == '3d-tiles':
+            box.prop(addon, 'progressiveImport')
         row = box.row(align=True)
         row.prop(addon, "dataType", text="")
         row.operator("blosm.import_data", text="import")
@@ -652,7 +654,6 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             box.label(text="Level of details:")
             box.prop(addon, "lodOf3dTiles", text='')
         
-        layout.prop(addon, "progressiveImport")
         layout.prop(addon, "join3dTilesObjects", text='Join tiles when finished' if addon.progressiveImport else 'Join 3D Tiles objects')
         layout.prop(addon, "relativeToInitialImport")
     
@@ -1095,7 +1096,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
     progressiveImport: bpy.props.BoolProperty(
         name = "Progressive import",
         description = "Show tiles as they load and allow viewport navigation between tile imports. Large tiles and final joining can briefly pause the viewport",
-        default = False
+        default = True
     )
     
     copyright: bpy.props.StringProperty(

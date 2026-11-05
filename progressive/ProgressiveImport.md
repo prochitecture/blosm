@@ -1,7 +1,8 @@
 # Progressive importing
 
-Enable **Progressive import** in Blosm's 3D Tiles settings to keep the viewport
-responsive between individual tile imports. The default remains blocking mode.
+**Progressive import** is enabled by default for 3D Tiles. Its checkbox appears
+in the import box directly above the data-type selector. Disable it to use
+blocking mode. Progressive mode keeps the viewport responsive between tile imports.
 Both GLB and B3DM are supported. Root and nested JSON manifests and tile content
 are downloaded into memory; no dataset caches or temporary tile files are used.
 
