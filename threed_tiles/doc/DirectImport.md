@@ -20,14 +20,19 @@ importer's decoded buffers. Optional report accepts an operator-style
 report({level}, message) callback; exceptions propagate to the caller.
 
 The renderer receives the outer Blosm operator's report callback and passes it
-to the adapter for GLB and B3DM imports. Raised errors are reported and
-re-raised for the manager's per-tile error accounting. Buffered glTF warnings
-and errors are forwarded with their original severity, including on failures.
-Console logging remains active. Console-only messages are not promoted to UI
-reports, matching the glTF operator's behavior.
-Blosm continues with subsequent tiles after a per-tile failure. When invoked
-from Python through bpy.ops.blosm.import_data(), Blender's operator wrapper
-raises RuntimeError for ERROR reports, even after a partial import finishes.
+to the adapter for GLB and B3DM imports. Raised errors propagate to the manager
+for per-tile error accounting without individual UI reports. Blosm continues
+with subsequent tiles, prints each failure with its URI in the System Console,
+and reports the aggregate result once in the UI. Unsupported extensions across
+many tiles therefore produce one final error summary, rather than repeated
+popups. A partial import reports its successful tile count and error count.
+
+Buffered glTF warnings and nonfatal errors are forwarded with their original
+severity only after a successful tile import, matching the glTF operator's
+success path. Failed-import diagnostics remain in the console. Logger cleanup
+runs on both success and failure. Python calls through bpy.ops.blosm.import_data()
+still raise RuntimeError when the outer operator reports an ERROR, such as when
+no tiles were imported.
 
 Version dispatch follows the existing coordinate-conversion patching:
 

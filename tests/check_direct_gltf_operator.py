@@ -1,6 +1,8 @@
 """Check the actual Blosm import operator with a deterministic mixed tileset."""
 import argparse
+from contextlib import redirect_stdout
 import importlib
+import io
 import json
 from math import radians
 from pathlib import Path
@@ -88,9 +90,8 @@ try:
     assert forwarded == [(["WARNING"], "fixture glTF warning")] * 2
     successful_reports = list(forwarded)
 
-    # A failed tile must report its cause and enter Blosm's error accounting,
-    # while a later tile is still imported. Blender's Python operator wrapper
-    # raises for ERROR reports even when the operator finishes a partial import.
+    # A failed tile enters Blosm's error accounting without an individual UI
+    # report; a later tile still imports and the operator finishes normally.
     reset_scene()
     payloads["nested/test.glb"] = b"invalid glTF JSON"
     requested.clear()
@@ -100,20 +101,75 @@ try:
     def process_error(self, error, uri):
         tile_errors.append((str(error), uri))
         real_process_error(self, error, uri)
+    ui_reports = []
+    addon_module = sys.modules[package]
+    real_import_tiles = addon_module.BLOSM_OT_ImportData.import3dTiles
+    class ReportCapture:
+        def __init__(self, operator):
+            self.operator = operator
+        def __getattr__(self, name):
+            return getattr(self.operator, name)
+        def report(self, level, message):
+            ui_reports.append((sorted(level), message))
+            self.operator.report(level, message)
+    def import_with_ui_capture(self, context):
+        return real_import_tiles(ReportCapture(self), context)
+    console = io.StringIO()
     with patch.object(manager_module.BaseManager, "download", download), \
             patch.object(manager_module.BaseManager, "processError", process_error), \
             patch.object(renderer_module, "import_gltf", side_effect=import_with_report_check), \
+            patch.object(addon_module.BLOSM_OT_ImportData, "import3dTiles", import_with_ui_capture), \
+            redirect_stdout(console), \
+            no_tile_writes_or_operator(no_dataset_files=True):
+        assert bpy.ops.blosm.import_data() == {"FINISHED"}
+    assert len(tile_errors) == 1 and tile_errors[0][1].endswith("test.glb")
+    assert forwarded == []
+    assert ui_reports == [(["INFO"],
+        "Imported 1 3D Tiles. 1 errors occured during the import. See the System Console.")]
+    assert tile_errors[0][0] in console.getvalue() and tile_errors[0][1] in console.getvalue()
+    assert len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]) == 1
+    assert requested == expected_requests
+    partial_import_reports = list(ui_reports)
+
+    # Reproduce the unsupported Gaussian splatting case: all 18 GLBs fail
+    # validation, but only the final aggregate ERROR reaches the UI.
+    reset_scene()
+    requested.clear()
+    tile_errors.clear()
+    ui_reports.clear()
+    doc["extensionsUsed"] = ["KHR_gaussian_splatting"]
+    doc["extensionsRequired"] = ["KHR_gaussian_splatting"]
+    unsupported_glb = make_glb(doc, binary)
+    tileset["root"]["children"] = [
+        {"geometricError": 0, "boundingVolume": bounds,
+         "content": {"uri": "unsupported_%s.glb" % i}} for i in range(18)]
+    payloads["nested/tileset.json"] = json.dumps(tileset).encode()
+    payloads.update({"nested/unsupported_%s.glb" % i: unsupported_glb for i in range(18)})
+    summary = "No 3D tiles were imported. 18 errors occured during the import. See the System Console."
+    console = io.StringIO()
+    with patch.object(manager_module.BaseManager, "download", download), \
+            patch.object(manager_module.BaseManager, "processError", process_error), \
+            patch.object(renderer_module, "import_gltf", side_effect=import_with_report_check), \
+            patch.object(addon_module.BLOSM_OT_ImportData, "import3dTiles", import_with_ui_capture), \
+            redirect_stdout(console), \
             no_tile_writes_or_operator(no_dataset_files=True):
         try:
             bpy.ops.blosm.import_data()
         except RuntimeError as exc:
-            assert len(tile_errors) == 1 and tile_errors[0][0] in str(exc)
+            assert summary in str(exc) and "KHR_gaussian_splatting" not in str(exc)
         else:
-            raise AssertionError("Expected the reported glTF error from Blender's operator wrapper")
-    assert len(tile_errors) == 1 and tile_errors[0][1].endswith("test.glb")
-    assert forwarded == [(["ERROR"], tile_errors[0][0])]
-    assert len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]) == 1
-    assert requested == expected_requests
+            raise AssertionError("Expected Blosm's aggregate error when all tiles fail")
+    assert len(tile_errors) == 18
+    assert all("Extension KHR_gaussian_splatting is not available" in message
+               for message, uri in tile_errors)
+    assert ui_reports == [(["ERROR"], summary)]
+    assert forwarded == []
+    assert not [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
+    assert requested == ["tileset.json", "nested/tileset.json"] + [
+        "nested/unsupported_%s.glb" % i for i in range(18)]
+    assert all(message in console.getvalue() and uri in console.getvalue()
+               for message, uri in tile_errors)
+    (args.artifacts / "failed_tiles_console.log").write_text(console.getvalue(), encoding="utf-8")
     assert not unused_data_dir.exists(), "3D Tiles import created a data directory"
     assert set(args.artifacts.rglob("*.json")) == existing_json_files
     assert not list(args.artifacts.rglob("*.glb"))
@@ -123,6 +179,8 @@ try:
               "tile_files_written": 0, "gltf_operator_calls": 0,
               "forwarded_gltf_reports": successful_reports,
               "failed_tile_reports": forwarded, "continued_after_tile_error": True,
+              "partial_import_reports": partial_import_reports,
+              "all_failed_reports": ui_reports, "failed_tiles": len(tile_errors),
               "copyright": settings.copyright}
     (args.artifacts / "operator_check.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print("BLOSM_OPERATOR_CHECK", json.dumps(report))

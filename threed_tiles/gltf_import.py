@@ -57,8 +57,9 @@ def import_gltf(filepath, *, content=None, report=None):
     """Import a file, or bytes with filepath as their resource base path.
 
     Return attribution and importer messages without retaining decoded buffers.
-    Errors propagate to the owning Blosm operation. Optional report has the
-    same report({level}, message) signature as a Blender operator. Like Blender's
+    Errors propagate to the owning Blosm operation without per-tile UI reports.
+    Optional report forwards messages from successful imports using the
+    report({level}, message) signature of a Blender operator. Like Blender's
     importer, this does not roll back partially created objects.
     External resources retain ordinary file-resolution behavior.
     """
@@ -102,21 +103,15 @@ def import_gltf(filepath, *, content=None, report=None):
         BlenderGlTF.create(importer)
         bpy.context.view_layer.update()
         messages = tuple(importer.log.messages()) if hasattr(importer.log, 'messages') else ()
-        return ImportResult(importer.data.asset.copyright or '', messages)
-    except Exception as exc:
-        # Reproduce the removed operator's visible error report while retaining
-        # the exception for Blosm's per-tile failure count and URI diagnostics.
         if report is not None:
-            report({'ERROR'}, str(exc))
-        raise
+            for level, message in messages:
+                report({level}, message)
+        return ImportResult(importer.data.asset.copyright or '', messages)
     finally:
-        try:
-            if report is not None and hasattr(importer.log, 'messages'):
-                for level, message in importer.log.messages():
-                    report({level}, message)
-        finally:
-            # Per-import handlers use shared loggers; remove them on failure too.
-            if hasattr(importer, 'log_handler'):
-                importer.log.removeHandler(importer.log_handler)
-            else:
-                importer.log.flush()
+        # Failed tiles are handled by Blosm's manager: details go to the System
+        # Console, with one aggregate UI report from the outer import operator.
+        # Per-import handlers use shared loggers; remove them on failure too.
+        if hasattr(importer, 'log_handler'):
+            importer.log.removeHandler(importer.log_handler)
+        else:
+            importer.log.flush()
