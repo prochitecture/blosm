@@ -3,7 +3,7 @@ import bpy
 from .blender import BlenderRenderer
 from ..progressive.core import Job
 from ..progressive.transport import DownloadTransport
-from ..progressive.blender import preserve_context, notify
+from ..progressive.blender import preserve_context, notify_result as notify
 
 
 class ProgressiveRenderer(BlenderRenderer):

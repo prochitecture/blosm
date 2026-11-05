@@ -29,6 +29,12 @@ package = REPO.name
 addon_utils.enable(package, default_set=True)
 manager_module = importlib.import_module(package + '.threed_tiles.manager')
 runtime = importlib.import_module(package + '.progressive.blender')
+result_popups = []
+real_show_result = runtime.show_result
+def record_result_popup(level, message):
+    result_popups.append((level, message))
+    real_show_result(level, message)
+runtime.show_result = record_result_popup
 transport_module = importlib.import_module(package + '.progressive.transport')
 from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
 
@@ -115,6 +121,8 @@ def tick():
             phase = 'complete'
         elif phase == 'complete' and runtime.active is None:
             assert count == 2
+            assert result_popups == [('INFO', 'Successfully imported 2 3D Tiles.')]
+            checks.append('completion opens one visible result popup')
             assert sum(p == 'complete' and n == 0 for p, n, t in heartbeats) > 3
             assert sum(p == 'complete' and n == 1 for p, n, t in heartbeats) > 3
             checks.append('real HTTP helper + viewport timer heartbeats + incremental tiles')
@@ -125,6 +133,7 @@ def tick():
             assert bpy.ops.blosm.cancel_progressive() == {'FINISHED'}
             assert runtime.active is None
             assert sum(obj.type == 'MESH' for obj in scene.objects) == 1
+            assert len(result_popups) == 2 and 'Import cancelled.' in result_popups[-1][1]
             checks.append('Cancel button keeps first tile and stops helper')
             reset_scene()
             start_import()
@@ -132,6 +141,7 @@ def tick():
         elif phase == 'undo' and count == 1:
             bpy.ops.ed.undo()
             assert runtime.active is None
+            assert len(result_popups) == 2, 'Undo must not open a result popup'
             scene = bpy.context.scene  # Undo replaces Blender data-block wrappers.
             assert not [obj for obj in scene.objects if obj.type == 'MESH']
             checks.append('Undo cancels active operation before restoring scene')
@@ -168,6 +178,7 @@ def tick():
             addon_utils.disable(package, default_set=True)
             assert runtime.active is None
             checks.append('disabling addon cancels helper and unregisters timer')
+            assert len(result_popups) == 3, 'Silent lifecycle cleanup must not open a popup'
             complete('passed')
             return None
         return .03

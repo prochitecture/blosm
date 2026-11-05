@@ -25,6 +25,11 @@ Redo cancels the active job before restoring Blender data. File loading, disabli
 the add-on and closing the owning window also stop the operation. Disabling Global
 Undo in Blender disables these checkpoints as well.
 
+Completion, failure and explicit cancellation display a Blosm import result
+popup in the owning window and retain the normal operator report. Per-tile
+failures remain console details. Silent cleanup for Undo, loading another file
+or disabling the add-on does not open a popup.
+
 The API entry point is still bpy.ops.blosm.import_data(). In progressive mode it
 returns FINISHED after scheduling the job; that does not mean all tiles have
 finished. Use blocking mode for scripts that need the final result immediately.

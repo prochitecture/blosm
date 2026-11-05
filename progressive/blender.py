@@ -5,6 +5,7 @@ Each committed revision gets an undo checkpoint. Undo/file loading/add-on
 disable cancels outstanding work before Blender invalidates scene references.
 """
 from contextlib import contextmanager
+import textwrap
 import bpy
 from bpy.app.handlers import persistent
 from .transport import reap
@@ -48,6 +49,22 @@ def notify(level, message):
     except RuntimeError:
         # ERROR reports make bpy.ops raise after displaying the report.
         pass
+
+
+def show_result(level, message):
+    """Timer-driven operator reports alone do not reliably show a UI banner."""
+    def draw(menu, context):
+        for paragraph in message.splitlines():
+            for line in textwrap.wrap(paragraph, width=80) or ['']:
+                menu.layout.label(text=line)
+    bpy.context.window_manager.popup_menu(
+        draw, title='Blosm import', icon='ERROR' if level == 'ERROR' else 'INFO')
+
+
+def notify_result(level, message):
+    notify(level, message)
+    if not bpy.app.background and bpy.context.window is not None:
+        show_result(level, message)
 
 
 def redraw():
@@ -120,7 +137,11 @@ class Controller:
         try:
             if not self.adapter.job.done:
                 self.adapter.cancel()
-            self.adapter.finish(silent=silent)
+            if self.window in list(bpy.context.window_manager.windows):
+                with bpy.context.temp_override(window=self.window):
+                    self.adapter.finish(silent=silent)
+            else:
+                self.adapter.finish(silent=True)
         finally:
             if bpy.app.timers.is_registered(_tick):
                 bpy.app.timers.unregister(_tick)
