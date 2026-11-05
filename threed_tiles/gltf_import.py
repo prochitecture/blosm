@@ -103,6 +103,12 @@ def import_gltf(filepath, *, content=None, report=None):
         bpy.context.view_layer.update()
         messages = tuple(importer.log.messages()) if hasattr(importer.log, 'messages') else ()
         return ImportResult(importer.data.asset.copyright or '', messages)
+    except Exception as exc:
+        # Reproduce the removed operator's visible error report while retaining
+        # the exception for Blosm's per-tile failure count and URI diagnostics.
+        if report is not None:
+            report({'ERROR'}, str(exc))
+        raise
     finally:
         try:
             if report is not None and hasattr(importer.log, 'messages'):

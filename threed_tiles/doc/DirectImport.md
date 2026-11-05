@@ -20,6 +20,16 @@ The function returns attribution and importer messages. It does not retain the
 importer's decoded buffers. Optional report accepts an operator-style
 report({level}, message) callback; exceptions propagate to the caller.
 
+The renderer receives the outer Blosm operator's report callback and passes it
+to the adapter for GLB, B3DM and cache reads. Raised errors are reported and
+re-raised for the manager's per-tile error accounting. Buffered glTF warnings
+and errors are forwarded with their original severity, including on failures.
+Console logging remains active. Console-only messages are not promoted to UI
+reports, matching the glTF operator's behavior.
+Blosm continues with subsequent tiles after a per-tile failure. When invoked
+from Python through bpy.ops.blosm.import_data(), Blender's operator wrapper
+raises RuntimeError for ERROR reports, even after a partial import finishes.
+
 Version dispatch follows the existing coordinate-conversion patching:
 
 | Blender version | Scene creation implementation |
@@ -90,8 +100,8 @@ cache hits, and patch restoration after failure. A separate check exercises the
 registered Blosm operator with a mixed GLB/B3DM tileset. Guards reject tile-file
 writes and any invocation of the glTF import operator in the new paths.
 
-The initial checks passed on Blender 4.5.0 and 5.2.0 LTS, including three real
-Helsinki tiles. Adapter-only checks also passed on Blender 3.6.4.
+The checks passed on Blender 4.5.0, 5.0.0, 5.1.0 and 5.2.0 LTS, including three
+real Helsinki tiles. Adapter-only checks also passed on Blender 3.6.4.
 
 The benchmark uses three warm-ups per path, twenty measured rounds, and a
 deterministic shuffled path order. It compares:

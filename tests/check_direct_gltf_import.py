@@ -88,11 +88,13 @@ for name, bad in (
 ):
     reset_scene()
     before = handler_counts()
+    reported = []
     try:
         with no_tile_writes_or_operator():
-            import_gltf(args.artifacts / "bad.glb", content=bad)
-    except Exception:
-        pass
+            import_gltf(args.artifacts / "bad.glb", content=bad,
+                        report=lambda level, message: reported.append((level, message)))
+    except Exception as exc:
+        assert reported == [({'ERROR'}, str(exc))]
     else:
         raise AssertionError("Expected failure: " + name)
     assert handler_counts() == before
@@ -120,6 +122,34 @@ finally:
 passed("enabled user extension")
 
 if bpy.app.version >= (4, 5, 0):
+    from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
+    create = BlenderGlTF.create
+    for failure in (False, True):
+        reset_scene()
+        reported = []
+        before = handler_counts()
+        def create_with_reports(importer):
+            importer.log.warning("fixture warning", popup=True)
+            importer.log.error("fixture nonfatal error", popup=True)
+            if failure:
+                raise RuntimeError("fixture fatal error")
+            create(importer)
+        with patch.object(BlenderGlTF, "create", side_effect=create_with_reports):
+            try:
+                result = import_gltf(path, content=glb,
+                                     report=lambda level, message: reported.append((level, message)))
+            except RuntimeError as exc:
+                assert failure and str(exc) == "fixture fatal error"
+            else:
+                assert not failure
+                assert result.messages == (('WARNING', 'fixture warning'), ('ERROR', 'fixture nonfatal error'))
+        assert reported.count(({'WARNING'}, "fixture warning")) == 1
+        assert reported.count(({'ERROR'}, "fixture nonfatal error")) == 1
+        assert reported.count(({'ERROR'}, "fixture fatal error")) == int(failure)
+        assert len(reported) == 2 + int(failure)
+        assert handler_counts() == before
+    passed("warning/error reports on successful and failed imports")
+
     ReleaseRenderer = baseline_renderer()
     transform = Matrix.Translation((5.0, -3.0, 2.0))
 

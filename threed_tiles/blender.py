@@ -29,10 +29,11 @@ def find_layer_collection(layer_col: bpy.types.LayerCollection, target_col: bpy.
 
 class BlenderRenderer:
     
-    def __init__(self, threedTilesName, join3dTilesObjects, instanceName):
+    def __init__(self, threedTilesName, join3dTilesObjects, instanceName, report=None):
         self.threedTilesName = threedTilesName
         self.join3dTilesObjects = join3dTilesObjects
         self.instanceName = instanceName
+        self.report = report
         
         self.calculateHeightOffset = False
         self.heightOffset = 0.
@@ -182,9 +183,9 @@ class BlenderRenderer:
         # The path is also the resource base for external glTF references.
         filepath = joinStrings(manager.tilesDir, basename(path))
         if cacheContent and pathExists(filepath):
-            result = import_gltf(filepath)
+            result = import_gltf(filepath, report=self.report)
         else:
-            result = import_gltf(filepath, content=manager.download(uri))
+            result = import_gltf(filepath, content=manager.download(uri), report=self.report)
         self.processCopyrightInfo(result.copyright)
         if self.collection_import.objects or self.collection_import.children:
             self.finalize_glb_import(transformMatrix)
@@ -215,7 +216,7 @@ class BlenderRenderer:
             _patch_convert_functions = glTFImporter._patch_convert_functions
             glTFImporter._patch_convert_functions = False
         try:
-            result = import_gltf(filepath, content=b3dmContent.body.gltf.to_array())
+            result = import_gltf(filepath, content=b3dmContent.body.gltf.to_array(), report=self.report)
         finally:
             if hasRtc:
                 glTFImporter._patch_convert_functions = _patch_convert_functions

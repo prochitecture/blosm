@@ -53,7 +53,24 @@ try:
         name = uri.rsplit("/", 1)[-1]
         requested.append(name)
         return payloads[name]
-    with patch.object(manager_module.BaseManager, "download", download), no_tile_writes_or_operator():
+    renderer_module = importlib.import_module(package + ".threed_tiles.blender")
+    real_import = renderer_module.import_gltf
+    from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
+    real_create = BlenderGlTF.create
+    forwarded = []
+    def import_with_report_check(filepath, *, content=None, report=None):
+        assert report is not None, "Blosm did not supply its report callback"
+        def forward(level, message):
+            forwarded.append((sorted(level), message))
+            report(level, message)
+        return real_import(filepath, content=content, report=forward)
+    def create_with_warning(importer):
+        importer.log.warning("fixture glTF warning", popup=True)
+        real_create(importer)
+    with patch.object(manager_module.BaseManager, "download", download), \
+            patch.object(renderer_module, "import_gltf", side_effect=import_with_report_check), \
+            patch.object(BlenderGlTF, "create", side_effect=create_with_warning), \
+            no_tile_writes_or_operator():
         result = bpy.ops.blosm.import_data()
     assert result == {"FINISHED"}
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
@@ -61,11 +78,42 @@ try:
     assert all(len(obj.data.vertices) == 3 and len(obj.data.polygons) == 1 for obj in meshes)
     assert "City of Test" in settings.copyright and "Café Example" in settings.copyright
     assert requested == ["tileset.json", "test.glb", "test.b3dm"]
+    assert forwarded == [(["WARNING"], "fixture glTF warning")] * 2
+    successful_reports = list(forwarded)
+
+    # A failed tile must report its cause and enter Blosm's error accounting,
+    # while a later tile is still imported. Blender's Python operator wrapper
+    # raises for ERROR reports even when the operator finishes a partial import.
+    reset_scene()
+    payloads["test.glb"] = b"invalid glTF JSON"
+    requested.clear()
+    forwarded.clear()
+    tile_errors = []
+    real_process_error = manager_module.BaseManager.processError
+    def process_error(self, error, uri):
+        tile_errors.append((str(error), uri))
+        real_process_error(self, error, uri)
+    with patch.object(manager_module.BaseManager, "download", download), \
+            patch.object(manager_module.BaseManager, "processError", process_error), \
+            patch.object(renderer_module, "import_gltf", side_effect=import_with_report_check), \
+            no_tile_writes_or_operator():
+        try:
+            bpy.ops.blosm.import_data()
+        except RuntimeError as exc:
+            assert len(tile_errors) == 1 and tile_errors[0][0] in str(exc)
+        else:
+            raise AssertionError("Expected the reported glTF error from Blender's operator wrapper")
+    assert len(tile_errors) == 1 and tile_errors[0][1].endswith("test.glb")
+    assert forwarded == [(["ERROR"], tile_errors[0][0])]
+    assert len([obj for obj in bpy.context.scene.objects if obj.type == "MESH"]) == 1
+    assert requested == ["tileset.json", "test.glb", "test.b3dm"]
     assert not list(args.artifacts.rglob("*.glb"))
     assert not list(args.artifacts.rglob("*.b3dm"))
     report = {"blender": bpy.app.version_string, "status": "passed",
               "meshes": len(meshes), "requests": requested,
               "tile_files_written": 0, "gltf_operator_calls": 0,
+              "forwarded_gltf_reports": successful_reports,
+              "failed_tile_reports": forwarded, "continued_after_tile_error": True,
               "copyright": settings.copyright}
     (args.artifacts / "operator_check.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print("BLOSM_OPERATOR_CHECK", json.dumps(report))
