@@ -69,9 +69,17 @@ controller adds UI yielding, context preservation and grouped undo checkpoints.
 ## 3D Tiles integration
 
 Concurrent downloads are enabled by default, independently of progressive import.
-The panel exposes a toggle and a simultaneous-download limit (default four).
-Disabling the toggle retains the previous sequential path. Setting the limit to
-one exercises the concurrent implementation with one outstanding request.
+The toggle and simultaneous-download limit (default four) are internal scene
+parameters, hidden from the UI. They remain accessible in Blender's Python Console:
+
+```python
+bpy.context.scene.blosm.concurrentDownloads = True
+bpy.context.scene.blosm.downloadWorkers = 4  # 1 through 8
+```
+
+Disabling `concurrentDownloads` retains the previous sequential path. Setting
+`downloadWorkers` to one exercises the concurrent implementation with one
+outstanding request. Changes apply to the next import.
 
 Manifest traversal remains depth-first and manifest dependencies are awaited in
 order. Selected GLB/B3DM requests are deferred; complete URLs, paths and accumulated

@@ -654,9 +654,6 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             box.label(text="Level of details:")
             box.prop(addon, "lodOf3dTiles", text='')
         
-        layout.prop(addon, "concurrentDownloads")
-        if addon.concurrentDownloads:
-            layout.prop(addon, "downloadWorkers")
         layout.prop(addon, "join3dTilesObjects", text='Join 3D Tiles objects when finished' if addon.progressiveImport else 'Join 3D Tiles objects')
         layout.prop(addon, "relativeToInitialImport")
     
@@ -1105,13 +1102,15 @@ class BlosmProperties(bpy.types.PropertyGroup):
     concurrentDownloads: bpy.props.BoolProperty(
         name = "Concurrent downloads",
         description = "Download several 3D Tiles at once in progressive or blocking mode",
-        default = True
+        default = True,
+        options = {'HIDDEN'}
     )
 
     downloadWorkers: bpy.props.IntProperty(
         name = "Simultaneous downloads",
         description = "Maximum outstanding downloads, including tiles waiting to be imported",
-        default = 4, min = 1, max = 8
+        default = 4, min = 1, max = 8,
+        options = {'HIDDEN'}
     )
     
     copyright: bpy.props.StringProperty(
