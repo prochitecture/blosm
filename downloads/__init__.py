@@ -1,6 +1,10 @@
 """Reusable in-memory HTTP downloads; no Blender dependencies."""
 from dataclasses import dataclass, field
 
+# A specific helper exit code preserves the reason even if IPC is backpressured
+# or the caller is busy importing a previously completed result.
+STALLED_WORKER_EXIT_CODE = 73
+
 
 @dataclass(frozen=True)
 class Request:

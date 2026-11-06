@@ -27,6 +27,51 @@ from urllib.parse import urlsplit
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from downloads.diagnostics import redact_text, redact_body
+from downloads import STALLED_WORKER_EXIT_CODE
+
+WORKER_DEADLINE_GRACE = 5.
+
+
+class Supervisor:
+    """Terminate a helper whose network thread cannot honor its deadline.
+
+    DNS/OS calls cannot always be interrupted by shutting down a socket. This
+    thread remains independent of both those calls and blocked IPC writes.
+    Finished futures are excluded, even if Blender has not received their bytes.
+    """
+    def __init__(self, grace):
+        self.grace = grace
+        self.condition = threading.Condition()
+        self.pending = {}
+        self.closed = False
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def watch(self, future, timeout):
+        with self.condition:
+            self.pending[future] = time.monotonic() + timeout + self.grace
+            self.condition.notify_all()
+        future.add_done_callback(self.finished)
+
+    def finished(self, future):
+        with self.condition:
+            self.pending.pop(future, None)
+            self.condition.notify_all()
+
+    def run(self):
+        with self.condition:
+            while not self.closed:
+                # Check done() as well: the callback may be waiting for this lock.
+                ends = [end for future, end in self.pending.items() if not future.done()]
+                remaining = min(ends) - time.monotonic() if ends else None
+                if remaining is not None and remaining <= 0:
+                    os._exit(STALLED_WORKER_EXIT_CODE)
+                self.condition.wait(remaining)
+
+    def close(self):
+        with self.condition:
+            self.closed = True
+            self.pending.clear()
+            self.condition.notify_all()
 
 
 class Failure(Exception):
@@ -183,7 +228,10 @@ def read_body(response, limit, deadline, *, complete=True):
     # read1 permits deadline checks even if a peer continuously trickles data.
     while len(content) <= limit:
         deadline.check()
-        chunk = response.read1(min(65536, limit + 1 - len(content)))
+        try:
+            chunk = response.read1(min(65536, limit + 1 - len(content)))
+        except http.client.IncompleteRead:
+            raise Failure('incomplete_response', 'Incomplete HTTP response') from None
         deadline.check()
         if not chunk:
             break
@@ -240,6 +288,12 @@ def perform(job, max_bytes, gate, deadline, attempts):
                 with opener.open(request.Request(url, headers=headers), timeout=min(30., deadline.check())) as response:
                     content = read_body(response, max_bytes, deadline)
                 break
+            except Failure as exc:
+                # Restart the complete GET; never append a new attempt to partial
+                # bytes. The same deadline and three-attempt budget still apply.
+                if exc.detail['code'] != 'incomplete_response' or attempt == 2:
+                    raise
+                delay = retry_delay(exc, attempt)
             except error.HTTPError as exc:
                 status = exc.code
                 delay = retry_delay(exc, attempt)
@@ -319,6 +373,7 @@ def main():
     workers, max_bytes = int(sys.argv[3]), int(sys.argv[4])
     pool = ThreadPoolExecutor(max_workers=workers)
     gate = ProviderGate(workers)
+    supervisor = Supervisor(WORKER_DEADLINE_GRACE)
     try:
         with socket.create_connection(('127.0.0.1', int(sys.argv[1])), timeout=15) as connection:
             connection.settimeout(None)
@@ -331,7 +386,9 @@ def main():
                     if size > 65536 or len(pending) >= workers:
                         raise ValueError('Invalid helper request')
                     job = json.loads(read_exact(connection, size))
-                    pending[pool.submit(result, job, max_bytes, gate)] = job['id']
+                    future = pool.submit(result, job, max_bytes, gate)
+                    supervisor.watch(future, job['timeout'])
+                    pending[future] = job['id']
                 for future in list(pending):
                     if future.done():
                         identity = pending.pop(future)
@@ -343,10 +400,11 @@ def main():
                     connection.sendall(struct.pack('!cQQ', b'H', 0, 0))
                     heartbeat = time.monotonic() + 1.
     finally:
+        supervisor.close()
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-if __name__ == '__main__':
+def run():
     status = 0
     try:
         main()
@@ -358,3 +416,7 @@ if __name__ == '__main__':
         # Python's normal shutdown joins executor threads even with wait=False.
         # IPC is closed; no files need flushing. The OS releases all network I/O.
         os._exit(status)
+
+
+if __name__ == '__main__':
+    run()

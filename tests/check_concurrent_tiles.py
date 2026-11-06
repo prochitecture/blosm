@@ -5,6 +5,7 @@ payloads are optional benchmark inputs; results are not live-provider timings.
 """
 import argparse
 import base64
+from collections import Counter
 import importlib
 import json
 from math import radians
@@ -92,7 +93,7 @@ def compare(expected, actual, join):
     return distance
 
 
-def run(progressive, workers, join=False, helsinki=False, failures=False):
+def run(progressive, workers, join=False, helsinki=False, failures=False, truncate=False):
     reset_scene()
     payloads, delays, expected_count = inputs(helsinki, failures)
     server = subprocess.Popen([t.python_executable(), '-I', '-B', str(Path(__file__).with_name('progressive_http_fixture.py'))],
@@ -100,8 +101,9 @@ def run(progressive, workers, join=False, helsinki=False, failures=False):
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     operation = None
     try:
+        truncated = ['root.json', next(key for key in payloads if key.endswith(('.glb', '.b3dm')))] if truncate else []
         server.stdin.write((json.dumps({'payloads': {k: base64.b64encode(v).decode() for k, v in payloads.items()},
-                                        'delays': delays}) + '\n').encode())
+                                        'delays': delays, 'truncate_once': truncated}) + '\n').encode())
         server.stdin.close()
         port = int(server.stdout.readline())
         server.stdout.close()
@@ -139,7 +141,8 @@ def run(progressive, workers, join=False, helsinki=False, failures=False):
         with urlopen(url + 'stats') as response:
             stats = json.load(response)
         requested = stats['requests']
-        assert len(requested) == len(set(requested)), 'Duplicate requests or retries of permanent failures'
+        for path, count in Counter(requested).items():
+            assert count == (2 if path.split('?', 1)[0].lstrip('/') in truncated else 1), 'Unexpected retry count'
         for path in requested:
             if '/a/' in path or path.startswith('/a/'):
                 assert 'session=a' in path and 'key=fixture' in path, path
@@ -155,7 +158,7 @@ def run(progressive, workers, join=False, helsinki=False, failures=False):
         return {'mode': 'progressive' if progressive else 'blocking', 'workers': workers,
                 'joined': join, 'dataset': 'Helsinki fixtures' if helsinki else 'synthetic',
                 'seconds': elapsed, 'tile_processing_seconds': sum(seconds), 'peak_requests': stats['peak'],
-                'errors': len(result[1]), 'import_order': order}, geometry()
+                'errors': len(result[1]), 'truncated_resources_recovered': len(truncated), 'import_order': order}, geometry()
     finally:
         if operation is not None and not operation.job.done:
             operation.cancel()
@@ -180,6 +183,13 @@ try:
     for progressive in (False, True):
         report, _ = run(progressive, 4, failures=True)
         reports.append(report)
+    for helsinki in ((False, True) if args.helsinki else (False,)):
+        baseline, expected = run(False, 4, helsinki=helsinki)
+        reports.append(baseline)
+        for progressive in (False, True):
+            report, actual = run(progressive, 4, helsinki=helsinki, truncate=True)
+            report['max_geometry_error'] = compare(expected, actual, False)
+            reports.append(report)
     report = {'blender': bpy.app.version_string, 'status': 'passed',
               'latency': 'Local HTTP fixture: first tile 350 ms; other tiles 120 ms', 'runs': reports}
     (args.artifacts / 'concurrent_checks.json').write_text(json.dumps(report, indent=2))

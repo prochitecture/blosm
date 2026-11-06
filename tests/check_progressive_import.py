@@ -235,6 +235,42 @@ try:
     assert not hasattr(glTFImporter, '_patch_convert_functions')
     checks.append('cancel retains finished tiles and closes transport')
 
+    for progressive in (False, True):
+        for join in (False, True):
+            reset_scene()
+            payloads = inputs()
+            renderer = (adapter_module.ProgressiveRenderer if progressive else renderer_module.BlenderRenderer)(
+                'Worker failure', join, '')
+            tile_manager = manager(renderer, payloads)
+            tile_manager.concurrentDownloads = True
+            transport = MemoryTransport(payloads)
+            normal_poll = transport.poll
+            def failed_worker():
+                if renderer.num_imported_tiles:
+                    raise TimeoutError('A download worker remained blocked past its deadline')
+                if transport.pending and next(iter(transport.pending.values())).endswith('second.b3dm'):
+                    return None  # Keep this resource pending until the first tile is committed.
+                return normal_poll()
+            transport.poll = failed_worker
+            if progressive:
+                operation = adapter_module.TilesImport(tile_manager,
+                    (24.93, 60.16, 24.95, 60.18), bpy.context, False, transport)
+                for _ in range(500):
+                    operation.job.step(max_steps=1)
+                    if operation.job.done:
+                        break
+                assert operation.job.done and isinstance(operation.job.error, TimeoutError)
+                message = str(operation.job.error)
+            else:
+                with patch.object(manager_module, 'DownloadTransport', return_value=transport):
+                    result = tile_manager.render(24.93, 60.16, 24.95, 60.18)
+                assert len(result) == 1
+                message = result[0]
+            assert 'worker remained blocked' in message
+            assert renderer.num_imported_tiles == 1 and len(geometry()) == 3
+            assert transport.closed and not hasattr(glTFImporter, '_patch_convert_functions')
+    checks.append('fatal helper error retains committed geometry and cleans up in blocking/progressive, joined/separate')
+
     reset_scene()
     payloads = inputs()
     payloads['https://test.invalid//nested/first.glb'] = b'invalid glTF'

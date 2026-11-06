@@ -17,7 +17,7 @@ import subprocess
 import sys
 from time import monotonic
 from urllib.error import HTTPError
-from . import Request, DownloadError
+from . import Request, DownloadError, STALLED_WORKER_EXIT_CODE
 from .diagnostics import redact_url
 
 MAX_BYTES = 256 * 1024 * 1024
@@ -71,6 +71,7 @@ class DownloadTransport:
         self.next_id = 0
         self.last_poll = monotonic()
         self.silent_poll_seconds = 0.
+        self.disconnected = None
         try:
             self.listener.bind(('127.0.0.1', 0))
             self.listener.listen(1)
@@ -107,9 +108,20 @@ class DownloadTransport:
     def poll(self):
         if self.process is None:
             raise RuntimeError('Download transport is closed')
-        if self.process.poll() is not None:
+        returncode = self.process.poll()
+        if returncode == STALLED_WORKER_EXIT_CODE:
+            raise TimeoutError('A download worker remained blocked past its deadline '
+                               '(DNS or network setup may be stuck). The import was stopped; please retry.')
+        if returncode is not None:
             raise RuntimeError('The download helper stopped unexpectedly')
         now = monotonic()
+        if self.disconnected is not None:
+            # EOF and the OS exit status can become visible in different polls.
+            # Give the specific stalled-worker status a chance to arrive without
+            # blocking Blender or misreporting it as a generic disconnection.
+            if now - self.disconnected > 1.:
+                raise RuntimeError('The download helper disconnected')
+            return None
         # Count only time spent polling responsively. Long glTF imports, modal
         # tools or debugger pauses in Blender must not expire valid replies.
         self.silent_poll_seconds += min(now - self.last_poll, .25)
@@ -134,8 +146,14 @@ class DownloadTransport:
                 chunk = self.connection.recv(256 * 1024)
             except BlockingIOError:
                 break
+            except ConnectionError:
+                # Windows can report a reset instead of EOF when the supervisor
+                # exits the helper. Preserve its exit-code diagnosis as above.
+                self.disconnected = monotonic()
+                return None
             if not chunk:
-                raise RuntimeError('The download helper disconnected')
+                self.disconnected = monotonic()
+                return None
             self.incoming.extend(chunk)
             self.silent_poll_seconds = 0.
             if not self.authenticated and len(self.incoming) >= 32:
@@ -153,6 +171,9 @@ class DownloadTransport:
                 del self.outgoing[:sent]
             except BlockingIOError:
                 pass
+            except ConnectionError:
+                self.disconnected = monotonic()
+                return None
         if len(self.incoming) < 17:
             return self._idle()
         kind, identity, size = struct.unpack('!cQQ', self.incoming[:17])

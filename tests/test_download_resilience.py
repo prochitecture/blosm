@@ -7,12 +7,14 @@ import sys
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from downloads import Request, DownloadError
 from downloads.transport import DownloadTransport
+from downloads import transport as transport_module
 from downloads.diagnostics import redact_text, redact_url, redact_body
 
 
@@ -81,10 +83,18 @@ class Handler(BaseHTTPRequestHandler):
             payload = b'\x1f\x8b' + b'not a gzip stream'
         if path == '/trickle_body':
             payload = b'x' * 100
+        if path == '/large_ok':
+            payload = b'x' * (4 * 1024 * 1024)
+        if path == '/retry_chunked':
+            self.send_response(status)
+            self.send_header('Transfer-Encoding', 'chunked')
+            self.end_headers()
+            self.wfile.write(b'2\r\nO' if number == 1 else b'2\r\nOK\r\n0\r\n\r\n')
+            return
         self.send_response(status)
         self.send_header('Content-Length', str(len(payload)))
         self.end_headers()
-        if path in ('/broken_error', '/truncated'):
+        if path in ('/broken_error', '/truncated') or (path == '/retry_truncated' and number == 1):
             self.wfile.write(payload[:1])
             return
         if path == '/error_body_timeout':
@@ -129,6 +139,15 @@ class ResilienceChecks(unittest.TestCase):
         transport = DownloadTransport(**kwargs)
         self.transports.append(transport)
         return transport
+
+    def supervised_transport(self, mode):
+        launch = transport_module.subprocess.Popen
+        def fixture(args, **kwargs):
+            args = list(args)
+            args[3:4] = [str(Path(__file__).with_name('stalled_download_worker.py')), mode]
+            return launch(args, **kwargs)
+        with patch.object(transport_module.subprocess, 'Popen', side_effect=fixture):
+            return self.transport()
 
     def replies(self, transport, count=1):
         replies = []
@@ -275,7 +294,67 @@ class ResilienceChecks(unittest.TestCase):
             failure = self.replies(transport)[0][2]
             self.assertIsInstance(failure, DownloadError)
             self.assertEqual(failure.code, code)
-            self.assertEqual(failure.attempts, 1)
+            self.assertEqual(failure.attempts, 3 if code == 'incomplete_response' else 1)
+
+    def test_incomplete_transfer_retries_from_scratch(self):
+        transport = self.transport()
+        for path in ('/retry_truncated', '/retry_chunked'):
+            transport.submit(self.url + path)
+            self.assertEqual(self.replies(transport)[0][1:], (b'OK', None))
+            self.assertEqual(self.servers[0][0].requests[path], 2)
+
+    def test_incomplete_retries_share_the_original_deadline(self):
+        transport = self.transport()
+        start = time.monotonic()
+        transport.submit(Request(self.url + '/truncated', timeout=.1))
+        failure = self.replies(transport)[0][2]
+        self.assertEqual(failure.code, 'timeout')
+        self.assertEqual(failure.attempts, 1)
+        self.assertLess(time.monotonic() - start, 1.5)
+        transport.submit(self.url + '/ok')
+        self.assertEqual(self.replies(transport)[0][1:], (b'OK', None))
+
+    def test_supervisor_stops_stalled_dns_even_with_heartbeats(self):
+        transport = self.supervised_transport('dns')
+        process = transport.process
+        transport.submit(self.url + '/ok')
+        self.assertEqual(self.replies(transport)[0][1:], (b'OK', None))
+        transport.submit(Request('http://stalled.invalid/tile.glb?key=private-key', timeout=1.1))
+        start = time.monotonic()
+        with self.assertRaisesRegex(TimeoutError, 'worker remained blocked past its deadline') as caught:
+            self.replies(transport)
+        self.assertLess(time.monotonic() - start, 3.)
+        self.assertNotIn('private-key', str(caught.exception))
+        process.wait(timeout=1)
+        self.assertEqual(process.returncode, transport_module.STALLED_WORKER_EXIT_CODE)
+
+    def test_supervisor_ignores_completed_bytes_waiting_for_blender(self):
+        transport = self.supervised_transport('normal')
+        # Establish IPC first; a 4 MiB result then fills the local socket while
+        # the parent is paused beyond both the resource deadline and grace.
+        transport.submit(self.url + '/ok')
+        self.replies(transport)
+        transport.submit(Request(self.url + '/large_ok', timeout=.3))
+        transport.poll()
+        time.sleep(1.)
+        _, content, failure = self.replies(transport)[0]
+        self.assertIsNone(failure)
+        self.assertEqual(content, b'x' * (4 * 1024 * 1024))
+        transport.submit(self.url + '/ok')
+        self.assertEqual(self.replies(transport)[0][1:], (b'OK', None))
+
+    def test_windows_reset_preserves_stalled_worker_diagnosis(self):
+        transport = self.transport()
+        transport.submit(self.url + '/ok')
+        self.replies(transport)
+        # Simulate the ordering observed on Windows: socket reset is visible one
+        # poll before the process termination code becomes available.
+        with patch.object(transport, 'connection', wraps=transport.connection) as connection, \
+                patch.object(transport.process, 'poll', side_effect=[None, transport_module.STALLED_WORKER_EXIT_CODE]):
+            connection.recv.side_effect = ConnectionResetError(10054, 'Connection reset')
+            self.assertIsNone(transport.poll())
+            with self.assertRaisesRegex(TimeoutError, 'worker remained blocked past its deadline'):
+                transport.poll()
 
     def test_helper_exits_on_parent_disconnect_with_active_request(self):
         transport = self.transport()

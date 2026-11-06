@@ -73,6 +73,9 @@ The top-level progressive package is independent of 3D Tiles:
   ordered; content downloads and import can overlap. Socket operations time out
   within 30 seconds and the helper enforces each resource's 90-second deadline
   across attempts. Completed bytes do not time out while Blender is busy importing.
+  A separate supervisor stops the helper if a worker remains stuck five seconds
+  past its deadline, including during DNS resolution; committed tiles are retained.
+  Incomplete HTTP bodies retry within the original deadline and attempt budget.
   Resource errors remain per-tile; helper/protocol failures stop the job. Shared
   origin cooldowns, credential policies and diagnostic details are documented in
   [downloads/README.md](../downloads/README.md). The downloaded and decoded response

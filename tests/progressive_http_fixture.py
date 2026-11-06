@@ -47,6 +47,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Length', str(len(content)))
         self.end_headers()
+        with guard:
+            first_attempt = requests.count(self.path) == 1
+        if key in configuration.get('truncate_once', ()) and first_attempt:
+            content = content[:max(1, len(content) // 2)]
         try:
             self.wfile.write(content)
         except ConnectionError:

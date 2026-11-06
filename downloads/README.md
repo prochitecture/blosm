@@ -92,6 +92,10 @@ existing behavior. GLB/B3DM bytes go directly to glTF; caching remains excluded.
 
 The helper retries transient connection failures and HTTP 429/500/502/503/504 up
 to twice, with exponential backoff/jitter and numeric/date Retry-After support.
+Incomplete fixed-length and chunked response bodies use this same retry budget.
+Each retry starts a complete GET with an empty buffer; partial bytes are discarded.
+The original resource deadline still applies across attempts and backoff. Invalid
+gzip, size violations and glTF parsing errors are not retried as network failures.
 HTTP 429 and 503 responses set a cooldown shared by all workers for that origin
 (scheme, hostname and port). Starting with the second 429, each further 429 halves
 that origin's concurrency limit, down to one, for the rest of this import. Other
@@ -103,18 +107,26 @@ Each resource has a helper-side deadline, normally 90 seconds, covering all
 attempts and cooldown waits. A timer shuts down its network sockets on expiry,
 including stalled headers and continuously trickling bodies. Socket operations
 also have a timeout of at most 30 seconds. OS DNS resolution cannot be forcibly
-interrupted by a Python thread; cancellation still terminates the entire helper.
+interrupted by a Python thread. An independent supervisor tracks unfinished
+futures and terminates the entire helper if one remains blocked five seconds
+beyond its deadline. Its exit code produces a specific stalled-worker error;
+the import stops and retains committed geometry. The supervisor runs separately
+from both network workers and IPC, so an unresponsive resolver or blocked socket
+write to Blender cannot prevent supervision. Finished futures are excluded.
 The deadline ends when the resource finishes in the helper. Waiting for Blender
 to receive/import completed bytes does not count against it.
 
-A deadline, HTTP error, invalid gzip, truncated response or size violation fails
-that resource; other tiles continue. Failure reading an HTTP error body preserves
+A normal deadline, HTTP error, invalid gzip, exhausted incomplete-response retries
+or size violation fails that resource; other tiles continue. Failure reading an HTTP error body preserves
 the original HTTP status. The helper sends periodic heartbeats; after 15 seconds
 of responsive polling with no incoming data, the caller reports an unresponsive
 helper. Long Blender import/tool pauses are excluded. Helper exit, malformed IPC
 or a failed helper responsiveness check stops the whole job and closes it. There
 is no automatic helper restart. On parent disconnect the helper exits immediately
 without waiting for network threads, including threads stuck in OS calls.
+On Windows, IPC can report a connection reset before the helper's exit status is
+visible. The caller allows up to one second for that status, using nonblocking
+polls, so a stalled worker is not misreported as a generic socket failure.
 
 Authentication suppression is opt-in. An adapter supplies an opaque `auth_scope`
 identifying its credential/session pair and explicit `auth_error_reasons` from
@@ -153,6 +165,8 @@ and size limits.
 trickling headers/bodies, delayed caller polling, shared cooldowns, repeated 429s,
 long Retry-After, credential scope suppression, broken/unusual error bodies,
 credential redaction and parent disconnect during active downloads.
+It also covers unrecoverable DNS stalls, completed responses waiting in IPC,
+Windows reset/exit ordering and bounded retries of incomplete transfers.
 
 `tests/check_concurrent_tiles.py` runs in background Blender with `--artifacts`
 and optionally `--helsinki`. It compares sequential blocking, one/four-worker
@@ -161,6 +175,8 @@ queries, distinct transforms, mixed GLB/B3DM content, out-of-order completion,
 partial failures and helper cleanup are checked. It records total wall time,
 consumer processing time and peak HTTP concurrency. Delays are controlled local
 fixture latency; these measurements are not live-provider performance claims.
+Additional cases deliberately truncate a manifest and a tile on their first
+attempt, including real Helsinki payloads, and compare the recovered geometry.
 
 `tests/check_progressive_import.py` checks geometry/context/collection/lifecycle
 behavior; `tests/check_progressive_ui.py` runs real timers and verifies blocking
@@ -168,6 +184,16 @@ and progressive Undo/Redo, cancellation, edit-mode pause and shutdown with the
 concurrent downloader. All generated results belong under
 `C:/dev/workspace/artifacts/concurrent_downloads` or, for the resilience checks,
 `C:/dev/workspace/artifacts/download_resilience`.
+
+`tests/check_live_tiles.py` compares real provider imports using one/four workers,
+blocking/progressive execution and joined/separate objects. It checks response
+hashes, geometry, topology counts, packed textures, tile/error counts and cleanup.
+`tests/check_live_tiles_ui.py` checks actual UI timers, incremental tiles, grouped
+Undo/Redo, cancellation and aggregate glTF error reporting with eight workers.
+Their regions and public URLs are in `tests/live_tile_datasets.py`. Reports belong
+under `C:/dev/workspace/artifacts/download_live_validation`; downloaded manifests
+and tiles are never written. See [LiveValidation.md](LiveValidation.md) for the
+observed results and provider limitations.
 
 ### Initial timing (Blender 5.2)
 
