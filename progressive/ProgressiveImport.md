@@ -70,9 +70,14 @@ The top-level progressive package is independent of 3D Tiles:
 - downloads/worker.py runs a bounded thread pool outside Blender for HTTP and
   optional gzip decoding. Outstanding requests and unconsumed replies occupy
   the same bounded window, including while paused. Manifest discovery remains
-  ordered; content downloads and import can overlap. Socket timeout is 30 seconds; parent-side request deadline is 90
-  seconds. The downloaded and decoded response size limit is 256 MiB each.
-  Cancellation terminates the helper; nonblocking polling reaps it afterward.
+  ordered; content downloads and import can overlap. Socket operations time out
+  within 30 seconds and the helper enforces each resource's 90-second deadline
+  across attempts. Completed bytes do not time out while Blender is busy importing.
+  Resource errors remain per-tile; helper/protocol failures stop the job. Shared
+  origin cooldowns, credential policies and diagnostic details are documented in
+  [downloads/README.md](../downloads/README.md). The downloaded and decoded response
+  size limit is 256 MiB each. Cancellation terminates the helper; nonblocking
+  polling reaps it afterward. Parent disconnect also stops busy network threads.
 - blender.Controller owns the application timer, redraws, cancellation UI,
   undo checkpoints and lifecycle handlers. Adapters supply job, scene, view_layer,
   revision, status, cancel and finish. No HTTP or provider logic lives here.

@@ -7,10 +7,13 @@ new resources are discovered. Neither requests nor results create dataset files.
 
 ## Interface
 
-- `Request(url, headers={}, decode_gzip=False, verify_tls=True)` describes an HTTP
+- `Request(url, headers={}, decode_gzip=False, verify_tls=True, timeout=90.,
+  auth_scope='', auth_error_reasons=())` describes an HTTP
   request. Headers and options are copied into the wire message on submission.
   Raw responses are the default so an intrinsically compressed resource, such as
   an HGT gzip file, can be passed unchanged to its consumer.
+  `timeout` is the helper-side resource deadline in seconds (up to 3600).
+  The optional authentication policy is explained below.
 - `DownloadTransport(max_requests=4, max_bytes=256 MiB, max_buffer_bytes=None)`
   starts the helper. `submit(request)` returns a monotonically increasing identity.
   `poll()` returns `None` or `(identity, content, exception)` in completion order.
@@ -88,17 +91,56 @@ existing behavior. GLB/B3DM bytes go directly to glTF; caching remains excluded.
 ## Failures and lifecycle
 
 The helper retries transient connection failures and HTTP 429/500/502/503/504 up
-to twice, with exponential backoff/jitter and Retry-After support. Retry-After
-values above 30 seconds are returned as errors rather than retried prematurely.
-Permanent HTTP failures and invalid/truncated/oversized payloads are errors,
-never silently interpreted as empty tiles. The socket operation timeout is 30
-seconds; the caller enforces a 90-second request deadline and 15-second startup
-deadline. A failed helper/protocol/deadline stops the whole job and closes it.
+to twice, with exponential backoff/jitter and numeric/date Retry-After support.
+HTTP 429 and 503 responses set a cooldown shared by all workers for that origin
+(scheme, hostname and port). Starting with the second 429, each further 429 halves
+that origin's concurrency limit, down to one, for the rest of this import. Other
+origins have independent limits. Requests already in flight finish normally.
+A cooldown longer than a resource's remaining deadline returns an HTTP error
+asking the user to retry later; it never causes an early retry.
+
+Each resource has a helper-side deadline, normally 90 seconds, covering all
+attempts and cooldown waits. A timer shuts down its network sockets on expiry,
+including stalled headers and continuously trickling bodies. Socket operations
+also have a timeout of at most 30 seconds. OS DNS resolution cannot be forcibly
+interrupted by a Python thread; cancellation still terminates the entire helper.
+The deadline ends when the resource finishes in the helper. Waiting for Blender
+to receive/import completed bytes does not count against it.
+
+A deadline, HTTP error, invalid gzip, truncated response or size violation fails
+that resource; other tiles continue. Failure reading an HTTP error body preserves
+the original HTTP status. The helper sends periodic heartbeats; after 15 seconds
+of responsive polling with no incoming data, the caller reports an unresponsive
+helper. Long Blender import/tool pauses are excluded. Helper exit, malformed IPC
+or a failed helper responsiveness check stops the whole job and closes it. There
+is no automatic helper restart. On parent disconnect the helper exits immediately
+without waiting for network threads, including threads stuck in OS calls.
+
+Authentication suppression is opt-in. An adapter supplies an opaque `auth_scope`
+identifying its credential/session pair and explicit `auth_error_reasons` from
+its provider's JSON error responses. HTTP 401, or HTTP 400/403 with a matching
+`reason` or `status`, prevents new attempts for that scope at the same origin.
+Unrecognized 400/403 responses remain individual resource errors. Other scopes
+remain usable; the transport does not refresh credentials or sessions. The Google
+3D Tiles adapter supplies this policy with a hash of its credential/session query.
+[Google's error documentation](https://developers.google.com/maps/documentation/tile/error_handling)
+lists both credential/session problems and unrelated errors under 400/403, so the
+status alone is insufficient for classifying those responses.
+
+HTTP failures retain `HTTPError` compatibility, status, a bounded sanitized body,
+`attempts`, `auth_failed` and `download_code`. Other resource failures use
+`DownloadError` with `code`, `attempts` and `auth_failed`. Human-readable messages
+include the attempt count; zero means the request was rejected before network I/O.
+URLs in diagnostics retain the host/path but remove user-info, query values and
+fragments. Known credential values and credential fields in provider bodies are
+redacted. The existing 3D Tiles console/root error paths use the same redaction,
+including the sequential blocking path. Per-tile errors still use console details
+and one aggregate import result rather than individual popup reports.
 
 The shared transport verifies TLS by default. The 3D Tiles adapter explicitly
 retains its pre-existing certificate-verification bypass for compatibility;
-changing that existing provider policy is separate work. Helper diagnostics avoid
-URL/header credentials. Provider adapters still own their error presentation.
+changing that existing provider policy is separate work. Provider adapters still
+own their error presentation.
 
 ## Validation
 
@@ -106,6 +148,11 @@ URL/header credentials. Provider adapters still own their error presentation.
 threaded HTTP fixture. It covers completion identities, bounded concurrency,
 paused backpressure, cancellation, helper exit, retries, gzip modes, truncation
 and size limits.
+
+`tests/test_download_resilience.py` adds local fault injection for stalled and
+trickling headers/bodies, delayed caller polling, shared cooldowns, repeated 429s,
+long Retry-After, credential scope suppression, broken/unusual error bodies,
+credential redaction and parent disconnect during active downloads.
 
 `tests/check_concurrent_tiles.py` runs in background Blender with `--artifacts`
 and optionally `--helsinki`. It compares sequential blocking, one/four-worker
@@ -119,7 +166,8 @@ fixture latency; these measurements are not live-provider performance claims.
 behavior; `tests/check_progressive_ui.py` runs real timers and verifies blocking
 and progressive Undo/Redo, cancellation, edit-mode pause and shutdown with the
 concurrent downloader. All generated results belong under
-`C:/dev/workspace/artifacts/concurrent_downloads`.
+`C:/dev/workspace/artifacts/concurrent_downloads` or, for the resilience checks,
+`C:/dev/workspace/artifacts/download_resilience`.
 
 ### Initial timing (Blender 5.2)
 

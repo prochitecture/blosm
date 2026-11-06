@@ -4,9 +4,11 @@ from urllib.parse import urlparse
 from os.path import splitext, dirname
 import json, ssl, gzip
 from functools import partial
+from hashlib import sha256
 from time import sleep
 from mathutils import Vector, Matrix
 from ..downloads import Request
+from ..downloads.diagnostics import redact_text, redact_url
 from ..downloads.transport import DownloadTransport
 from ..progressive.core import Job, Download, Drain
 
@@ -61,7 +63,11 @@ class BaseManager:
     def render(self, minLon, minLat, maxLon, maxLat):
         steps = self.iterRender(minLon, minLat, maxLon, maxLat)
         if self.concurrentDownloads:
-            job = Job(steps, DownloadTransport(max_requests=self.downloadWorkers))
+            try:
+                transport = DownloadTransport(max_requests=self.downloadWorkers)
+            except Exception as exc:
+                return ('Unable to start the download helper: %s' % redact_text(exc),)
+            job = Job(steps, transport)
             try:
                 while not job.done:
                     job.step()
@@ -113,20 +119,22 @@ class BaseManager:
         except error.HTTPError as e:
             error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
             if self.uriServer == "https://tile.googleapis.com":
-                response = e.read()
-                if response:
-                    if isinstance(response, bytes):
-                        response = response.decode('utf-8')
-                    try:
-                        response = json.loads(response)
-                        if "error" in response and "message" in response["error"]:
-                            error_message += "\nMessage from Google Cloud:\n%s" % response["error"]["message"]
-                    except json.JSONDecodeError:
-                        pass
-            return (error_message,)
+                try:
+                    response = json.loads(e.read(65536))
+                    if isinstance(response, dict) and isinstance(response.get('error'), dict):
+                        message = response['error'].get('message')
+                        if isinstance(message, str):
+                            error_message += "\nMessage from Google Cloud:\n%s" % message
+                except Exception:
+                    # Error details are optional, including on the old blocking
+                    # path. A broken body must not hide the original HTTP error.
+                    pass
+                finally:
+                    e.close()
+            return (redact_text(error_message, self.rootUri),)
         except Exception as e:
             # return only a critical error
-            return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
+            return ("Unable to process the root URI of the 3D Tiles: %s" % redact_text(e, self.rootUri),)
     
     def renderTileset(self, tileset, baseUri, transformMatrix):
         yield from self.renderTile(tileset["root"], baseUri, transformMatrix)
@@ -193,11 +201,17 @@ class BaseManager:
             except Exception as e:
                 self.processError(e, uri)
 
-    @staticmethod
-    def downloadRequest(uri):
+    def downloadRequest(self, uri):
         # Preserve this provider adapter's existing gzip/TLS behavior; the
         # reusable transport itself verifies certificates and returns raw bytes.
-        return Request(uri, decode_gzip=True, verify_tls=False)
+        scope, reasons = '', ()
+        if urlparse(uri).hostname == 'tile.googleapis.com':
+            # The helper has no Google-specific policy. Only this adapter opts
+            # into stopping a confirmed invalid credential/session scope.
+            scope = sha256((self.constantUriQuery + '\n' + urlparse(uri).query).encode()).hexdigest()
+            reasons = ('API_KEY_INVALID', 'API_KEY_EXPIRED', 'SESSION_EXPIRED', 'UNAUTHENTICATED', 'expired')
+        return Request(uri, decode_gzip=True, verify_tls=False,
+                       auth_scope=scope, auth_error_reasons=reasons)
 
     def consumeContent(self, uri, path, transformMatrix, extension, content, failure):
         try:
@@ -552,5 +566,5 @@ class BaseManager:
     
     def processError(self, e, uri):
         self.errors.append(
-            "There was an error when processing the URI %s: %s" % (uri, str(e))
+            "There was an error when processing the URI %s: %s" % (redact_url(uri), redact_text(e, uri))
         )

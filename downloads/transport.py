@@ -8,6 +8,7 @@ import atexit
 from dataclasses import asdict
 import io
 import json
+import math
 from pathlib import Path
 import secrets
 import socket
@@ -16,7 +17,8 @@ import subprocess
 import sys
 from time import monotonic
 from urllib.error import HTTPError
-from . import Request
+from . import Request, DownloadError
+from .diagnostics import redact_url
 
 MAX_BYTES = 256 * 1024 * 1024
 _retired = []
@@ -67,7 +69,8 @@ class DownloadTransport:
         self.outgoing = bytearray()
         self.pending = {}
         self.next_id = 0
-        self.startup_deadline = monotonic() + 15
+        self.last_poll = monotonic()
+        self.silent_poll_seconds = 0.
         try:
             self.listener.bind(('127.0.0.1', 0))
             self.listener.listen(1)
@@ -90,12 +93,14 @@ class DownloadTransport:
             raise RuntimeError('Download capacity exhausted')
         if isinstance(request, str):
             request = Request(request)
+        if not math.isfinite(request.timeout) or not 0 < request.timeout <= 3600:
+            raise ValueError('Download timeout must be between 0 and 3600 seconds')
         identity = self.next_id
         data = json.dumps(dict(asdict(request), id=identity)).encode('utf-8')
         if len(data) > 65536:
             raise ValueError('Download request is too long')
         self.next_id += 1
-        self.pending[identity] = (request.url, monotonic() + 90)
+        self.pending[identity] = request.url
         self.outgoing.extend(struct.pack('!I', len(data)) + data)
         return identity
 
@@ -105,15 +110,16 @@ class DownloadTransport:
         if self.process.poll() is not None:
             raise RuntimeError('The download helper stopped unexpectedly')
         now = monotonic()
-        if (not self.authenticated and now > self.startup_deadline) or any(
-                now > deadline for _, deadline in self.pending.values()):
-            raise TimeoutError('The download helper timed out')
+        # Count only time spent polling responsively. Long glTF imports, modal
+        # tools or debugger pauses in Blender must not expire valid replies.
+        self.silent_poll_seconds += min(now - self.last_poll, .25)
+        self.last_poll = now
         if self.connection is None:
             try:
                 self.connection, _ = self.listener.accept()
                 self.connection.setblocking(False)
             except BlockingIOError:
-                return None
+                return self._idle()
         deadline = monotonic() + 0.004
         # At most one response-sized frame plus a read chunk is buffered here.
         # Subsequent replies stay in the helper/socket until the caller consumes.
@@ -131,6 +137,7 @@ class DownloadTransport:
             if not chunk:
                 raise RuntimeError('The download helper disconnected')
             self.incoming.extend(chunk)
+            self.silent_poll_seconds = 0.
             if not self.authenticated and len(self.incoming) >= 32:
                 if bytes(self.incoming[:32]) != self.token:
                     raise RuntimeError('Invalid download helper connection')
@@ -139,7 +146,7 @@ class DownloadTransport:
                 self.listener.close()
                 self.listener = None
         if not self.authenticated:
-            return None
+            return self._idle()
         if self.outgoing:
             try:
                 sent = self.connection.send(self.outgoing)
@@ -147,24 +154,38 @@ class DownloadTransport:
             except BlockingIOError:
                 pass
         if len(self.incoming) < 17:
-            return None
+            return self._idle()
         kind, identity, size = struct.unpack('!cQQ', self.incoming[:17])
+        if kind == b'H' and identity == 0 and size == 0:
+            del self.incoming[:17]
+            self.silent_poll_seconds = 0.
+            return None
         if kind not in (b'B', b'E') or identity not in self.pending:
             raise RuntimeError('Invalid response from the download helper')
         if size > (self.max_bytes if kind == b'B' else 524288):
             raise RuntimeError('Download exceeds the response size limit')
         if len(self.incoming) < size + 17:
-            return None
+            return self._idle()
         content = bytes(memoryview(self.incoming)[17:17 + size])
         del self.incoming[:17 + size]
-        url, _ = self.pending.pop(identity)
+        url = self.pending.pop(identity)
         if kind == b'B':
             return identity, content, None
         detail = json.loads(content)
         if 'status' in detail:
-            return identity, None, HTTPError(url, detail['status'], detail['message'],
+            failure = HTTPError(redact_url(url), detail['status'], str(DownloadError(detail)),
                 detail.get('headers', {}), io.BytesIO(detail.get('body', '').encode('utf-8')))
-        return identity, None, RuntimeError(detail['message'])
+            failure.attempts = detail.get('attempts', 0)
+            failure.auth_failed = detail.get('auth_failed', False)
+            failure.download_code = detail.get('code', 'http_error')
+        else:
+            failure = DownloadError(detail)
+        return identity, None, failure
+
+    def _idle(self):
+        if self.silent_poll_seconds > 15:
+            raise TimeoutError('The download helper is unresponsive')
+        return None
 
     def close(self):
         _live.discard(self)

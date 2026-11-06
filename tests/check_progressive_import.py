@@ -1,11 +1,13 @@
 """Blender-run progressive adapter/core checks; all outputs stay in artifacts."""
 import argparse
 import importlib
+import io
 import json
 from math import radians, frexp, ldexp
 from pathlib import Path
 import sys
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -264,6 +266,52 @@ try:
     assert len(operation.job.result) == 1 and 'Root unavailable' in operation.job.result[0]
     assert transport.closed and not geometry()
     checks.append('root download failure closes the job without scene data')
+
+    class BrokenErrorBody(io.BytesIO):
+        def read(self, *args):
+            raise OSError('incomplete error body')
+
+    for progressive in (False, True):
+        for broken_body in (False, True):
+            reset_scene()
+            uri = 'https://tile.googleapis.com/v1/3dtiles/root.json?key=private-key&session=private-session'
+            body = (BrokenErrorBody() if broken_body else io.BytesIO(json.dumps({
+                'error': {'message': 'Rejected private-key and private-session at ' + uri}
+            }).encode()))
+            failure = HTTPError(uri, 403, 'Permission denied', {}, body)
+            operation, transport = task(payloads={uri: failure})
+            tile_manager = operation.manager
+            tile_manager.rootUri = uri
+            tile_manager.uriServer = 'https://tile.googleapis.com'
+            if progressive:
+                drive(operation)
+                result = operation.job.result
+            else:
+                operation.cancel()
+                tile_manager.renderer = renderer_module.BlenderRenderer('Error test', False, '')
+                tile_manager.concurrentDownloads = False
+                def fail_download(uri):
+                    raise failure
+                tile_manager.download = fail_download
+                result = tile_manager.render(24.93, 60.16, 24.95, 60.18)
+            assert len(result) == 1 and '403' in result[0], result
+            if not broken_body:
+                assert 'Message from Google Cloud' in result[0]
+            assert 'private-key' not in result[0] and 'private-session' not in result[0]
+            tile_manager.errors = []
+            tile_manager.processError(RuntimeError('Download failed at ' + uri), uri)
+            assert 'root.json' in tile_manager.errors[0]
+            assert 'private-key' not in tile_manager.errors[0] and 'private-session' not in tile_manager.errors[0]
+    checks.append('blocking/progressive root and tile errors redact credentials; broken error body preserves HTTP status')
+
+    reset_scene()
+    tile_manager = manager(renderer_module.BlenderRenderer('Startup failure', False, ''), inputs())
+    tile_manager.concurrentDownloads = True
+    with patch.object(manager_module, 'DownloadTransport', side_effect=OSError('Permission denied')):
+        result = tile_manager.render(24.93, 60.16, 24.95, 60.18)
+    assert len(result) == 1 and 'Unable to start the download helper' in result[0]
+    assert not geometry()
+    checks.append('blocking helper startup failure uses the normal import error result')
 
     reset_scene()
     from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
