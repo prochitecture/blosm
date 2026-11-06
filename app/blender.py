@@ -338,13 +338,11 @@ class BlenderApp(BaseApp):
         self.setTerrain(context, createFlatTerrain=True, createBvhTree=False)
     
     def init3dTiles(self, context, manager):
-        from threed_tiles.manager import BaseManager
-        
         addon = context.scene.blosm
         addonName = self.addonName
         
         manager.setGeometricError(
-            BaseManager.geometricErrors.get(self.lodOf3dTiles)\
+            manager.geometricErrors.get(self.lodOf3dTiles)\
             if addon.threedTilesSource == "google" else\
             addon.geometricError
         )

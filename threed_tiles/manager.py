@@ -3,7 +3,12 @@ from urllib import request, error
 from urllib.parse import urlparse
 from os.path import splitext, dirname
 import json, ssl, gzip
+from functools import partial
+from time import sleep
 from mathutils import Vector, Matrix
+from ..downloads import Request
+from ..downloads.transport import DownloadTransport
+from ..progressive.core import Job, Download, Drain
 
 
 # heights above the sea level
@@ -47,12 +52,25 @@ class BaseManager:
         # <self.uriQuery> is returned by a 3D Tiles server (e.g. a session ID), it is appended
         # to all subsequent URI requests
         self.uriQuery = ''
+        self.concurrentDownloads = False
+        self.downloadWorkers = 4
         
     def setGeometricError(self, geometricError):
         self.geometricError = geometricError
     
     def render(self, minLon, minLat, maxLon, maxLat):
         steps = self.iterRender(minLon, minLat, maxLon, maxLat)
+        if self.concurrentDownloads:
+            job = Job(steps, DownloadTransport(max_requests=self.downloadWorkers))
+            try:
+                while not job.done:
+                    job.step()
+                    if job.waiting:
+                        sleep(.001)  # Only the explicitly blocking runner waits.
+                return (str(job.error),) if job.error else job.result
+            finally:
+                if not job.done:
+                    job.cancel()
         value, failure = None, None
         try:
             while True:
@@ -60,7 +78,7 @@ class BaseManager:
                 value, failure = None, None
                 if uri is not None:
                     try:
-                        value = self.download(uri)
+                        value = self.download(uri.url)
                     except Exception as exc:
                         failure = exc
         except StopIteration as finished:
@@ -78,9 +96,19 @@ class BaseManager:
         self.initAreaData(minLon, minLat, maxLon, maxLat)
         
         self.renderer.prepare(self)
-        
+
         try:
-            tileset = json.loads((yield self.rootUri))
+            critical = yield from self.iterContents()
+            if self.concurrentDownloads:
+                yield Drain()
+        finally:
+            # Drain even after a traversal error, but never yield on close().
+            self.renderer.finalize(self)
+        return critical or (self.renderer.num_imported_tiles, self.errors)
+
+    def iterContents(self):
+        try:
+            tileset = json.loads((yield self.downloadRequest(self.rootUri)))
             yield from self.renderTileset(tileset, self.baseUri, None)
         except error.HTTPError as e:
             error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
@@ -99,11 +127,6 @@ class BaseManager:
         except Exception as e:
             # return only a critical error
             return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
-        finally:
-            self.renderer.finalize(self)
-        
-        # return the number of rendered tiles and uncritical errors
-        return self.renderer.num_imported_tiles, self.errors
     
     def renderTileset(self, tileset, baseUri, transformMatrix):
         yield from self.renderTile(tileset["root"], baseUri, transformMatrix)
@@ -159,16 +182,31 @@ class BaseManager:
             
             try:
                 if contentExtension == ".json":
-                    tileset = json.loads((yield uri))
+                    tileset = json.loads((yield self.downloadRequest(uri)))
                     yield from self.renderTileset(tileset, baseUri, transformMatrix)
-                elif contentExtension == ".glb":
-                    data = yield uri
-                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix, content=data)
-                elif contentExtension == ".b3dm":
-                    data = yield uri
-                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix, content=data)
+                elif contentExtension in (".glb", ".b3dm"):
+                    consume = partial(self.consumeContent, uri, uriComponents.path, transformMatrix, contentExtension)
+                    if self.concurrentDownloads:
+                        yield Download(self.downloadRequest(uri), consume)
+                    else:
+                        consume((yield self.downloadRequest(uri)), None)
             except Exception as e:
                 self.processError(e, uri)
+
+    @staticmethod
+    def downloadRequest(uri):
+        # Preserve this provider adapter's existing gzip/TLS behavior; the
+        # reusable transport itself verifies certificates and returns raw bytes.
+        return Request(uri, decode_gzip=True, verify_tls=False)
+
+    def consumeContent(self, uri, path, transformMatrix, extension, content, failure):
+        try:
+            if failure is not None:
+                raise failure
+            render = self.renderer.renderGlb if extension == '.glb' else self.renderer.renderB3dm
+            render(self, uri, path, transformMatrix, content=content)
+        except Exception as exc:
+            self.processError(exc, uri)
     
     def getUri(self, uriComponents, baseUri):
         if uriComponents.netloc:

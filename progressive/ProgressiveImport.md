@@ -5,6 +5,8 @@ in the import box directly above the data-type selector. Disable it to use
 blocking mode. Progressive mode keeps the viewport responsive between tile imports.
 Both GLB and B3DM are supported. Root and nested JSON manifests and tile content
 are downloaded into memory; no dataset caches or temporary tile files are used.
+**Concurrent downloads** is independently enabled by default, with four requests.
+It also serves blocking mode; see [shared downloads](../downloads/README.md).
 
 Tiles appear in their final geographic orientation as each finishes. Selection,
 active object, active collection and the 3D cursor are restored after each tile.
@@ -53,21 +55,22 @@ is rejected in background Blender rather than silently leaving a timer unrun.
 The top-level progressive package is independent of 3D Tiles:
 
 - core.Job drives a generator in bounded turns (8 ms / 32 checkpoints by default).
-  A yielded None is a cooperative checkpoint. Any other yielded value is a
-  request understood by the supplied transport. The reply is sent back into the
-  generator; a request error is thrown into it. The return value is the job result.
+  A yielded None is a cooperative checkpoint. A URL/Request awaits a reply, sent
+  back into the generator (or an error thrown into it). Download schedules a
+  deferred main-thread consumer and allows discovery to continue. Drain waits
+  for all deferred consumers before finalization. The return value is the job result.
   close/cancel invokes generator finally blocks and closes the transport.
   An optional validate callback runs before each step, allowing adapters to
   stop with an error if user edits invalidate the import destination.
-- transport.DownloadTransport implements submit, poll and close using a separate
+- downloads.transport.DownloadTransport implements submit, poll and close using a separate
   ordinary Python helper and nonblocking loopback sockets. It discovers Blender's
   bundled Python at runtime. The helper window is hidden on Windows. URLs travel
   through IPC, not command-line arguments or files. The parent authenticates the
   connection with a per-process nonce before sending requests.
-- worker.py performs HTTP requests and gzip decoding, without importing bpy.
-  There are no background Python threads in Blender. One request is active at a
-  time, which bounds queued content and preserves current traversal/session-query
-  ordering. Request timeout is 30 seconds; parent-side request deadline is 90
+- downloads/worker.py runs a bounded thread pool outside Blender for HTTP and
+  optional gzip decoding. Outstanding requests and unconsumed replies occupy
+  the same bounded window, including while paused. Manifest discovery remains
+  ordered; content downloads and import can overlap. Socket timeout is 30 seconds; parent-side request deadline is 90
   seconds. The downloaded and decoded response size limit is 256 MiB each.
   Cancellation terminates the helper; nonblocking polling reaps it afterward.
 - blender.Controller owns the application timer, redraws, cancellation UI,
@@ -92,8 +95,7 @@ Future OSM, bitmap imagery and Mapillary adapters can supply their own generator
 transports and scene-commit steps. They do not need tile URLs, bounding volumes or
 glTF concepts in the shared scheduler. Large OSM parsing should use a dedicated
 helper task protocol; it is not automatically made non-blocking by this scheduler.
-Concurrent downloading is a later transport/scheduling feature. No concurrency
-controls or other data-type integrations are exposed in this implementation.
+The concurrent downloader is shared; other data-type integrations are future work.
 
 ## Validation
 

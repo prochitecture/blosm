@@ -9,7 +9,7 @@ from contextlib import contextmanager
 import textwrap
 import bpy
 from bpy.app.handlers import persistent
-from .transport import reap
+from ..downloads.transport import reap
 
 active = None
 

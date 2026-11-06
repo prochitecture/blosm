@@ -29,26 +29,32 @@ BaseManager = manager_module.BaseManager
 
 
 class MemoryTransport:
+    max_requests = 4
     def __init__(self, payloads):
         self.payloads = payloads
-        self.pending = None
+        self.pending = {}
         self.requests = []
         self.closed = False
         self.polls = 0
 
-    def submit(self, uri):
-        assert self.pending is None
-        self.pending = uri
+    def submit(self, request):
+        uri = request.url
+        identity = len(self.requests)
+        self.pending[identity] = uri
         self.requests.append(uri)
         self.polls = 0
+        return identity
 
     def poll(self):
         self.polls += 1
         if self.polls < 3:
             return None
-        uri, self.pending = self.pending, None
+        if not self.pending:
+            return None
+        identity = next(iter(self.pending))
+        uri = self.pending.pop(identity)
         result = self.payloads[uri]
-        return (None, result) if isinstance(result, Exception) else (result, None)
+        return (identity, None, result) if isinstance(result, Exception) else (identity, result, None)
 
     def close(self):
         self.closed = True
@@ -94,7 +100,9 @@ def task(join=False, payloads=None):
     renderer = adapter_module.ProgressiveRenderer('Progressive test', join, '')
     renderer.calculateHeightOffset = True
     transport = MemoryTransport(payloads)
-    operation = adapter_module.TilesImport(manager(renderer, payloads),
+    tile_manager = manager(renderer, payloads)
+    tile_manager.concurrentDownloads = True
+    operation = adapter_module.TilesImport(tile_manager,
         (24.93, 60.16, 24.95, 60.18), bpy.context, True, transport)
     return operation, transport
 
@@ -102,7 +110,7 @@ def task(join=False, payloads=None):
 def drive(operation, after_step=lambda: None):
     for _ in range(500):
         with no_tile_writes_or_operator(no_dataset_files=True):
-            operation.job.step()
+            operation.job.step(max_steps=1)
         assert not hasattr(glTFImporter, '_patch_convert_functions')
         after_step()
         if operation.job.done:
@@ -208,6 +216,13 @@ try:
         checks.append('destination deletion/unlink/rename/move before next tile and final join, join=%s' % join)
 
     reset_scene()
+    operation, transport = task()
+    operation.manager.concurrentDownloads = False
+    drive(operation)
+    assert operation.job.result == (2, []) and len(geometry()) == 6
+    checks.append('progressive import also works with concurrent downloads disabled')
+
+    reset_scene()
     operation, transport = task(True)
     while operation.renderer.num_imported_tiles == 0:
         operation.job.step()
@@ -266,6 +281,19 @@ try:
     assert len(bpy.data.meshes) == 1
     assert not [c for c in bpy.data.collections if '_import' in c.name]
     checks.append('partial tile objects and temporary collections cleaned on failure')
+
+    reset_scene()
+    payloads = inputs()
+    root = json.loads(payloads['https://test.invalid//nested/tileset.json'])
+    root['root']['children'][0]['content']['uri'] = 'nested/first.glb'
+    root['root']['children'] = [root['root']['children'][0], {'geometricError': 0}]
+    payloads['https://test.invalid/root.json'] = json.dumps(root).encode()
+    operation, transport = task(payloads=payloads)
+    drive(operation)
+    assert len(operation.job.result) == 1 and 'boundingVolume' in operation.job.result[0]
+    assert operation.renderer.num_imported_tiles == 1 and geometry()
+    assert transport.closed
+    checks.append('traversal failure drains submitted content before renderer finalization')
 
     if args.helsinki:
         payloads = inputs()

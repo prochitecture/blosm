@@ -2,7 +2,7 @@
 import bpy
 from .blender import BlenderRenderer
 from ..progressive.core import Job
-from ..progressive.transport import DownloadTransport
+from ..downloads.transport import DownloadTransport
 from ..progressive.blender import preserve_context, notify_result as notify
 
 
@@ -123,7 +123,8 @@ class TilesImport:
         self.renderer.num_imported_tiles = 0
         self.renderer.revision = 0
         manager.errors = []
-        self.job = Job(manager.iterRender(*bounds), transport or DownloadTransport(),
+        self.job = Job(manager.iterRender(*bounds), transport or DownloadTransport(
+                           max_requests=manager.downloadWorkers if manager.concurrentDownloads else 1),
                        validate=self.validate)
 
     def validate(self):

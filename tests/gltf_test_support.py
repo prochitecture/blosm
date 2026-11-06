@@ -23,7 +23,8 @@ sys.dont_write_bytecode = True
 
 from threed_tiles.blender import BlenderRenderer
 from threed_tiles.gltf_import import import_gltf
-from threed_tiles.manager import BaseManager
+sys.path.insert(0, str(REPO.parent))
+BaseManager = __import__(REPO.name + '.threed_tiles.manager', fromlist=['BaseManager']).BaseManager
 from threed_tiles.py3dtiles.tileset.content.tile_content_reader import read_array
 
 

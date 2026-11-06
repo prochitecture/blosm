@@ -6,8 +6,8 @@ memory. The renderer does not write a temporary tile or invoke
 bpy.ops.import_scene.gltf.
 
 The implementation is also used by the optional progressive importer described
-in [ProgressiveImport.md](../../progressive/ProgressiveImport.md). Concurrent
-downloading is not implemented yet.
+in [ProgressiveImport.md](../../progressive/ProgressiveImport.md). Shared
+[concurrent downloads](../../downloads/README.md) work with both import modes.
 
 ## Entry point and version compatibility
 

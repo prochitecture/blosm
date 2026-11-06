@@ -526,6 +526,8 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             "https://tile.googleapis.com/v1/3dtiles/root.json" if google3dTiles else addon.threedTilesUrl,
             renderer
         )
+        manager.concurrentDownloads = addon.concurrentDownloads
+        manager.downloadWorkers = addon.downloadWorkers
         
         a = blenderApp.app
         try:

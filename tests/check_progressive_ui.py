@@ -35,7 +35,7 @@ def record_result_popup(level, message):
     result_popups.append((level, message))
     real_show_result(level, message)
 runtime.show_result = record_result_popup
-transport_module = importlib.import_module(package + '.progressive.transport')
+transport_module = importlib.import_module(package + '.downloads.transport')
 from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
 
 center = manager_module.BaseManager.fromGeographic(60.17, 24.94, 0)
@@ -135,6 +135,18 @@ def tick():
         count = sum(obj.type == 'MESH' for obj in scene.objects)
         heartbeats.append((phase, count, time.monotonic() - started))
         if phase == 'start':
+            reset_scene()
+            assert scene.blosm.concurrentDownloads is True
+            scene.blosm.progressiveImport = False
+            bpy.ops.ed.undo_push(message='Blocking import baseline')
+            assert bpy.ops.blosm.import_data('EXEC_DEFAULT', True) == {'FINISHED'}
+            assert mesh_state() == (2, 6) and runtime.active is None
+            undo()
+            assert mesh_state() == (0, 0)
+            redo()
+            assert mesh_state() == (2, 6)
+            checks.append('blocking concurrent import uses one ordinary undo step')
+            scene.blosm.progressiveImport = True
             reset_scene()
             start_import()
             phase = 'complete'
