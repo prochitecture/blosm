@@ -78,14 +78,33 @@ processes = []
 hold_until = 0
 paused_once = False
 extra_scene = None
+popups_before_cancel = 0
 
 
 def start_import():
     global stage_started
-    assert bpy.ops.blosm.import_data() == {'FINISHED'}
+    # Match the UI's undo-enabled invocation, including the outer operator.
+    assert bpy.ops.blosm.import_data('EXEC_DEFAULT', True) == {'FINISHED'}
     assert runtime.active is not None
     processes.append(runtime.active.adapter.job.transport.process)
     stage_started = time.monotonic()
+
+
+def mesh_state():
+    meshes = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+    return len(meshes), sum(len(obj.data.vertices) for obj in meshes)
+
+
+def undo():
+    global scene
+    bpy.ops.ed.undo()
+    scene = bpy.context.scene  # Undo replaces Blender data-block wrappers.
+
+
+def redo():
+    global scene
+    bpy.ops.ed.redo()
+    scene = bpy.context.scene
 
 
 def complete(status, error=None):
@@ -103,7 +122,7 @@ def complete(status, error=None):
 
 
 def tick():
-    global phase, hold_until, paused_once, extra_scene, scene
+    global phase, hold_until, paused_once, extra_scene, scene, popups_before_cancel
     try:
         assert time.monotonic() - started < 50, 'UI test timed out'
         assert not hasattr(glTFImporter, '_patch_convert_functions')
@@ -126,23 +145,78 @@ def tick():
             assert sum(p == 'complete' and n == 0 for p, n, t in heartbeats) > 3
             assert sum(p == 'complete' and n == 1 for p, n, t in heartbeats) > 3
             checks.append('real HTTP helper + viewport timer heartbeats + incremental tiles')
+            undo()
+            assert mesh_state() == (0, 0), 'One Undo must remove all separate tiles'
+            redo()
+            assert mesh_state() == (2, 6), 'One Redo must restore all separate tiles'
+            assert runtime.active is None, 'Redo must not restart downloading'
+            checks.append('one Undo/Redo removes/restores entire unjoined import')
             reset_scene()
+            scene.blosm.join3dTilesObjects = True
+            start_import()
+            phase = 'joined'
+        elif phase == 'joined' and runtime.active is None:
+            assert mesh_state() == (1, 6)
+            undo()
+            assert mesh_state() == (0, 0), 'One Undo must remove joined tiles, not split them'
+            redo()
+            assert mesh_state() == (1, 6)
+            checks.append('final join shares the import undo step; Redo restores joined mesh')
+            start_import()
+            phase = 'second_import'
+        elif phase == 'second_import' and runtime.active is None:
+            assert mesh_state() == (2, 12)
+            undo()
+            assert mesh_state() == (1, 6), 'Undo must retain the preceding import'
+            redo()
+            assert mesh_state() == (2, 12)
+            checks.append('consecutive imports retain separate undo groups')
+            reset_scene()
+            start_import()
+            phase = 'user_edit'
+        elif phase == 'user_edit' and count == 1 and runtime.active is not None:
+            bpy.ops.object.empty_add('EXEC_DEFAULT', True, location=(10., 0., 0.))
+            assert len([obj for obj in scene.objects if obj.type == 'EMPTY']) == 1
+            phase = 'after_user_edit'
+        elif phase == 'after_user_edit' and runtime.active is None:
+            assert mesh_state() == (1, 6)
+            undo()
+            assert mesh_state() == (1, 3), 'Undo only the tiles imported after the user edit'
+            assert len([obj for obj in scene.objects if obj.type == 'EMPTY']) == 1
+            undo()
+            assert mesh_state() == (1, 3)
+            assert not [obj for obj in scene.objects if obj.type == 'EMPTY']
+            undo()
+            assert mesh_state() == (0, 0)
+            redo()
+            redo()
+            redo()
+            assert mesh_state() == (1, 6)
+            assert len([obj for obj in scene.objects if obj.type == 'EMPTY']) == 1
+            checks.append('user scene edit splits import groups and remains independently undoable')
+            reset_scene()
+            scene.blosm.join3dTilesObjects = False
+            popups_before_cancel = len(result_popups)
             start_import()
             phase = 'cancel'
         elif phase == 'cancel' and count == 1:
             assert bpy.ops.blosm.cancel_progressive() == {'FINISHED'}
             assert runtime.active is None
             assert sum(obj.type == 'MESH' for obj in scene.objects) == 1
-            assert len(result_popups) == 2 and 'Import cancelled.' in result_popups[-1][1]
+            assert len(result_popups) == popups_before_cancel + 1 and 'Import cancelled.' in result_popups[-1][1]
             checks.append('Cancel button keeps first tile and stops helper')
+            undo()
+            assert mesh_state() == (0, 0)
+            redo()
+            assert mesh_state() == (1, 3)
+            checks.append('cancelled partial import can be undone/redone as a group')
             reset_scene()
             start_import()
             phase = 'undo'
         elif phase == 'undo' and count == 1:
-            bpy.ops.ed.undo()
+            undo()
             assert runtime.active is None
-            assert len(result_popups) == 2, 'Undo must not open a result popup'
-            scene = bpy.context.scene  # Undo replaces Blender data-block wrappers.
+            assert len(result_popups) == popups_before_cancel + 1, 'Undo must not open a result popup'
             assert not [obj for obj in scene.objects if obj.type == 'MESH']
             checks.append('Undo cancels active operation before restoring scene')
             start_import()
@@ -178,7 +252,7 @@ def tick():
             addon_utils.disable(package, default_set=True)
             assert runtime.active is None
             checks.append('disabling addon cancels helper and unregisters timer')
-            assert len(result_popups) == 3, 'Silent lifecycle cleanup must not open a popup'
+            assert len(result_popups) == popups_before_cancel + 2, 'Silent lifecycle cleanup must not open a popup'
             complete('passed')
             return None
         return .03

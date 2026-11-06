@@ -28,9 +28,12 @@ count records successful imports, including tiles subsequently deleted by the us
 
 Only one Blosm import may run at a time. Settings are captured when starting.
 Changing to another scene/view layer or entering Edit Mode pauses scene changes
-until the original scene/view layer and Object Mode are active again. Completed
-tiles get undo checkpoints, interleaved with the user's other actions. Undo or
-Redo cancels the active job before restoring Blender data. File loading, disabling
+until the original scene/view layer and Object Mode are active again. Consecutive
+tile imports and the final join share one undo step: one Undo removes the entire
+import if no scene edits intervene. Scene edits during loading keep their own undo
+steps and split the import into groups. Separate imports also remain separate undo
+groups. Undo or Redo cancels the active job before restoring Blender data. Redo
+restores the saved geometry without restarting downloads. File loading, disabling
 the add-on and closing the owning window also stop the operation. Disabling Global
 Undo in Blender disables these checkpoints as well.
 
@@ -114,6 +117,7 @@ float32 units in the last place at the fixture coordinate magnitude.
 Run tests/check_progressive_ui.py in a separate factory-startup GUI Blender process
 with --artifacts pointing to an output directory. It starts a separate local HTTP
 fixture process, imports delayed tiles using the real helper, changes the viewport
-on timer heartbeats and exercises Cancel, Undo, Edit Mode pause/resume, scene switch
-and add-on disable. It saves no preferences. Its report distinguishes pass/failure;
+on timer heartbeats and exercises grouped Undo/Redo with and without joining,
+consecutive imports, an intervening user edit, Cancel, Edit Mode pause/resume,
+scene switch and add-on disable. It saves no preferences. Its report distinguishes pass/failure;
 check that report rather than relying solely on the GUI process exit code.

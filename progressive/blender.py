@@ -1,8 +1,9 @@
 """Blender lifecycle shared by progressive data-type adapters.
 
 Adapters expose job, scene, view_layer, revision, status, cancel(), and finish().
-Each committed revision gets an undo checkpoint. Undo/file loading/add-on
-disable cancels outstanding work before Blender invalidates scene references.
+Consecutive import revisions share an undo step; user edits split the group.
+Undo/file loading/add-on disable cancels outstanding work before Blender
+invalidates scene references.
 """
 from contextlib import contextmanager
 import textwrap
@@ -80,7 +81,7 @@ def start(adapter, context):
         raise RuntimeError('A Blosm import is already running')
     active = Controller(adapter, context.window)
     try:
-        active.checkpoint()
+        active.checkpoint(initial=True)
         bpy.app.timers.register(_tick, first_interval=0.05)
     except Exception:
         active.close(silent=True)
@@ -125,9 +126,15 @@ class Controller:
             self.close()
         redraw()
 
-    def checkpoint(self):
+    def checkpoint(self, initial=False):
         if not bpy.app.background and bpy.context.preferences.edit.use_global_undo:
-            bpy.ops.ed.undo_push(message='Blosm progressive import')
+            if initial:
+                # Keep a baseline and separate consecutive imports, including
+                # when start() is called without the outer import operator.
+                bpy.ops.ed.undo_push(message='Before Blosm progressive import')
+            else:
+                # Explicitly enable undo for this Python operator call.
+                bpy.ops.blosm.progressive_checkpoint('EXEC_DEFAULT', True)
 
     def close(self, silent=False):
         global active
@@ -184,6 +191,21 @@ class BLOSM_OT_CancelProgressive(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class BLOSM_OT_ProgressiveCheckpoint(bpy.types.Operator):
+    bl_idname = 'blosm.progressive_checkpoint'
+    bl_label = 'Blosm progressive import'
+    bl_options = {'INTERNAL', 'UNDO_GROUPED'}
+
+    @classmethod
+    def poll(cls, context):
+        return active is not None
+
+    def execute(self, context):
+        # Blender replaces only a consecutive checkpoint with this label.
+        # A user edit has its own label and therefore keeps its undo boundary.
+        return {'FINISHED'}
+
+
 class BLOSM_OT_ProgressiveReport(bpy.types.Operator):
     bl_idname = 'blosm.progressive_report'
     bl_label = 'Blosm import'
@@ -198,6 +220,7 @@ class BLOSM_OT_ProgressiveReport(bpy.types.Operator):
 
 def register():
     bpy.utils.register_class(BLOSM_OT_CancelProgressive)
+    bpy.utils.register_class(BLOSM_OT_ProgressiveCheckpoint)
     bpy.utils.register_class(BLOSM_OT_ProgressiveReport)
     for handlers in (bpy.app.handlers.load_pre, bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
         handlers.append(stop_for_scene_change)
@@ -209,4 +232,5 @@ def unregister():
         if stop_for_scene_change in handlers:
             handlers.remove(stop_for_scene_change)
     bpy.utils.unregister_class(BLOSM_OT_ProgressiveReport)
+    bpy.utils.unregister_class(BLOSM_OT_ProgressiveCheckpoint)
     bpy.utils.unregister_class(BLOSM_OT_CancelProgressive)
