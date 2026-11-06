@@ -146,6 +146,57 @@ try:
         assert 'City of Test' in bpy.context.scene.blosm.copyright
         checks.append('incremental geometry/context/blocking parity, join=%s' % join)
 
+    for join in (False, True):
+        for imported_before_edit in (1, 2):
+            for edit in ('delete_collection', 'delete_hierarchy', 'unlink', 'rename_and_move'):
+                reset_scene()
+                operation, transport = task(join)
+                for _ in range(500):
+                    operation.job.step(max_steps=1)
+                    if operation.renderer.num_imported_tiles == imported_before_edit:
+                        break
+                assert operation.renderer.num_imported_tiles == imported_before_edit
+                assert not operation.job.done  # Edit before finalization, even after the last tile.
+                destination = operation.renderer.collection
+                old_name = destination.name
+                if edit == 'rename_and_move':
+                    destination.name = 'Renamed by user'
+                    parent = bpy.data.collections.new('User parent')
+                    bpy.context.scene.collection.children.link(parent)
+                    parent.children.link(destination)
+                    bpy.context.scene.collection.children.unlink(destination)
+                elif edit == 'unlink':
+                    bpy.context.scene.collection.children.unlink(destination)
+                    destination.name = 'Detached by user'
+                else:
+                    if edit == 'delete_hierarchy':
+                        for obj in list(destination.objects):
+                            bpy.data.objects.remove(obj, do_unlink=True)
+                    bpy.data.collections.remove(destination)
+                # A replacement with the same name must not be adopted or joined.
+                unrelated = bpy.data.collections.new(old_name)
+                bpy.context.scene.collection.children.link(unrelated)
+                sentinel = bpy.data.objects.new('User mesh', bpy.data.meshes.new('User mesh'))
+                unrelated.objects.link(sentinel)
+                drive(operation)
+                assert operation.job.result == (2, [])
+                assert transport.closed
+                assert list(unrelated.objects) == [sentinel] and sentinel.name == 'User mesh'
+                if edit == 'rename_and_move':
+                    assert operation.renderer.collection == destination
+                    assert len(destination.objects) == (1 if join else 2)
+                elif imported_before_edit == 1:
+                    replacement = operation.renderer.collection
+                    assert replacement is not None and replacement != unrelated
+                    assert replacement in bpy.context.scene.collection.children_recursive
+                    assert len(replacement.objects) == 1
+                elif join:
+                    assert operation.renderer.collection is None
+                if edit == 'unlink':
+                    assert len(destination.objects) == imported_before_edit
+                    assert destination not in bpy.context.scene.collection.children_recursive
+        checks.append('destination deletion/unlink/rename/move before next tile and final join, join=%s' % join)
+
     reset_scene()
     operation, transport = task(True)
     while operation.renderer.num_imported_tiles == 0:

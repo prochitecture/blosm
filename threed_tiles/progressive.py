@@ -19,7 +19,23 @@ class ProgressiveRenderer(BlenderRenderer):
     def renderB3dm(self, manager, uri, path, transformMatrix, *, content=None):
         self._tile(manager, uri, path, transformMatrix, content, 'renderB3dm')
 
+    def _destination(self):
+        # Users can delete or unlink the collection between timer turns.
+        # Follow its identity, not its name, including after renaming or moving
+        # it within the scene. Never adopt an unrelated same-named collection.
+        collection = self.collection
+        if collection is not None:
+            try:
+                collection.name  # A deleted Blender datablock raises ReferenceError.
+                if collection in bpy.context.scene.collection.children_recursive:
+                    return collection
+            except ReferenceError:
+                pass
+            self.collection = None
+        return None
+
     def _tile(self, manager, uri, path, transform, content, method):
+        destination = self._destination()
         with preserve_context():
             tile = BlenderRenderer(self.threedTilesName, False, self.instanceName, report=self.report)
             tile.heightOffset = self.heightOffset
@@ -36,13 +52,11 @@ class ProgressiveRenderer(BlenderRenderer):
                 tile.finalize(manager)
                 if not tile.num_imported_tiles:
                     return
-                if self.collection is None:
+                if destination is None:
                     self.collection = output
                 else:
-                    if self.collection.name not in bpy.context.scene.collection.children:
-                        raise RuntimeError('The destination collection was removed during import')
                     for obj in list(output.objects):
-                        self.collection.objects.link(obj)
+                        destination.objects.link(obj)
                         output.objects.unlink(obj)
                     bpy.data.collections.remove(output)
                 for holder, count in tile.copyrightHolders.items():
@@ -77,10 +91,13 @@ class ProgressiveRenderer(BlenderRenderer):
     def finalize(self, manager):
         # Completed tiles are already positioned. Cancel never joins or
         # retransforms the user's visible objects.
-        if not self.cancelled and self.join3dTilesObjects and self.collection is not None:
+        if self.cancelled or not self.join3dTilesObjects:
+            return
+        collection = self._destination()
+        if collection is not None:
             with preserve_context():
                 bpy.ops.object.select_all(action='DESELECT')
-                for obj in self.collection.objects:
+                for obj in collection.objects:
                     if obj.type == 'MESH':
                         obj.select_set(True)
                 meshes = list(bpy.context.selected_objects)

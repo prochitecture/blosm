@@ -18,6 +18,14 @@ imports keep their separate objects. A large tile or final join can visibly paus
 the viewport: individual Blender API calls are synchronous and cannot be preempted
 by the scheduler's time budget. Disable joining to avoid that final operation.
 
+Deleting or renaming imported objects does not stop loading. If the destination
+collection is deleted or unlinked from the import scene, the next successful tile
+starts a new collection. Deleted tiles are not imported again. If no tiles remain
+to load, a missing destination collection simply skips the final join. Renaming
+or moving the collection within the same scene preserves it as the destination;
+an unrelated collection with the old name is never adopted. The reported tile
+count records successful imports, including tiles subsequently deleted by the user.
+
 Only one Blosm import may run at a time. Settings are captured when starting.
 Changing to another scene/view layer or entering Edit Mode pauses scene changes
 until the original scene/view layer and Object Mode are active again. Completed
