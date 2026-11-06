@@ -19,9 +19,9 @@ the viewport: individual Blender API calls are synchronous and cannot be preempt
 by the scheduler's time budget. Disable joining to avoid that final operation.
 
 Deleting or renaming imported objects does not stop loading. If the destination
-collection is deleted or unlinked from the import scene, the next successful tile
-starts a new collection. Deleted tiles are not imported again. If no tiles remain
-to load, a missing destination collection simply skips the final join. Renaming
+collection is deleted or unlinked from the import scene, loading stops with one
+error report. No replacement collection is created, including when deletion
+happens just before the final join. Renaming
 or moving the collection within the same scene preserves it as the destination;
 an unrelated collection with the old name is never adopted. The reported tile
 count records successful imports, including tiles subsequently deleted by the user.
@@ -54,6 +54,8 @@ The top-level progressive package is independent of 3D Tiles:
   request understood by the supplied transport. The reply is sent back into the
   generator; a request error is thrown into it. The return value is the job result.
   close/cancel invokes generator finally blocks and closes the transport.
+  An optional validate callback runs before each step, allowing adapters to
+  stop with an error if user edits invalidate the import destination.
 - transport.DownloadTransport implements submit, poll and close using a separate
   ordinary Python helper and nonblocking loopback sockets. It discovers Blender's
   bundled Python at runtime. The helper window is hidden on Windows. URLs travel

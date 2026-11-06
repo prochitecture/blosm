@@ -178,20 +178,30 @@ try:
                 bpy.context.scene.collection.children.link(unrelated)
                 sentinel = bpy.data.objects.new('User mesh', bpy.data.meshes.new('User mesh'))
                 unrelated.objects.link(sentinel)
-                drive(operation)
-                assert operation.job.result == (2, [])
+                if edit == 'rename_and_move':
+                    drive(operation)
+                    assert operation.job.result == (2, [])
+                else:
+                    requests = list(transport.requests)
+                    collections = set(bpy.data.collections)
+                    operation.job.step()
+                    assert operation.job.done
+                    assert isinstance(operation.job.error, RuntimeError)
+                    message = 'The destination collection was deleted or removed from the import scene'
+                    assert str(operation.job.error) == message
+                    assert operation.renderer.num_imported_tiles == imported_before_edit
+                    assert not operation.manager.errors
+                    assert transport.requests == requests
+                    assert set(bpy.data.collections) == collections
+                    reports = []
+                    with patch.object(adapter_module, 'notify', side_effect=lambda *args: reports.append(args)):
+                        operation.finish()
+                    assert reports == [('ERROR', '3D Tiles import stopped: ' + message)]
                 assert transport.closed
                 assert list(unrelated.objects) == [sentinel] and sentinel.name == 'User mesh'
                 if edit == 'rename_and_move':
                     assert operation.renderer.collection == destination
                     assert len(destination.objects) == (1 if join else 2)
-                elif imported_before_edit == 1:
-                    replacement = operation.renderer.collection
-                    assert replacement is not None and replacement != unrelated
-                    assert replacement in bpy.context.scene.collection.children_recursive
-                    assert len(replacement.objects) == 1
-                elif join:
-                    assert operation.renderer.collection is None
                 if edit == 'unlink':
                     assert len(destination.objects) == imported_before_edit
                     assert destination not in bpy.context.scene.collection.children_recursive

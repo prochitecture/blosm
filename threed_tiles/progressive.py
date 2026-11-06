@@ -31,7 +31,7 @@ class ProgressiveRenderer(BlenderRenderer):
                     return collection
             except ReferenceError:
                 pass
-            self.collection = None
+            raise RuntimeError('The destination collection was deleted or removed from the import scene')
         return None
 
     def _tile(self, manager, uri, path, transform, content, method):
@@ -91,10 +91,10 @@ class ProgressiveRenderer(BlenderRenderer):
     def finalize(self, manager):
         # Completed tiles are already positioned. Cancel never joins or
         # retransforms the user's visible objects.
-        if self.cancelled or not self.join3dTilesObjects:
+        if self.cancelled:
             return
         collection = self._destination()
-        if collection is not None:
+        if self.join3dTilesObjects and collection is not None:
             with preserve_context():
                 bpy.ops.object.select_all(action='DESELECT')
                 for obj in collection.objects:
@@ -123,7 +123,14 @@ class TilesImport:
         self.renderer.num_imported_tiles = 0
         self.renderer.revision = 0
         manager.errors = []
-        self.job = Job(manager.iterRender(*bounds), transport or DownloadTransport())
+        self.job = Job(manager.iterRender(*bounds), transport or DownloadTransport(),
+                       validate=self.validate)
+
+    def validate(self):
+        # Check before resuming downloads/traversal so a removed destination
+        # stops the job, rather than being counted as a failure for each tile.
+        if self.renderer.num_imported_tiles:
+            self.renderer._destination()
 
     @property
     def revision(self):

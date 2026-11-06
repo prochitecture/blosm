@@ -9,9 +9,10 @@ from time import monotonic
 
 
 class Job:
-    def __init__(self, steps, transport):
+    def __init__(self, steps, transport, validate=None):
         self.steps = steps
         self.transport = transport
+        self.validate = validate
         self.waiting = False
         self.reply = None
         self.done = False
@@ -29,6 +30,8 @@ class Job:
             return
         deadline = monotonic() + budget
         try:
+            if self.validate is not None:
+                self.validate()
             for _ in range(max_steps):
                 value, error = None, None
                 if self.waiting:
