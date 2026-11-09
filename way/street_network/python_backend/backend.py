@@ -1,5 +1,6 @@
 """Numerical backend assembly; feature policy is injected through providers."""
 import time
+from dataclasses import replace
 from .intersections import IntersectionProvider
 from .patterns import PatternLibrary
 from .providers import PathProvider, CarriagewayProvider, FurnitureProvider
@@ -49,6 +50,19 @@ class PythonMeshBackend:
             raise ValueError('No registered numerical provider supports: ' + ', '.join(sorted(missing)))
         self.patterns.set_budget(network.settings.pattern_cache_bytes)
         prepared = self.updates.prepare(network, force=force)
+        # Feature providers can supply their own charts and extra UV sets.
+        # Every otherwise uncharted Part gets a shared physical-plan fallback,
+        # after its final geometry has been assembled and before placement.
+        from .providers import Part
+        from .uv import DEFAULT_UV_MAP, PlanarMapping, apply_mapping
+        uv_start = time.perf_counter()
+        products = dict(prepared.products)
+        for key, part in products.items():
+            if isinstance(part, Part) and part.mesh is not None and DEFAULT_UV_MAP not in part.mesh.uv_layers:
+                products[key] = Part(part.owner, apply_mapping(part.mesh, PlanarMapping()),
+                                     dict(part.metadata, uv_mapping='planar_xy_metres'))
+        prepared = replace(prepared, products=products)
+        prepared.timings['uv_seconds'] = time.perf_counter() - uv_start
         meshes = {key: part.mesh for key, part in prepared.products.items()
                   if hasattr(part, 'mesh') and part.mesh is not None}
         prepared.timings['overlap_check'] = validate_overlaps(meshes, changed=prepared.rebuilt,

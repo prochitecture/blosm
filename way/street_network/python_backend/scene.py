@@ -186,6 +186,8 @@ class SceneWriter:
 
     @staticmethod
     def _mesh(name, mesh, scale):
+        from .uv import publication_uv_coordinates
+        mesh.validate()
         result = bpy.data.meshes.new(name)
         try:
             result.vertices.add(len(mesh.xyz))
@@ -197,6 +199,14 @@ class SceneWriter:
             result.polygons.foreach_set('loop_total', np.full(len(mesh.quads), 4, dtype=np.int32))
             result.polygons.foreach_set('use_smooth', np.ones(len(mesh.quads), dtype=bool))
             result.update(calc_edges=True)
+            for name, values in mesh.uv_layers.items():
+                layer = result.uv_layers.new(name=name, do_init=False)
+                if layer.name != name:
+                    raise ValueError('UV map name cannot be represented in Blender: ' + name)
+                layer.uv.foreach_set('vector', publication_uv_coordinates(values).reshape(-1))
+            if result.uv_layers.get('UVMap') is not None:
+                result.uv_layers.active = result.uv_layers['UVMap']
+                result.uv_layers['UVMap'].active_render = True
             return result
         except Exception:
             bpy.data.meshes.remove(result)
@@ -257,11 +267,8 @@ class SceneWriter:
                     # Register immediately: metadata/material/property errors
                     # below must not leak a detached object or its mesh.
                     staged.append(obj)
-                    material = self.materials.get(product.mesh.material)
-                    if material is None:
-                        material = controller.get('st_py_' + product.mesh.material + '_material')
-                    if material is not None:
-                        mesh.materials.append(material)
+                    from .materials import resolve, assign
+                    assign(mesh, resolve(controller, product.mesh.material, self.materials))
                     obj['st_py_owner'] = product.owner.text()
                     product.metadata['bounds'] = product.mesh.bounds
                     product.metadata['terrain_material'] = product.mesh.material
@@ -325,6 +332,8 @@ class SceneWriter:
             if isinstance(data, bpy.types.Mesh) and data.users == 0:
                 bpy.data.meshes.remove(data)
         engine.release_published_meshes()
+        from .materials import refresh
+        update.timings['material_objects_updated'] = refresh(controller, update.products, self.materials)
         return update
 
 

@@ -47,6 +47,9 @@ class PythonStreetBackendTests(unittest.TestCase):
         for retired in ('streetConstruction', 'streetAssetFile'):
             self.assertNotIn(retired, props)
         self.assertIn('streetMaterialFile', props)
+        self.assertIn('streetCarriagewayMaterial', props)
+        self.assertEqual(props['streetCarriagewayMaterial'].fixed_type.identifier, 'Material')
+        self.assertTrue(hasattr(bpy.types.Object, 'blosm_street_pavement'))
         self.assertEqual({item.identifier for item in props['streetTerrainMode'].enum_items}, {'PROFILE', 'DIRECT'})
         self.assertEqual(bpy.context.scene.blosm.streetTerrainMode, 'PROFILE')
         self.assertTrue(hasattr(bpy.types.Object, 'blosm_street_terrain'))
@@ -69,6 +72,26 @@ class PythonStreetBackendTests(unittest.TestCase):
         finally:
             bpy.data.scenes.remove(legacy)
             bpy.data.scenes.remove(retired)
+
+    def test_street_panel_loads_reuses_and_selects_asphalt_materials(self):
+        from blosm.way.street_network.assets import ASPHALTS
+        settings = bpy.context.scene.blosm
+        original = settings.streetCarriagewayMaterial
+        original_path = settings.streetMaterialFile
+        try:
+            settings.streetMaterialFile = ''
+            self.assertEqual(bpy.ops.blosm.load_street_materials(), {'FINISHED'})
+            blocks = [bpy.data.materials[ref.name] for ref in ASPHALTS]
+            pointers = tuple(m.as_pointer() for m in blocks)
+            count = len(bpy.data.materials)
+            self.assertEqual(bpy.ops.blosm.load_street_materials(), {'FINISHED'})
+            self.assertEqual(count, len(bpy.data.materials))
+            self.assertEqual(pointers, tuple(bpy.data.materials[ref.name].as_pointer() for ref in ASPHALTS))
+            settings.streetCarriagewayMaterial = blocks[2]
+            self.assertIs(settings.streetCarriagewayMaterial, blocks[2])
+        finally:
+            settings.streetCarriagewayMaterial = original
+            settings.streetMaterialFile = original_path
 
     def test_terrain_configuration_uses_explicit_selection(self):
         from types import SimpleNamespace

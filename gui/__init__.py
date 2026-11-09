@@ -530,6 +530,8 @@ class BLOSM_PT_Settings(bpy.types.Panel):
                 streets_box.prop(addon, "streetResolution")
                 streets_box.prop(addon, "streetExaggeration")
                 streets_box.prop(addon, "streetMaterialFile")
+                streets_box.operator('blosm.load_street_materials')
+                streets_box.prop(addon, "streetCarriagewayMaterial")
                 streets_box.prop(addon, "streetTerrainMode")
                 streets_box.prop(addon, "streetTerrainClearance")
                 streets_box.prop(addon, "streetTerrainSampling")
@@ -946,6 +948,8 @@ class BlosmProperties(bpy.types.PropertyGroup):
     streetExaggeration: bpy.props.FloatProperty(name="Height exaggeration", default=1., min=0.)
     streetMaterialFile: bpy.props.StringProperty(name="Street materials", subtype='FILE_PATH',
         description="Optional compatible material .blend library for streets; empty uses bundled materials")
+    streetCarriagewayMaterial: bpy.props.PointerProperty(name='Carriageway material', type=bpy.types.Material,
+        description='Optional material for imported carriageways and intersections; empty uses the library default')
     streetTerrainMode: bpy.props.EnumProperty(name="Terrain placement", items=(
         ('PROFILE', 'Preserve profiles (Python)', 'Fit complete cross-sections and coordinated junction heights'),
         ('DIRECT', 'Direct projection (GN)', 'Project vertices and restore relative heights; terrain affects cross-sections')),

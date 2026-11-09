@@ -1,5 +1,10 @@
 # Street terrain placement — dev76
 
+**UV integration, dev77:** [UV maps](STREETS_UV.md) describe the prepared
+surface and remain unchanged by vertical placement in either terrain mode.
+All named face-corner maps survive terrain recovery and republishing. These
+are plan-distance coordinates; they are not re-unwrapped over terrain relief.
+
 Implemented on `buildings_gn`, 4 November 2026, for Blender 5.2. The Python
 backend generates the street meshes. A separate placement stage offers the
 two requested terrain modes; it does not restore the retired GN street solver.

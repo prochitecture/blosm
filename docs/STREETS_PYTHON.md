@@ -1,5 +1,15 @@
 # Python street generation — implementation goal
 
+**6 November 2026, buildings_gn:** [asphalt materials](STREETS_ASPHALT.md)
+adds three PBR and three diffuse-only Poly Haven materials in one packed library,
+import/network material selectors and material-only Update without remeshing.
+Generators are in `prochitecture_gn/materials/`; 160 m comparisons and resource
+reports are under `artifacts/streets/asphalt_materials/`.
+
+**5 November 2026, dev77:** [UV mapping](STREETS_UV.md) adds physical-scale
+road-relative and planar charts, extensible per-face-corner UV sets and
+preservation through explicit Update, scene recovery and terrain placement.
+
 **4 November 2026, dev76:** [terrain placement](STREETS_TERRAIN.md) adds a complete
 corridor contract, profile-preserving Python alignment and optional direct GN
 projection. Both use the existing Python-generated meshes and explicit Update.

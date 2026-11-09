@@ -24,14 +24,45 @@ class Mesh:
     quads: np.ndarray
     material: str = 'pavement'
     seams: dict = field(default_factory=dict)
+    # Blender UVs belong to face corners: a shared geometric vertex may carry
+    # different texture coordinates on either side of a deliberate UV seam.
+    uv_layers: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self.xyz = np.ascontiguousarray(self.xyz, dtype=np.float64)
         self.quads = np.ascontiguousarray(self.quads, dtype=np.int32)
+        self.uv_layers = dict(self.uv_layers)
+        for name, values in self.uv_layers.items():
+            if (not isinstance(name, str) or not name or '\0' in name
+                    or len(name.encode('utf-8')) > 63):
+                raise ValueError('UV layer names must contain 1 to 63 UTF-8 bytes without nulls')
+            values = np.array(values, dtype=np.float64, order='C', copy=True)
+            if values.shape != (len(self.quads), 4, 2) or not np.isfinite(values).all():
+                raise ValueError('UV coordinates must be finite face-corner arrays shaped (quads, 4, 2)')
+            values.setflags(write=False)
+            self.uv_layers[name] = values
+
+    def with_uv_layer(self, name, values):
+        """Return a payload with one replaced/added map and all other maps intact."""
+        layers = dict(self.uv_layers)
+        layers[name] = values
+        return Mesh(self.xyz, self.quads, self.material, self.seams, layers)
+
+    def with_positions(self, xyz):
+        """Replace positions without changing topology, materials, seams or UVs.
+
+        UVs describe the prepared surface and are intentionally unchanged by
+        vertical terrain placement or scene-unit conversion. A provider that
+        changes topology must explicitly supply coordinates for its new corners.
+        """
+        xyz = np.asarray(xyz)
+        if xyz.shape != self.xyz.shape:
+            raise ValueError('Replacing mesh positions must preserve the vertex count')
+        return Mesh(xyz, self.quads, self.material, self.seams, self.uv_layers)
 
     @property
     def nbytes(self):
-        return self.xyz.nbytes + self.quads.nbytes
+        return self.xyz.nbytes + self.quads.nbytes + sum(values.nbytes for values in self.uv_layers.values())
 
     @property
     def bounds(self):
@@ -42,6 +73,14 @@ class Mesh:
                 or not np.all(np.isfinite(self.xyz)) or self.quads.ndim != 2 or self.quads.shape[1] != 4
                 or not len(self.quads) or self.quads.min() < 0 or self.quads.max() >= len(self.xyz)):
             raise ValueError('Invalid numerical mesh buffers')
+        # The dictionary is extensible for providers, so validate again before
+        # publication even though constructor-owned arrays are immutable.
+        for name, values in self.uv_layers.items():
+            if (not isinstance(name, str) or not name or '\0' in name
+                    or len(name.encode('utf-8')) > 63):
+                raise ValueError('Invalid UV layer name')
+            if np.shape(values) != (len(self.quads), 4, 2) or not np.isfinite(values).all():
+                raise ValueError('Invalid face-corner UV coordinates')
         points = self.xyz[self.quads, :2]
         edges = np.roll(points, -1, axis=1) - points
         jacobians = cross(edges, np.roll(edges, -1, axis=1))

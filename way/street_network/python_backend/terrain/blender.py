@@ -123,6 +123,10 @@ def hydrate(update, owned, scale):
         if product.mesh is None:
             obj=owned.get(key)
             if obj is None: raise ValueError('A saved street mesh is missing; use a full regeneration')
+            counts=np.empty(len(obj.data.polygons),np.int32)
+            obj.data.polygons.foreach_get('loop_total',counts)
+            if len(obj.data.loops)!=4*len(counts) or np.any(counts!=4):
+                raise ValueError('Saved generated street topology must contain quads; use a full regeneration')
             xyz=np.empty((len(obj.data.vertices),3),np.float32)
             obj.data.vertices.foreach_get('co',xyz.ravel())
             xyz=xyz.astype(float)*scale
@@ -134,10 +138,14 @@ def hydrate(update, owned, scale):
             if role is None:
                 grass=obj.get('st_py_controller').get('st_py_grass_material')
                 role='grass' if grass is not None and grass in obj.data.materials[:] else 'pavement'
-            mesh=Mesh(xyz,ids.reshape(-1,4),role)
+            layers={}
+            for layer in obj.data.uv_layers:
+                values=np.empty((len(obj.data.polygons),4,2),np.float32)
+                layer.uv.foreach_get('vector',values.ravel())
+                layers[layer.name]=values
+            mesh=Mesh(xyz,ids.reshape(-1,4),role,uv_layers=layers)
         else:
-            mesh=Mesh(publication_coordinates(product.mesh.xyz,scale,physical=True),product.mesh.quads,
-                      product.mesh.material,product.mesh.seams)
+            mesh=product.mesh.with_positions(publication_coordinates(product.mesh.xyz,scale,physical=True))
         products[key]=Part(product.owner,mesh,dict(product.metadata,terrain_material=mesh.material))
     return replace(update,products=products)
 
@@ -179,7 +187,7 @@ class ScenePlacement:
         for c in components:
             key=Key.parse(c.identity); raw=products[key]
             xyz=fitted.coordinates[c.identity] if fitted else raw.mesh.xyz
-            products[key]=Part(raw.owner,Mesh(xyz,raw.mesh.quads,raw.mesh.material,raw.mesh.seams),
+            products[key]=Part(raw.owner,raw.mesh.with_positions(xyz),
                 dict(raw.metadata,terrain_datum=c.datum,terrain_reference=c.reference))
         by_key={c.identity:c for c in components}
         placements={p.id:p for p in network.furniture}

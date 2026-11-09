@@ -41,6 +41,14 @@ class PythonStreetRenderer(StreetRenderBackend):
         with ImportTransaction():
             return self._render(manager, data)
 
+    def load_materials(self):
+        """Explicit import override, with the existing library defaults otherwise."""
+        pavement = getattr(self.app, 'streetCarriagewayMaterial', None)
+        refs = (assets.GRASS,) if pavement is not None else (assets.PAVEMENT, assets.GRASS)
+        loaded = self.loader.load_many(refs)
+        return {'pavement': pavement if pavement is not None else loaded[assets.PAVEMENT],
+                'grass': loaded[assets.GRASS]}
+
     def _render(self, manager, data):
         start = time.perf_counter()
         snapshot = self.adapter.read(manager)
@@ -48,8 +56,7 @@ class PythonStreetRenderer(StreetRenderBackend):
         settings = Settings(self.design.cell_size, self.design.resolution, self.design.exaggeration)
         adaptation = self.converter.read(physical, str(uuid4()), settings,
             rise=self.design.profile_rise, interpolation=self.design.interpolation)
-        loaded = self.loader.load_many((assets.PAVEMENT, assets.GRASS))
-        materials = {'pavement': loaded[assets.PAVEMENT], 'grass': loaded[assets.GRASS]}
+        materials = self.load_materials()
         collection = bpy.data.collections.new('Blosm / Python streets')
         bpy.context.scene.collection.children.link(collection)
         results = []

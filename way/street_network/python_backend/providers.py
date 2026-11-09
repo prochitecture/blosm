@@ -218,11 +218,16 @@ class CarriagewayProvider(FeatureProvider):
         mesh = Mesh(xyz.reshape(-1, 3), grid.quads[:, ::-1])
         mesh.seams = {0: np.arange(across + 1),
                       1: np.arange((len(stations) - 1) * (across + 1), len(stations) * (across + 1))}
+        from .uv import RoadMapping, apply_mapping
+        mesh = apply_mapping(mesh, RoadMapping(
+            np.repeat(stations, across + 1),
+            np.tile(section.offset + .5 * section.width * q, len(stations))))
         quality = mesh.validate()
         metadata = dict(start=first, end=last, quality=quality,
                     transverse_intervals=across, profile_half=profile.half, compound_spans=covered,
                     junction_spans=junction_spans, transition_spans=transition_spans,
-                    terrain_stations=stations.tolist(), terrain_datum=float(profile.datum))
+                    terrain_stations=stations.tolist(), terrain_datum=float(profile.datum),
+                    uv_mapping='road_station_transverse_metres')
         if refine_sampling:
             metadata['local_curvature_sampling'] = True
         if getattr(path, 'localized', False):

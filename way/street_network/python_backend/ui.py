@@ -36,7 +36,34 @@ class BLOSM_OT_UpdatePythonStreets(bpy.types.Operator):
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
         count = update.timings.get('published_objects', 0) + update.timings.get('removed_objects', 0)
-        self.report({'INFO'}, f'Updated {count} street objects' if count else 'Already up to date')
+        material_count = update.timings.get('material_objects_updated', 0)
+        self.report({'INFO'}, f'Updated {count} street objects; {material_count} material assignments'
+                    if count or material_count else 'Already up to date')
+        return {'FINISHED'}
+
+
+class BLOSM_OT_LoadStreetMaterials(bpy.types.Operator):
+    bl_idname = 'blosm.load_street_materials'
+    bl_label = 'Load asphalt materials'
+    bl_description = 'Load the three PBR and three diffuse-only asphalt materials from the street material library'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from pathlib import Path
+        from ....app.asset_library import BlenderAssetLoader
+        from .. import assets
+        settings = getattr(context.scene, 'blosm', None)
+        external = getattr(settings, 'streetMaterialFile', '')
+        try:
+            # Explicit user library browsing embeds the chosen materials. Import
+            # generation retains its normal asset storage policy.
+            loader = BlenderAssetLoader(Path(__file__).resolve().parents[3] / 'assets',
+                                        assets.material_catalog(external))
+            loader.load_many(assets.ASPHALTS)
+        except Exception as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self.report({'INFO'}, 'Loaded six asphalt materials')
         return {'FINISHED'}
 
 
@@ -127,6 +154,8 @@ class BLOSM_PT_PythonStreets(bpy.types.Panel):
         controller = controller_for(context.active_object)
         self.layout.operator('blosm.update_python_streets', icon='FILE_REFRESH')
         self.layout.operator('blosm.python_street_section')
+        self.layout.prop(controller, 'blosm_street_pavement')
+        self.layout.operator('blosm.load_street_materials')
         for key, label in (('st_py_cell_size', 'Cell size (m)'), ('st_py_resolution', 'Resolution'),
                            ('st_py_exaggeration', 'Exaggeration')):
             self.layout.prop(controller, '["' + key + '"]', text=label)
@@ -151,7 +180,8 @@ class BLOSM_PT_PythonStreets(bpy.types.Panel):
             self.layout.label(text=controller['st_py_error'][:70])
 
 
-CLASSES = (BLOSM_PG_StreetTerrain, BLOSM_OT_UpdatePythonStreets, BLOSM_OT_PythonStreetSection, BLOSM_PT_PythonStreets)
+CLASSES = (BLOSM_PG_StreetTerrain, BLOSM_OT_UpdatePythonStreets, BLOSM_OT_LoadStreetMaterials,
+           BLOSM_OT_PythonStreetSection, BLOSM_PT_PythonStreets)
 
 
 def register():
@@ -160,10 +190,15 @@ def register():
             bpy.utils.register_class(cls)
     if not hasattr(bpy.types.Object, 'blosm_street_terrain'):
         bpy.types.Object.blosm_street_terrain = bpy.props.PointerProperty(type=BLOSM_PG_StreetTerrain)
+    if not hasattr(bpy.types.Object, 'blosm_street_pavement'):
+        bpy.types.Object.blosm_street_pavement = bpy.props.PointerProperty(name='Carriageway material',
+            type=bpy.types.Material, description='Optional material override; press Update to apply to this network')
     register_runtime()
 
 
 def unregister():
+    if hasattr(bpy.types.Object, 'blosm_street_pavement'):
+        del bpy.types.Object.blosm_street_pavement
     if hasattr(bpy.types.Object, 'blosm_street_terrain'):
         del bpy.types.Object.blosm_street_terrain
     for cls in reversed(CLASSES):

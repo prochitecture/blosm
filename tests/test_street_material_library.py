@@ -44,8 +44,10 @@ class StreetMaterialLibraryTests(unittest.TestCase):
     def test_material_library_contains_no_geometry(self):
         with bpy.data.libraries.load(str(OPTIONS.asset_root/assets.MATERIAL_LIBRARY.path)) as (data, _):
             self.assertEqual(set(data.materials), {assets.PAVEMENT.name, assets.GRASS.name,
-                                                 assets.DIAGNOSTICS.name, assets.DIAGNOSTIC_RED.name})
-            for kind in ('node_groups', 'objects', 'meshes', 'texts', 'images'):
+                                                 assets.DIAGNOSTICS.name, assets.DIAGNOSTIC_RED.name,
+                                                 *(ref.name for ref in assets.ASPHALTS)})
+            self.assertEqual(len(data.images), 9)
+            for kind in ('node_groups', 'objects', 'meshes', 'texts'):
                 self.assertEqual(getattr(data, kind), [], kind)
 
     def test_python_mesh_and_update_need_only_the_material_library(self):
