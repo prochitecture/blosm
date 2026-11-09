@@ -112,6 +112,11 @@ def main():
     success = {s['footprint_id'] for s in report['statuses'] if not s.get('error')}
     assert set(bounds) == success, (set(bounds)-success,success-set(bounds))
     by_id = {f.footprint_id:f for f in footprints}
+    failures = [{'status':row,'identity':by_id[row['footprint_id']].identity,
+                 'outer':by_id[row['footprint_id']].outer,
+                 'attributes':dict(by_id[row['footprint_id']].attributes)}
+                for row in report['statuses'] if row.get('error')]
+    (destination / (args.backend + '_failures.json')).write_text(json.dumps(failures,indent=2)+'\n')
     single_planar_caps = Counter()
     for fid,sizes in roof_caps.items():
         footprint = by_id[fid]
@@ -119,11 +124,9 @@ def main():
         if roof in ('flat','skillion') and not footprint.holes:
             assert sizes == [len(footprint.outer)], ('Planar roof must be one original polygon',roof,fid,sizes)
             single_planar_caps[roof] += 1
-    if args.backend == 'python':
-        import json as _json
-        main = next((f for f in footprints if _json.loads(f.identity)[1] == 'osm:way:840186547'),None)
-        if main is not None:
-            assert main.footprint_id in success, 'Python failed to generate the St. Pius main body'
+    main = next((f for f in footprints if json.loads(f.identity)[1] == 'osm:way:840186547'),None)
+    if main is not None:
+        assert main.footprint_id in success, (args.backend, 'St. Pius main body is missing')
     assert all(FaceType.generates_volume(by_id[fid].face_type) for fid in bounds)
     for fid,(low,high) in bounds.items():
         f = by_id[fid]
@@ -132,8 +135,8 @@ def main():
             assert abs(high-samples[fid]-f.attributes['max_elevation']) < .01, (fid,high,samples[fid])
     messages = [message.message for result in results for mod in result.output.modifiers
                 for message in getattr(mod,'node_warnings',[])]
-    assert not messages or any(row.get('error') for row in report['statuses']), messages
-    assert all(message in {'ERR_NON_CONVEX', 'ERR_STRAIGHT_ANGLE'} for message in messages), messages
+    assert not failures, failures
+    assert not messages, messages
     details = {'backend':args.backend,'dedicated':args.dedicated,'source_sha256':before,
         'elapsed_seconds':time.monotonic()-started,'input_count':len(footprints),
         'object_count':len(results),'generated_count':len(bounds),'vertices':vertices,'faces':faces,

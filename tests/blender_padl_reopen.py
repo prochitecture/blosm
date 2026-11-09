@@ -51,10 +51,10 @@ def main():
             assert len(bpy.data.node_groups) == count
         # Both a constrained edit and a new explicit level count after reopening.
         footprints = read_footprints(owner)
-        if backend == 'python':
-            main_part = next((f for f in footprints if json.loads(f.identity)[1] == 'osm:way:840186547'),None)
-            if main_part is not None:
-                assert abs(top(output,main_part.footprint_id)-right['bounds'][str(main_part.footprint_id)][1]) < .0001
+        main_part = next((f for f in footprints if json.loads(f.identity)[1] == 'osm:way:840186547'),None)
+        if main_part is not None:
+            expected = reports[backend]['bounds'][str(main_part.footprint_id)][1]
+            assert abs(top(output,main_part.footprint_id)-expected) < .0001
         successes = {int(k) for k in reports[backend]['bounds']}
         used = set()
         for supplied in (True, False):

@@ -29,6 +29,24 @@ choice. Publication derives `available_roofs` from the matching compiler
 catalog and actual program dependencies; Python uses those same capabilities.
 Ship the Blender file, catalogs and extracted document together.
 
+`BuildingProgramLibrary.program(role)` caches the validated parsed `Program`
+on that library instance. One ordinary import creates one library, so manager
+prevalidation and all packed/dedicated generation calls share one parse per
+unchanged PADL document. Both backends use this path. Later imports create a
+fresh library; longer-lived callers can reuse their instance.
+
+Cache entries track the requested document path, published program fingerprint,
+file identity, size and nanosecond modification/change times. Changes reparse and
+revalidate the document; invalid documents never replace a valid result silently.
+Edition and file-identity checks still run on every access. Path resolution and
+containment validation run on cache misses and invalidated entries. Call
+`library.clear_program_cache(role)` or `library.clear_program_cache()` to force
+revalidation, including unusual external edits that preserve file metadata.
+The cache retains only the latest program per role and treats shared structure
+as read-only. Input attributes, selected branches, fitted heights, random samples
+and evaluator caches remain execution-specific. The JSON embedded on an editable
+Python owner is still parsed when explicitly regenerating that owner.
+
 Publish runtime sidecars after a build (Windows cmd, one line):
 
 ```bat
@@ -166,8 +184,12 @@ Python gabled roofs support simple convex and concave footprints without holes.
 They reuse the existing profile geometry algorithm, extracted into the synchronized
 `padl/profile_geometry.py`; legacy `RoofProfile` uses that same kernel. PADL
 provides dimensions, direction and placement explicitly, preserving source corners.
-GN gabled roofs currently require convex, hole-free inputs. Geometry failures are reported
-per footprint without silently choosing a different roof.
+Current Stage 6 GN gabled roofs also support simple concave, hole-free inputs,
+using native directed global-profile strips. The PADL adapter passes the same
+direction, profile and elevation inputs for convex and concave footprints.
+The direct concave route retains straight and near-straight source corners.
+Legacy convex angular and general numeric checks still apply; holes remain unsupported.
+Geometry failures are reported per footprint without silently choosing another roof.
 
 Flat and skillion roofs without holes are native single n-gons in both backends, built
 directly from their footprint boundary, including concave/collinear corners.
@@ -208,6 +230,13 @@ describe rejected footprints; valid-only inputs must produce no warnings.
 
 ## Berlin acceptance
 
+The current GN library generates all 183 volumes (50 parts), including St. Pius
+ways 840186541 and 840186547 (main body). Removing the inherited angular guard
+from the direct concave path resolves the two remaining exclusions; original
+corners are retained. See the [straight-corner fix qualification](../../padl/docs/GABLED_STRAIGHT_CORNERS.md)
+for asset identity and review scenes, and the [earlier concave integration](../../padl/docs/CONCAVE_GABLED_ACCEPTANCE.md)
+for the wider direction/profile matrix.
+
 `tests/blender_padl_berlin.py` runs the actual addon import against
 `C:\prochitecture\setup\bldg2_berlin_karl_marx_allee.blend`, its `Terrain` and
 the local OSM extract. Copies go under `C:\dev\workspace\artifacts\padl_berlin`;
@@ -217,12 +246,12 @@ both outputs, checks reuse/parity and edits counts with H fixed and unconstraine
 Building-part acceptance on 2026-11-03 retains 188 footprints: 133 standalone
 buildings, five context-only outlines and 50 associated parts. Both backends
 generate 168 GN volumes (45 parts) and 183 Python volumes (50 parts).
-Python now generates all fifteen concave gabled volumes rejected by GN, including
+At that earlier checkpoint Python generated all fifteen concave gabled volumes rejected by GN, including
 the main body and tower of St. Pius-Kirche. Mapping reports one unresolved part
 association and twelve unsupported roof-shape notices. Compare vertical bounds
 on their common generated footprint IDs. The Python run has zero generation
 failures. GN has 1,965 faces; Python has 2,201 faces. These are
-explicit current profile/solver limits, not complete source coverage.
+historical profile/solver results; the current counts are given above.
 
 Run either backend with `--dedicated` to test Single object disabled. Outputs
 for the part acceptance runs are under `artifacts/padl_parts/packed` and

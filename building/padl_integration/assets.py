@@ -16,6 +16,7 @@ class BuildingProgramLibrary:
             raise PadlError('Unsupported building asset catalog', code='incompatible_asset')
         self.app = app
         self._loader = None
+        self._programs = {}
 
     def record(self, role):
         try:
@@ -29,14 +30,42 @@ class BuildingProgramLibrary:
         return record
 
     def program(self, role):
+        """Reuse validated structure within this library, never evaluation state.
+
+        Keep only the latest document revision per role. Stat checks also notice
+        edits/atomic replacements made while a caller retains the library.
+        """
         record = self.record(role)
-        path = (self.root / record['document']).resolve()
+        source = self.root / record['document']
+        identity = (source, record['program_sha256'])
+        cached = self._programs.get(role)
+        if cached is not None and cached[0] == identity:
+            # Stat the requested path so a replaced file or redirected symlink
+            # cannot reuse the previously verified target's cached structure.
+            if cached[1] == self._document_revision(source):
+                return cached[2]
+        self._programs.pop(role, None)
+        path = source.resolve()
         if not path.is_relative_to(self.root.resolve()):
             raise PadlError('Building document path escapes assets', code='incompatible_asset')
+        revision = self._document_revision(path)
         program = PadlParser().load(path)
         if program.fingerprint != record['program_sha256']:
             raise PadlError('Building document differs from the published program', code='program_mismatch')
+        self._programs[role] = (identity, revision, program)
         return program
+
+    @staticmethod
+    def _document_revision(path):
+        stat = path.stat()
+        return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+    def clear_program_cache(self, role=None):
+        """Force revalidation on next access, for one role or the whole library."""
+        if role is None:
+            self._programs.clear()
+        else:
+            self._programs.pop(role, None)
 
     def available_roofs(self, role):
         roofs = self.record(role).get('available_roofs')
