@@ -20,8 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import math
 from mathutils import Vector
 from . import Roof
-from util import zero
-from util.osm import parseNumber
+from ...util import zero
+from ...util.osm import parseNumber
 
 
 # Use https://raw.githubusercontent.com/wiki/vvoovv/blosm/assets/roof_profiles.blend

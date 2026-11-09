@@ -391,7 +391,7 @@ class BlenderApp(BaseApp):
         if addonName in prefs:
             dataDir = prefs[addonName].preferences.dataDir
             if not dataDir:
-                raise Exception("A valid directory for data in the addon preferences isn't set")
+                dataDir = bpy.utils.extension_path_user(addonName, create=True)
             dataDir = os.path.realpath(bpy.path.abspath(dataDir))
             if not os.path.isdir(dataDir):
                 raise Exception("The directory for data in the addon preferences doesn't exist")
@@ -668,7 +668,7 @@ class BlenderApp(BaseApp):
         if bpyproj:
             projection = bpyproj.getProjection(lat, lon)
         if not projection:
-            from util.transverse_mercator import TransverseMercator
+            from ..util.transverse_mercator import TransverseMercator
             # fall back to the Transverse Mercator
             projection = TransverseMercator(lat=lat, lon=lon)
         self.projection = projection

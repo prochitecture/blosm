@@ -79,9 +79,6 @@ class ProgressiveRenderer(BlenderRenderer):
                         if block.users == 0:
                             blocks.remove(block)
                 raise
-            finally:
-                if tile._gltfImporterPatched:
-                    tile.cleanupGltfImporterPatching()
 
     def _attribution(self):
         bpy.context.scene.blosm.copyright = '; '.join(

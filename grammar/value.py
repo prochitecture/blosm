@@ -1,5 +1,5 @@
 import math
-from util.osm import parseNumber
+from ..util.osm import parseNumber
 from .scope import *
 
 
@@ -377,7 +377,7 @@ class FromStyleBlockAttr:
         return item.getStyleBlockAttr(self.attr)
 
 
-from util.random import RandomNormal as RandomNormalBase
+from ..util.random import RandomNormal as RandomNormalBase
 class RandomNormal(_Value):
     """
     A wrapper for <util.random.RandomNormal>
@@ -390,7 +390,7 @@ class RandomNormal(_Value):
         return self._value.value
 
 
-from util.random import RandomWeighted as RandomWeightedBase
+from ..util.random import RandomWeighted as RandomWeightedBase
 class RandomWeighted(_Value):
     """
     A wrapper for <util.random.RandomWeighted>

@@ -18,10 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import os, bpy, bmesh
-from util import zeroVector
-from util.blender import createCollection, createEmptyObject, createDiffuseMaterial, pointNormalUpward,\
+from ..util import zeroVector
+from ..util.blender import createCollection, createEmptyObject, createDiffuseMaterial, pointNormalUpward,\
     getBmesh, setBmesh
-from util.osm import assignTags
+from ..util.osm import assignTags
 
 
 class Renderer:

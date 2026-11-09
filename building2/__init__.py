@@ -1,6 +1,6 @@
 from mathutils import Vector
-import parse
-from util.polygon import Polygon
+from .. import parse
+from ..util.polygon import Polygon
 
 
 class Building:

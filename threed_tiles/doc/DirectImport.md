@@ -11,7 +11,7 @@ in [ProgressiveImport.md](../../progressive/ProgressiveImport.md). Shared
 
 ## Entry point and version compatibility
 
-import_gltf(filepath, *, content=None, report=None) accepts either a file path
+import_gltf(filepath, *, content=None, report=None, coordinate_offset=None) accepts either a file path
 or a bytes-like object. When content is provided, the path supplies the source
 identity and the directory for external buffers/images, without requiring that
 the tile itself exist. Self-contained GLB content requires no tile file.
@@ -35,7 +35,7 @@ runs on both success and failure. Python calls through bpy.ops.blosm.import_data
 still raise RuntimeError when the outer operator reports an ERROR, such as when
 no tiles were imported.
 
-Version dispatch follows the existing coordinate-conversion patching:
+Version dispatch follows Blender's glTF module layout:
 
 | Blender version | Scene creation implementation |
 | --- | --- |
@@ -57,7 +57,7 @@ parity was checked without it on Blender 4.5, 5.0, 5.1 and 5.2.
 - GLB downloads go directly to the adapter as bytes.
 - B3DM is decoded with the existing bundled parser. Its GLB array goes directly
   to the adapter, while RTC_CENTER is applied using the existing renderer logic.
-  The temporary RTC conversion switch is restored on exceptions.
+  A zero coordinate offset preserves RTC-relative coordinates during import.
 - Attribution is read from parsed glTF asset metadata, preserving spaces,
   punctuation and Unicode. Existing semicolon-separated aggregation remains.
 - Root and nested JSON manifests are downloaded and parsed in memory on each
@@ -73,9 +73,9 @@ parity was checked without it on Blender 4.5, 5.0, 5.1 and 5.2.
 
 Scene creation still runs synchronously on Blender's main thread. This change
 does not make a single glTF import interruptible or safe in a worker thread.
-The blocking path owns coordinate patches for the whole import. The progressive
-adapter applies and restores them within each synchronous tile step, before
-returning control to Blender.
+Both import modes rebase private parsed node transforms before Blender converts
+them to single-precision values. Selection is controlled through import settings.
+Neither path changes Blender's shared importer classes or other add-ons.
 
 ## Validation and benchmark
 
@@ -105,7 +105,7 @@ before direct importing was introduced. Its revision is recorded in the results.
 Correctness checks cover operator/file/byte equivalence, topology, UVs, vertex
 colors, packed images, matrices, attribution, external resources, enabled user
 extensions, invalid input, logger cleanup, RTC with/without/zero center, joining,
-and patch restoration after failure. A separate check exercises the registered
+and importer isolation after failure. A separate check exercises the registered
 Blosm operator with root and nested JSON manifests and mixed GLB/B3DM tiles,
 including repeated downloads and continuation after a failed tile. Guards reject
 local dataset reads/writes and any invocation of the glTF import operator in the

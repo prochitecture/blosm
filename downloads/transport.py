@@ -19,6 +19,7 @@ from time import monotonic
 from urllib.error import HTTPError
 from . import Request, DownloadError, STALLED_WORKER_EXIT_CODE
 from .diagnostics import redact_url
+from .access import require_online_access
 
 MAX_BYTES = 256 * 1024 * 1024
 _retired = []
@@ -51,6 +52,7 @@ def python_executable():
 
 class DownloadTransport:
     def __init__(self, max_requests=4, max_bytes=MAX_BYTES, max_buffer_bytes=None):
+        require_online_access()
         if not 1 <= max_requests <= 8 or not 1 <= max_bytes <= MAX_BYTES:
             raise ValueError('Invalid download limits')
         # Reserve a worst-case payload for every outstanding request. Thus
@@ -88,6 +90,7 @@ class DownloadTransport:
             raise
 
     def submit(self, request):
+        self._check_online_access()
         if self.process is None:
             raise RuntimeError('Download transport is closed')
         if len(self.pending) >= self.max_requests:
@@ -106,6 +109,7 @@ class DownloadTransport:
         return identity
 
     def poll(self):
+        self._check_online_access()
         if self.process is None:
             raise RuntimeError('Download transport is closed')
         returncode = self.process.poll()
@@ -207,6 +211,13 @@ class DownloadTransport:
         if self.silent_poll_seconds > 15:
             raise TimeoutError('The download helper is unresponsive')
         return None
+
+    def _check_online_access(self):
+        try:
+            require_online_access()
+        except RuntimeError:
+            self.close()
+            raise
 
     def close(self):
         _live.discard(self)

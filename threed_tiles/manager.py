@@ -292,6 +292,8 @@ class BaseManager:
         self.areaMaxLat = radians(maxLat)
     
     def download(self, url):
+        from ..downloads.access import require_online_access
+        require_online_access()
         req = request.Request(
             url,
             data = None,

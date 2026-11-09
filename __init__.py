@@ -17,41 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-bl_info = {
-    "name": "Blosm",
-    "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 28),
-    "blender": (4, 5, 0),
-    "location": "Right side panel > \"Blosm\" tab",
-    "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
-    "warning": "",
-    "wiki_url": "https://github.com/vvoovv/blosm/wiki/Premium-Version",
-    "tracker_url": "https://github.com/vvoovv/blosm/issues",
-    "support": "COMMUNITY",
-    "category": "Import-Export",
-    "blosmAssets": "2021.05.07"
-}
+import os, textwrap, tomllib
 
-import os, sys, textwrap
-
-# force cleanup of sys.modules to avoid conflicts with the other addons for Blender
-for m in [
-        "action", "ape", "app", "building", "building2", "defs", "gpx", "grammar", "gui",
-        "item", "item_renderer", "lib", "manager", "material", "mpl", "overlay", "parse",
-        "pml", "realistic", "renderer", "script", "setup", "style", "terrain",
-        "threed_tiles", "util", "way"
-    ]:
-    sys.modules.pop(m, 0)
-
-def _checkPath():
-    path = os.path.dirname(os.path.realpath(__file__))
-    if path in sys.path:
-        sys.path.remove(path)
-    # make <path> the first one to search for a module
-    sys.path.insert(0, path)
-    sys.path.insert(1, os.path.join(path, "pml"))
-    sys.path.insert(2, os.path.join(path, "threed_tiles"))
-_checkPath()
+with open(os.path.join(os.path.dirname(__file__), "blender_manifest.toml"), "rb") as _file:
+    _manifest = tomllib.load(_file)
 
 
 import bpy, bmesh, blf
@@ -59,9 +28,9 @@ import bpy, bmesh, blf
 from .app import blender as blenderApp
 # Important: <blenderApp.app> attributes must be set before importing gui, since <app.isPro> is used there
 # set the minimum version for BLOSM assets
-blenderApp.app.setMinAssetsVersion(bl_info["blosmAssets"])
+blenderApp.app.setMinAssetsVersion("2021.05.07")
 # set addon version
-blenderApp.app.version = bl_info["version"]
+blenderApp.app.version = tuple(int(part) for part in _manifest["version"].split('.'))
 blenderApp.app.isPro = os.path.isdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), "realistic"))
 
 from .renderer import Renderer
@@ -69,10 +38,11 @@ from .parse.osm import Osm
 from . import gui, ape
 from .defs import Keys
 from .progressive import blender as progressiveImport
+from .downloads.access import OnlineAccessError
 
 
 class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
-    bl_idname = __name__
+    bl_idname = __package__
     
     screenType: bpy.props.EnumProperty(
         name = "Screen type for addon preferences",
@@ -87,7 +57,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
     dataDir: bpy.props.StringProperty(
         name = '',
         subtype = 'DIR_PATH',
-        description = "Directory to store downloaded OpenStreetMap and terrain files"
+        description = "Directory for downloaded data; leave empty to use Blender's extension storage"
     )
     
     assetsDir: bpy.props.StringProperty(
@@ -140,7 +110,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
         if self.screenType == "ape":
             self.drawApe(context)
         else:
-            layout.label(text="Directory to store downloaded OpenStreetMap and terrain files:")
+            layout.label(text="Data directory (empty uses Blender's extension storage):")
             layout.prop(self, "dataDir")
             
             if blenderApp.app.isPro:
@@ -407,14 +377,9 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
                     "The script file doesn't exist"
                 )
             return None
-        import importlib.util
-        moduleName = os.path.splitext(os.path.basename(setupScript))[0]
         try:
-            spec = importlib.util.spec_from_file_location(moduleName, setupScript)
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[moduleName] = module
-            spec.loader.exec_module(module)
-            return module.setup
+            from .util.setup_script import load_setup_script
+            return load_setup_script(setupScript)
         except Exception:
             self.report({'ERROR'},
                 "Unable to execute the setup script! See the error message in the Blender console!"
@@ -470,8 +435,13 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         if blosm.commandLineMode:
             hasTiles = True
-            while hasTiles:
-                hasTiles = blenderApp.app.overlay.importNextTile()
+            try:
+                while hasTiles:
+                    hasTiles = blenderApp.app.overlay.importNextTile()
+            except OnlineAccessError as exc:
+                self.report({'ERROR'}, str(exc))
+                a.area = None
+                return {'CANCELLED'}
             if blenderApp.app.overlay.finalizeImport():
                 self.report({'INFO'}, "Overlay import is finished!")
             else:
@@ -652,7 +622,13 @@ class BLOSM_OT_ControlOverlay(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
-            hasTiles = blenderApp.app.overlay.importNextTile()
+            try:
+                hasTiles = blenderApp.app.overlay.importNextTile()
+            except OnlineAccessError as exc:
+                self.stop(context)
+                blenderApp.app.area = None
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
             if not hasTiles:
                 self.stop(context)
                 if blenderApp.app.overlay.finalizeImport():
@@ -736,7 +712,7 @@ def register():
     # Pro-only: register optional baking tools if available
     if blenderApp.app.isPro:
         try:
-            from util.blender_extra import baking as _baking
+            from .util.blender_extra import baking as _baking
             if hasattr(_baking, 'register'):
                 _baking.register()
         except Exception:

@@ -1,11 +1,11 @@
 import math
 from mathutils import Vector
 from .roof import Roof
-from item.facade import Facade
-from item.roof_profile import RoofProfile as ItemRoofProfile
+from ...item.facade import Facade
+from ...item.roof_profile import RoofProfile as ItemRoofProfile
 from .geometry.trapezoid import TrapezoidRV, TrapezoidChainedRV
 from .geometry.rectangle import RectangleFRA
-from util import zero, zAxis
+from ...util import zero, zAxis
 
 
 # Use https://raw.githubusercontent.com/wiki/vvoovv/blosm/assets/roof_profiles.blend

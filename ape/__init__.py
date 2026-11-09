@@ -4,7 +4,7 @@ APE stands for Asset Package Editor
 
 import os, json
 from copy import deepcopy
-from distutils.dir_util import copy_tree
+from shutil import copytree
 from shutil import copyfile
 import bpy
 import bpy.utils.previews
@@ -736,9 +736,10 @@ class BLOSM_OT_ApeCopyAp(bpy.types.Operator):
         return {'FINISHED'}
     
     def copyStyle(self, sourceDir, targetDir):
-        copy_tree(
+        copytree(
             os.path.join(sourceDir, "style"),
-            os.path.join(targetDir, "style")
+            os.path.join(targetDir, "style"),
+            dirs_exist_ok=True
         )
     
     def copyAssetInfos(self, sourceDir, targetDir, apDirName):

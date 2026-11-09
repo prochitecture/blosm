@@ -1,4 +1,4 @@
-from util import zAxis
+from ....util import zAxis
 
 from . import Geometry
 

@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import TilerException
-from py3dtiles.typing import BoundingVolumeBoxDictType
+from ..exceptions import TilerException
+from ..typing import BoundingVolumeBoxDictType
 
 from .bounding_volume import BoundingVolume
 

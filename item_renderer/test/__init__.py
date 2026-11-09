@@ -1,4 +1,4 @@
-from parse.osm.way import Way
+from ...parse.osm.way import Way
 
 
 class GeometryRenderer:

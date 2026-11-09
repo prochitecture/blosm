@@ -53,7 +53,7 @@ def _import_settings():
     return settings
 
 
-def import_gltf(filepath, *, content=None, report=None):
+def import_gltf(filepath, *, content=None, report=None, coordinate_offset=None):
     """Import a file, or bytes with filepath as their resource base path.
 
     Return attribution and importer messages without retaining decoded buffers.
@@ -63,7 +63,7 @@ def import_gltf(filepath, *, content=None, report=None):
     importer, this does not roll back partially created objects.
     External resources retain ordinary file-resolution behavior.
     """
-    # Match BlenderRenderer.patchGltfImporter: Blender 4.3 renamed the scene
+    # Blender 4.3 renamed the scene
     # construction modules. Keep both call paths explicit at this boundary.
     version = bpy.app.version
     if (version[0] == 3 and version[1] == 6) or (version[0] == 4 and version[1] <= 2):
@@ -78,6 +78,8 @@ def import_gltf(filepath, *, content=None, report=None):
 
     filepath = fspath(filepath)
     settings = _import_settings()
+    if coordinate_offset is not None:
+        settings['import_select_created_objects'] = False
     settings['filepath'] = filepath
     importer = glTFImporter(filepath, settings)
     try:
@@ -96,6 +98,20 @@ def import_gltf(filepath, *, content=None, report=None):
                 raise ImportError('Could not parse the glTF tile: invalid or truncated data') from exc
 
         importer.checks()
+        if coordinate_offset is not None and bpy.app.debug_value != 100:
+            # Rebase the parsed, private node transforms in double precision,
+            # before Blender converts them to single-precision mathutils values.
+            # glTF is Y-up: (x, y, z) becomes Blender's (x, -z, y).
+            # This replaces the old process-wide glTF class monkey-patches.
+            x, y, z = coordinate_offset
+            for node in importer.data.nodes or ():
+                if node.matrix is not None:
+                    node.matrix[12] -= x
+                    node.matrix[13] -= z
+                    node.matrix[14] += y
+                else:
+                    translation = node.translation or [0., 0., 0.]
+                    node.translation = [translation[0] - x, translation[1] - z, translation[2] + y]
         BlenderGlTF.create(importer)
         # Evaluate newly created objects before Blosm reads matrix_world for
         # RTC and tile transforms; otherwise these matrices can be stale.

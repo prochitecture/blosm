@@ -1,6 +1,6 @@
 from . import Item
-from util.polygon import Polygon
-from action.volume.level_heights import LevelHeights
+from ..util.polygon import Polygon
+from ..action.volume.level_heights import LevelHeights
 
 
 _facadeClassName = "Facade"

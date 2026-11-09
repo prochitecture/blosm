@@ -3,12 +3,12 @@ from itertools import accumulate
 from operator import add
 from .roof_flat_multi import RoofMulti
 from .roof_hipped import RoofHipped
-from item.roof_hipped_multi import RoofHippedMulti as ItemRoofHippedMulti
+from ...item.roof_hipped_multi import RoofHippedMulti as ItemRoofHippedMulti
 from mathutils import Vector
 
-from lib.bpypolyskel.bpypolyskel import polygonize
+from ...lib.bpypolyskel.bpypolyskel import polygonize
 
-from util import zAxis
+from ...util import zAxis
 
 #from util.debug import dumpInputHippedRoof
 

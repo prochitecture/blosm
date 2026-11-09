@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import InvalidPntsError
-from py3dtiles.tileset.content.feature_table import (
+from ...exceptions import InvalidPntsError
+from .feature_table import (
     FeatureTable,
     FeatureTableBody,
     FeatureTableHeader,
 )
-from py3dtiles.typing import FeatureTableHeaderDataType
+from ...typing import FeatureTableHeaderDataType
 
 if TYPE_CHECKING:
     from .tile_content import TileContentHeader

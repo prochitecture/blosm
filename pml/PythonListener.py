@@ -1,6 +1,6 @@
-from pml_grammar.pmlListener import pmlListener
-from pml_grammar.pmlParser import pmlParser
-from PythonCoder import PythonCoder
+from .pml_grammar.pmlListener import pmlListener
+from .pml_grammar.pmlParser import pmlParser
+from .PythonCoder import PythonCoder
 
 class PythonListener(pmlListener):
     def __init__(self):

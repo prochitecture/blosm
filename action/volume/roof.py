@@ -1,6 +1,6 @@
 import math
 from mathutils import Vector
-from util import zero
+from ...util import zero
 
 
 """

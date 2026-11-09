@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ...osm import Osm
 from . import Relation
-import parse
+from .... import parse
 
 
 class Linestring:

@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import Invalid3dtilesError
+from ...exceptions import Invalid3dtilesError
 
 from .b3dm import B3dm
 from .pnts import Pnts
 
 if TYPE_CHECKING:
-    from py3dtiles.tileset.content import TileContent
+    from . import TileContent
 
 __all__ = ["read_binary_tile_content"]
 

@@ -1,8 +1,8 @@
 from mathutils import Vector
 from .roof_flat import RoofFlat
-from item.facade import Facade
-from item.roof_flat_multi import RoofFlatMulti as ItemRoofFlatMulti
-from util.polygon import PolygonCW
+from ...item.facade import Facade
+from ...item.roof_flat_multi import RoofFlatMulti as ItemRoofFlatMulti
+from ...util.polygon import PolygonCW
 
 
 class RoofMulti:

@@ -37,7 +37,7 @@ with `RTC_CENTER`.
 
 ## RTC_CENTER is not available
 
-Blosm keeps the glTF importer offset patch enabled. The offset `-C` is used to reduce numerical errors caused by large coordinate values. The imported glTF transform is effectively:
+Blosm subtracts the offset `C` from private parsed glTF node transforms before Blender's single-precision conversion. This reduces numerical errors caused by large coordinate values without modifying the shared glTF importer. The imported glTF transform is effectively:
 
 ```
 T(-C) @ G
@@ -65,7 +65,7 @@ T(-C) @ M @ T(C) @ T(-C) @ G = T(-C) @ M @ G
 
 ## RTC_CENTER is available
 
-Blosm temporarily disables the glTF importer offset patch when importing B3DM content with `RTC_CENTER`. The imported glTF transform is therefore:
+Blosm uses a zero importer coordinate offset for B3DM content with `RTC_CENTER`. The imported glTF transform is therefore:
 
 ```
 G

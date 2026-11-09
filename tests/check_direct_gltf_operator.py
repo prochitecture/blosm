@@ -69,12 +69,12 @@ try:
     from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
     real_create = BlenderGlTF.create
     forwarded = []
-    def import_with_report_check(filepath, *, content=None, report=None):
+    def import_with_report_check(filepath, *, content=None, report=None, **kwargs):
         assert report is not None, "Blosm did not supply its report callback"
         def forward(level, message):
             forwarded.append((sorted(level), message))
             report(level, message)
-        return real_import(filepath, content=content, report=forward)
+        return real_import(filepath, content=content, report=forward, **kwargs)
     def create_with_warning(importer):
         importer.log.warning("fixture glTF warning", popup=True)
         real_create(importer)

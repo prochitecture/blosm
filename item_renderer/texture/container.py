@@ -1,6 +1,6 @@
 from .. import ItemRenderer, _setAssetInfoCache
-from grammar.arrangement import Horizontal, Vertical
-from grammar.symmetry import MiddleOfLast, RightmostOfLast
+from ...grammar.arrangement import Horizontal, Vertical
+from ...grammar.symmetry import MiddleOfLast, RightmostOfLast
 
 
 def _getTileWidthM(facadeTextureInfo):

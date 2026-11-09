@@ -25,9 +25,14 @@ from urllib import request, error
 from urllib.parse import urlsplit
 
 if not __package__:
+    # Only the isolated ordinary-Python helper takes this branch. Blender loads
+    # modules through the extension namespace and never changes its search path.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from downloads.diagnostics import redact_text, redact_body
-from downloads import STALLED_WORKER_EXIT_CODE
+    from downloads.diagnostics import redact_text, redact_body
+    from downloads import STALLED_WORKER_EXIT_CODE
+else:
+    from .diagnostics import redact_text, redact_body
+    from . import STALLED_WORKER_EXIT_CODE
 
 WORKER_DEADLINE_GRACE = 5.
 

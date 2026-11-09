@@ -1,4 +1,4 @@
-from grammar import perBuilding
+from ..grammar import perBuilding
 
 
 class Item:

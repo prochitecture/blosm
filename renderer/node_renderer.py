@@ -20,9 +20,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import bpy
 import os, math
 from . import Renderer, assignTags
-from util.blender import loadCollectionFromFile, loadGroupFromFile
-from util.osm import parseNumber
-from util.random import RandomNormal, RandomWeighted
+from ..util.blender import loadCollectionFromFile, loadGroupFromFile
+from ..util.osm import parseNumber
+from ..util.random import RandomNormal, RandomWeighted
 
 
 class BaseNodeRenderer(Renderer):

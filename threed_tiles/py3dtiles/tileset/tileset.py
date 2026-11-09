@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal
 
-from py3dtiles.typing import AssetDictType, GeometricErrorType, TilesetDictType
+from ..typing import AssetDictType, GeometricErrorType, TilesetDictType
 
 from .root_property import RootProperty
 from .tile import Tile

@@ -94,8 +94,9 @@ calls can exceed the cooperative time budget.
 
 threed_tiles.progressive.TilesImport connects that producer to Job and the Blender
 driver. ProgressiveRenderer uses the existing renderer to finish one tile at a
-time, moves its objects into the destination collection and releases glTF patches
-before yielding. Failed-tile objects, temporary collections and newly created
+time and moves its objects into the destination collection before yielding.
+Coordinate conversion uses private import data without shared glTF patches.
+Failed-tile objects, temporary collections and newly created
 unused mesh/material/image data are removed. Failures remain console details;
 completion emits one aggregate UI report, rather than an error popup per tile.
 

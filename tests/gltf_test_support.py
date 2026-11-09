@@ -3,9 +3,11 @@
 from contextlib import contextmanager
 import hashlib
 import importlib.util
+import importlib
 import io
 import json
 import logging
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -17,15 +19,13 @@ import bpy
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "threed_tiles"))
 sys.dont_write_bytecode = True
-
-from threed_tiles.blender import BlenderRenderer
-from threed_tiles.gltf_import import import_gltf
 sys.path.insert(0, str(REPO.parent))
-BaseManager = __import__(REPO.name + '.threed_tiles.manager', fromlist=['BaseManager']).BaseManager
-from threed_tiles.py3dtiles.tileset.content.tile_content_reader import read_array
+PACKAGE = os.environ.get('BLOSM_TEST_PACKAGE', REPO.name)
+BlenderRenderer = importlib.import_module(PACKAGE + '.threed_tiles.blender').BlenderRenderer
+import_gltf = importlib.import_module(PACKAGE + '.threed_tiles.gltf_import').import_gltf
+BaseManager = importlib.import_module(PACKAGE + '.threed_tiles.manager').BaseManager
+read_array = importlib.import_module(PACKAGE + '.threed_tiles.py3dtiles.tileset.content.tile_content_reader').read_array
 
 
 def png_bytes():
@@ -190,7 +190,10 @@ def baseline_renderer():
     """Load the pre-direct-import renderer from its fixed historical revision."""
     source = subprocess.check_output(
         ["git", "-C", str(REPO), "show", BASELINE_REF + ":threed_tiles/blender.py"], text=True)
-    name = "threed_tiles._release_renderer"
+    # Adapt only the historical module's imports to the current package layout.
+    source = source.replace('from util.blender import', 'from ..util.blender import')
+    source = source.replace('from py3dtiles.', 'from .py3dtiles.')
+    name = PACKAGE + ".threed_tiles._release_renderer"
     spec = importlib.util.spec_from_loader(name, loader=None)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
@@ -202,7 +205,7 @@ def manager_for(renderer, directory, content):
     manager = BaseManager("https://fixture.invalid/root.json", renderer)
     manager.centerLat, manager.centerLon = 60.17, 24.94
     # Only the historical operator renderer needs a temporary file directory.
-    if renderer.__class__.__module__ == "threed_tiles._release_renderer":
+    if renderer.__class__.__module__ == PACKAGE + ".threed_tiles._release_renderer":
         manager.tilesDir = str(directory)
     manager.download = lambda uri: content
     return manager

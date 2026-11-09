@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import InvalidTilesetError, Py3dtilesException, TilerException
-from py3dtiles.typing import RefineType, TileDictType
+from ..exceptions import InvalidTilesetError, Py3dtilesException, TilerException
+from ..typing import RefineType, TileDictType
 
 from .bounding_volume import BoundingVolume
 from .bounding_volume_box import BoundingVolumeBox
@@ -16,7 +16,7 @@ from .content import TileContent, read_binary_tile_content
 from .root_property import RootProperty
 
 if TYPE_CHECKING:
-    from py3dtiles.tileset import TileSet
+    from . import TileSet
 
 DEFAULT_TRANSFORMATION = np.identity(4, dtype=np.float64)
 DEFAULT_TRANSFORMATION.setflags(write=False)

@@ -1,6 +1,6 @@
 import bmesh
 from .. import ItemRenderer
-from util import zAxis
+from ...util import zAxis
 
 
 def _getEdge(bmVert):

@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Any, Literal, Union
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import Invalid3dtilesError
-from py3dtiles.typing import BatchTableHeaderDataType
+from ...exceptions import Invalid3dtilesError
+from ...typing import BatchTableHeaderDataType
 
 if TYPE_CHECKING:
-    from py3dtiles.tileset.content import TileContentHeader
+    from . import TileContentHeader
 
 COMPONENT_TYPE_NUMPY_MAPPING = {
     "BYTE": np.int8,

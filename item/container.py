@@ -1,7 +1,7 @@
 import math
 from . import Item
-from grammar.arrangement import Horizontal, Vertical
-from grammar.symmetry import MiddleOfLast
+from ..grammar.arrangement import Horizontal, Vertical
+from ..grammar.symmetry import MiddleOfLast
 
 
 class ItemSize:

@@ -1,8 +1,8 @@
 import math
 from .. import ItemRenderer
 from ..util import initUvAlongPolygonEdge
-from grammar import smoothness
-from util import zAxis
+from ...grammar import smoothness
+from ...util import zAxis
 
 Center = 1
 MiddleOfTheLongesSide = 2

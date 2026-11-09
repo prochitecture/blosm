@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any, Literal, Union
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import Invalid3dtilesError
-from py3dtiles.tileset.content.feature_table import (
+from ...exceptions import Invalid3dtilesError
+from .feature_table import (
     FeatureTable,
     FeatureTableBody,
     FeatureTableHeader,

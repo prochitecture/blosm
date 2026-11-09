@@ -19,11 +19,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bpy, bmesh
 import math
-import parse
+from .. import parse
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
-from util import zAxis, zeroVector
-from util.blender import makeActive, createMeshObject, getBmesh, setBmesh, pointNormalUpward, addShrinkwrapModifier
+from ..util import zAxis, zeroVector
+from ..util.blender import makeActive, createMeshObject, getBmesh, setBmesh, pointNormalUpward, addShrinkwrapModifier
 
 
 direction = -zAxis # downwards

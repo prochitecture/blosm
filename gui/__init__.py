@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import bpy
-import os, math, webbrowser, importlib.util, importlib
+import os, math, webbrowser
 from bpy.app.handlers import persistent
 from ..app.blender import app
 from ..defs import Keys
@@ -687,13 +687,10 @@ class BLOSM_PT_Tools(bpy.types.Panel):
         active_mesh = context.object and context.object.type == 'MESH'
         baking_mod = None
         if isPro:
-            for name in ('util.blender_extra.baking', 'blosm.util.blender_extra.baking'):
-                try:
-                    if importlib.util.find_spec(name):
-                        baking_mod = importlib.import_module(name)
-                        break
-                except Exception:
-                    continue
+            try:
+                from ..util.blender_extra import baking as baking_mod
+            except ImportError:
+                pass
         if isPro and baking_mod and active_mesh:
             box = layout.box()
             box.label(text="Bake: single texture")

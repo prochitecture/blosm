@@ -190,7 +190,7 @@ if bpy.app.version >= (4, 5, 0):
     assert b3dm_expected[0] and "City of Test" in b3dm_expected[1]
     passed("GLB/B3DM imports without local dataset access")
 
-    # Renderer restores the RTC patch even if scene construction fails.
+    # Renderer leaves shared importer state untouched even if scene creation fails.
     from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
     reset_scene()
     renderer = BlenderRenderer("Failure", False, "")
@@ -205,12 +205,12 @@ if bpy.app.version >= (4, 5, 0):
                 assert str(error) == "injected failure"
             else:
                 raise AssertionError("Expected injected failure")
-        assert glTFImporter._patch_convert_functions is True
+        assert not hasattr(glTFImporter, "_patch_convert_functions")
         assert handler_counts() == before
     finally:
         renderer.finalize(manager)
     assert not hasattr(glTFImporter, "_patch_convert_functions")
-    passed("RTC and logger restoration after scene-creation failure")
+    passed("Importer isolation and logger cleanup after scene-creation failure")
 
     if args.helsinki:
         for tile in sorted(args.helsinki.glob("*.b3dm")):

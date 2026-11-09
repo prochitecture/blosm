@@ -1,11 +1,11 @@
 import math
-from grammar import *
-from grammar.scope import PerBuilding, PerFootprint
-from grammar import units, symmetry, smoothness
-from grammar.value import Value, FromAttr, Alternatives, Conditional, FromStyleBlockAttr, Constant
-from grammar.value import RandomWeighted, RandomNormal
-from action.volume.roof import Roof as RoofDefs
-from item.defs import RoofShapes, CladdingMaterials
+from ..grammar import *
+from ..grammar.scope import PerBuilding, PerFootprint
+from ..grammar import units, symmetry, smoothness
+from ..grammar.value import Value, FromAttr, Alternatives, Conditional, FromStyleBlockAttr, Constant
+from ..grammar.value import RandomWeighted, RandomNormal
+from ..action.volume.roof import Roof as RoofDefs
+from ..item.defs import RoofShapes, CladdingMaterials
 
 
 minHeightForLevels = 1.5

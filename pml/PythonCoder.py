@@ -1,5 +1,5 @@
 import re
-from Dictionaries import Dictionaries
+from .Dictionaries import Dictionaries
 
 class PythonCoder():
     def __init__(self):

@@ -5,6 +5,11 @@ Python helper with a bounded `ThreadPoolExecutor`; all Blender work stays on the
 main thread. The helper is reused throughout an import and accepts requests as
 new resources are discovered. Neither requests nor results create dataset files.
 
+Inside Blender, transport creation, submission and polling respect
+`bpy.app.online_access`. Disabling online access closes the transport at its next
+submission or poll, including the isolated worker and pending requests. Ordinary
+Python use remains independent of Blender.
+
 ## Interface
 
 - `Request(url, headers={}, decode_gzip=False, verify_tls=True, timeout=90.,

@@ -1,6 +1,6 @@
 import os, sys
 import bpy, bmesh
-from util.blender import loadMaterialsFromFile, addShrinkwrapModifier
+from ..util.blender import loadMaterialsFromFile, addShrinkwrapModifier
 
 _isBlender291 = bpy.app.version[1] >= 91
 _curveBevelObjectName = "gpx_bevel"

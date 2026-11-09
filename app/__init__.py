@@ -1,7 +1,7 @@
 import os, math, ssl
 from urllib import request
 
-from util.polygon import Polygon
+from ..util.polygon import Polygon
 
 
 class BaseApp:
@@ -55,6 +55,8 @@ class BaseApp:
         Polygon.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
     
     def download(self, url, filepath, data=None):
+        from ..downloads.access import require_online_access
+        require_online_access()
         print("Downloading the file from %s..." % url)
         if data:
             data = data.encode('ascii')
@@ -150,15 +152,9 @@ class BaseApp:
         setupScript = os.path.realpath(setupScript)
         if not os.path.isfile(setupScript):
             raise Exception("The script file doesn't exist")
-        import importlib.util
-        import sys
-        moduleName = os.path.splitext(os.path.basename(setupScript))[0]
         try:
-            spec = importlib.util.spec_from_file_location(moduleName, setupScript)
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[moduleName] = module
-            spec.loader.exec_module(module)
-            return module.setup
+            from ..util.setup_script import load_setup_script
+            return load_setup_script(setupScript)
         except Exception:
             raise Exception(
                 "Unable to execute the setup script! See the error message in the Blender console!"

@@ -1,6 +1,6 @@
 # Generated from pml.g4 by ANTLR 4.8
 # encoding: utf-8
-from antlr4 import *
+from ..antlr4 import *
 from io import StringIO
 import sys
 from typing import TextIO
@@ -2376,7 +2376,7 @@ class pmlParser ( Parser ):
                     self.pushNewRecursionContext(localctx, _startState, self.RULE_bool_expr)
                     self.state = 324
                     if not self.precpred(self._ctx, 4):
-                        from antlr4.error.Errors import FailedPredicateException
+                        from ..antlr4.error.Errors import FailedPredicateException
                         raise FailedPredicateException(self, "self.precpred(self._ctx, 4)")
                     self.state = 325
                     self.logicop()
@@ -2609,7 +2609,7 @@ class pmlParser ( Parser ):
                     self.pushNewRecursionContext(localctx, _startState, self.RULE_arith_expr)
                     self.state = 356
                     if not self.precpred(self._ctx, 2):
-                        from antlr4.error.Errors import FailedPredicateException
+                        from ..antlr4.error.Errors import FailedPredicateException
                         raise FailedPredicateException(self, "self.precpred(self._ctx, 2)")
                     self.state = 357
                     self.arith_op()

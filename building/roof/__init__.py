@@ -19,10 +19,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import math
 from mathutils import Vector
-from util import zero
-from util.osm import parseNumber
-from util.polygon import PolygonOLD
-from renderer import Renderer
+from ...util import zero
+from ...util.osm import parseNumber
+from ...util.polygon import PolygonOLD
+from ...renderer import Renderer
 
 """
 key: a cardinal direction

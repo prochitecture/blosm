@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import math
 from . import RoofRealistic
-from building.roof.profile import RoofProfile
+from ....building.roof.profile import RoofProfile
 
 
 class RoofProfileRealistic(RoofRealistic, RoofProfile):
