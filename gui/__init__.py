@@ -41,8 +41,6 @@ def getDataTypes():
             ),
             ("gpx", "gpx", "GPX tracks")
         ]
-        if app.has(Keys.geojson):
-            items.append(("geojson", "GeoJson", "GeoJson"))
         return items
 
 
@@ -392,8 +390,7 @@ class BLOSM_PT_Extent(bpy.types.Panel):
         if (addon.dataType == "osm" and addon.osmSource == "server") or\
             (addon.dataType == "overlay" and not bpy.data.objects.get(addon.terrainObject)) or\
             addon.dataType == "terrain" or\
-            addon.dataType == "3d-tiles" or\
-            (addon.dataType == "geojson" and addon.coordinatesAsFilter):
+            addon.dataType == "3d-tiles":
             box = layout.box()
             row = box.row()
             row.alignment = "CENTER"
@@ -473,23 +470,16 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             self.draw3dTiles(context)
         elif dataType == "gpx":
             self.drawGpx(context)
-        elif dataType == "geojson":
-            self.drawOsm(context)
     
     def drawOsm(self, context):
         layout = self.layout
         addon = context.scene.blosm
         mode3dRealistic = _has3dRealistic and addon.mode == "3Drealistic"
-        isOsm = addon.dataType == "osm"
-        isGeoJson = addon.dataType == "geojson"
         
         box = layout.box()
-        if isOsm:
-            box.prop(addon, "osmSource", text="Import from")
-        if isGeoJson or addon.osmSource == "file":
+        box.prop(addon, "osmSource", text="Import from")
+        if addon.osmSource == "file":
             box.prop(addon, "osmFilepath", text="File")
-        if isGeoJson:
-            box.prop(addon, "coordinatesAsFilter")
         
         layout.box().prop_search(addon, "terrainObject", context.scene, "objects")
             
@@ -847,12 +837,6 @@ class BlosmProperties(bpy.types.PropertyGroup):
         min = -180.,
         max = 180.,
         default= -73.9812 if _has3dRealistic else 12.37983
-    )
-    
-    coordinatesAsFilter: bpy.props.BoolProperty(
-        name = "Use coordinates as filter",
-        description = "Use coordinates as a filter for the import from the file",
-        default = False
     )
     
     buildings: bpy.props.BoolProperty(

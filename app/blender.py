@@ -372,69 +372,6 @@ class BlenderApp(BaseApp):
             raise Exception("A valid GPX file isn't set")
         self.gpxFilepath = gpxFilepath
     
-    def initGeoJson(self, op, context):
-        prefs = context.preferences.addons
-        
-        if app.has(defs.Keys.mode3d) and self.mode != "2D":
-            self.mode = BaseApp.realistic\
-                if app.has(defs.Keys.mode3dRealistic) and self.mode == "3Drealistic"\
-                else BaseApp.simple
-        else:
-            self.mode = BaseApp.twoD
-            
-        if self.mode is BaseApp.realistic:
-            # first try the <assetsDir> from the addon GUI
-            assetsDir = self.assetsDir
-            if not assetsDir:
-                # second try the <assetsDir> from the addon preferences
-                assetsDir = prefs[addonName].preferences.assetsDir if addonName in prefs else None
-            if assetsDir:
-                assetsDir = os.path.realpath(bpy.path.abspath(assetsDir))
-                if not os.path.isdir(assetsDir):
-                    raise Exception(
-                        "The directory with assets %s doesn't exist. " % assetsDir +
-                        _setAssetsDirStr
-                    )
-                self.assetsDir = assetsDir
-                bldgMaterialsFilepath = os.path.join(assetsDir, self.bldgMaterialsFileName)
-                if not os.path.isfile(bldgMaterialsFilepath):
-                    raise Exception(
-                        "The directory with assets %s doesn't contain the file %s. " % (assetsDir, self.bldgMaterialsFileName) +
-                        _setAssetsDirStr
-                    )
-                self.bldgMaterialsFilepath = bldgMaterialsFilepath
-                if self.forests:
-                    vegetationFilepath = os.path.join(assetsDir, self.vegetationFileName)
-                    if not os.path.isfile(vegetationFilepath):
-                        raise Exception(
-                            "The directory with assets %s doesn't contain the file %s. " % (assetsDir, self.vegetationFileName) +
-                            _setAssetsDirStr
-                        )
-                    self.vegetationFilepath = vegetationFilepath
-            else:
-                raise Exception(_setAssetsDirStr)
-        
-        basePath = self.basePath
-        self.op = op
-        self.assetPath = os.path.join(basePath, "assets")
-        
-        # a Python dict to cache Blender meshes loaded from Blender files serving as an asset library
-        self.meshes = {}
-        
-        self.layerIndices = {}
-        self.layers = []
-        
-        self.osmFilepath = os.path.realpath(bpy.path.abspath(self.osmFilepath))
-        
-        # managers (derived from manager.Manager) performing some processing
-        self.managers = []
-        
-        # renderers (derived from renderer.Renderer) actually making 3D objects
-        self.renderers = []
-        
-        # tangent to check if an angle of the polygon is straight
-        Polygon.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
-    
     def setAttributes(self, context):
         """
         Copies properties from <context.scene.blosm>
@@ -501,8 +438,6 @@ class BlenderApp(BaseApp):
                 has = os.path.isdir(os.path.join(self.basePath, "realistic"))
             elif key == "overlay":
                 has = os.path.isdir(os.path.join(self.basePath, "overlay"))
-            elif key == "geojson":
-                has = os.path.isdir(os.path.join(self.basePath, "geojson"))
             self._keys[key] = has
             
         return has

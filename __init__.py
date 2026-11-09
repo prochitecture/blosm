@@ -279,8 +279,6 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             return self.importGpx(context)
         elif dataType == "3d-tiles":
             return self.import3dTiles(context)
-        elif dataType == "geojson":
-            return self.importGeoJson(context)
         
         return {'FINISHED'}
 
@@ -629,78 +627,6 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             self.setCenterLatLon(context, gpx.lat, gpx.lon)
         return {'FINISHED'}
 
-    def importGeoJson(self, context):
-        from .parse.geojson import GeoJson
-        
-        a = blenderApp.app
-        addon = context.scene.blosm
-        
-        try:
-            a.initGeoJson(self, context)
-        except Exception as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-        
-        createFlatTerrain = a.mode is a.realistic and a.forests
-        forceExtentCalculation = createFlatTerrain
-        
-        # check if have a terrain Blender object set
-        a.setTerrain(
-            context,
-            createFlatTerrain = createFlatTerrain,
-            createBvhTree = True
-        )
-        
-        setupScript = addon.setupScript
-        if setupScript:
-            setup_function = self.loadSetupScript(setupScript, reportError=True)
-            if not setup_function:
-                return {'CANCELLED'}
-        else:
-            if a.mode is a.realistic:
-                from .setup.premium_default import setup as setup_function
-            else:
-                from .setup.geojson_base import setup as setup_function
-        
-        scene = context.scene
-        
-        self.setObjectMode(context)
-        bpy.ops.object.select_all(action='DESELECT')
-        
-        data = GeoJson(a)
-        setup_function(a, data)
-        a.createLayers(data)
-        
-        setLatLon = False
-        if "lat" in scene and "lon" in scene and a.relativeToInitialImport:
-            a.setProjection(scene["lat"], scene["lon"])
-        elif a.coordinatesAsFilter:
-            a.setProjection( (a.minLat+a.maxLat)/2., (a.minLon+a.maxLon)/2. )
-        else:
-            setLatLon = True
-        
-        data.parse(a.osmFilepath, forceExtentCalculation=forceExtentCalculation)
-        
-        if forceExtentCalculation:
-            a.minLat = data.minLat
-            a.maxLat = data.maxLat
-            a.minLon = data.minLon
-            a.maxLon = data.maxLon
-        
-        a.initLayers()
-        
-        a.process()
-        a.render()
-        
-        # setting <lon> and <lat> attributes for <scene> if necessary
-        if setLatLon:
-            # <osm.lat> and <osm.lon> have been set in osm.parse(..)
-            self.setCenterLatLon(context, data.lat, data.lon)
-        
-        a.clean()
-        
-        return {'FINISHED'}
-    
     def setObjectMode(self, context):
         scene = context.scene
         # setting active object if there is no active object
