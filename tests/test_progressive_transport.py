@@ -13,7 +13,8 @@ from collections import Counter
 from urllib.error import HTTPError
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from release_target import ADDON_ROOT
+sys.path.insert(0, str(ADDON_ROOT))
 from progressive.core import Job, Download, Drain
 from downloads import Request
 from downloads.transport import DownloadTransport, reap

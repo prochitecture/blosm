@@ -2,6 +2,7 @@
 import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from pathlib import Path
 import sys
 import time
 import threading
@@ -40,6 +41,16 @@ class Handler(BaseHTTPRequestHandler):
     def serve_payload(self):
         key = self.path.split('?', 1)[0].lstrip('/')
         time.sleep(configuration.get('delays', {}).get(key, 0))
+        # Optional UI-test barrier: do not race a fixed sleep against viewport
+        # redraw speed. Other transport tests omit gates and retain their timing.
+        gate = configuration.get('gates', {}).get(key)
+        if gate:
+            deadline = time.monotonic() + 120
+            while not Path(gate).exists():
+                if time.monotonic() > deadline:
+                    self.send_error(503, 'Test gate timed out')
+                    return
+                time.sleep(0.02)
         content = payloads.get(key)
         if content is None:
             self.send_error(404)

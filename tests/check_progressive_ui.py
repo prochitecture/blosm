@@ -16,7 +16,7 @@ import traceback
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gltf_test_support import bpy, REPO, fixture, make_glb, make_b3dm, reset_scene
+from gltf_test_support import bpy, REPO, PACKAGE, fixture, make_glb, make_b3dm, reset_scene
 import addon_utils
 
 parser = argparse.ArgumentParser()
@@ -24,8 +24,7 @@ parser.add_argument('--artifacts', type=Path, required=True)
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
 args.artifacts.mkdir(parents=True, exist_ok=True)
 bpy.context.preferences.filepaths.temporary_directory = str(args.artifacts)
-sys.path.insert(0, str(REPO.parent))
-package = REPO.name
+package = PACKAGE
 addon_utils.enable(package, default_set=True)
 manager_module = importlib.import_module(package + '.threed_tiles.manager')
 runtime = importlib.import_module(package + '.progressive.blender')
@@ -48,13 +47,16 @@ tileset = {'root': {'geometricError': 0, 'boundingVolume': {'region': region}, '
     {'geometricError': 0, 'boundingVolume': {'region': region}, 'content': {'uri': 'one.glb'}},
     {'geometricError': 0, 'boundingVolume': {'region': region}, 'content': {'uri': 'two.b3dm'}}]}}
 payloads = {'root.json': json.dumps(tileset).encode(), 'one.glb': glb, 'two.b3dm': b3dm}
+second_tile_gate = args.artifacts / 'allow_second_tile'
+second_tile_gate.touch()  # The initial blocking operator must be able to finish.
 server = subprocess.Popen([transport_module.python_executable(), '-I', '-B',
     str(Path(__file__).with_name('progressive_http_fixture.py'))],
     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 server.stdin.write((json.dumps({'payloads': {key: base64.b64encode(value).decode()
                                            for key, value in payloads.items()},
-                               'delays': {'root.json': .3, 'one.glb': .4, 'two.b3dm': .8}}) + '\n').encode())
+                               'delays': {'root.json': .3, 'one.glb': .4, 'two.b3dm': .8},
+                               'gates': {'two.b3dm': str(second_tile_gate)}}) + '\n').encode())
 server.stdin.flush()
 port = int(server.stdout.readline())
 server.stdin.close()
@@ -79,10 +81,15 @@ hold_until = 0
 paused_once = False
 extra_scene = None
 popups_before_cancel = 0
+partial_heartbeats = 0
+meshes_before_import = 0
 
 
 def start_import():
-    global stage_started
+    global stage_started, partial_heartbeats, meshes_before_import
+    second_tile_gate.unlink(missing_ok=True)
+    partial_heartbeats = 0
+    meshes_before_import = sum(obj.type == 'MESH' for obj in scene.objects)
     # Match the UI's undo-enabled invocation, including the outer operator.
     assert bpy.ops.blosm.import_data('EXEC_DEFAULT', True) == {'FINISHED'}
     assert runtime.active is not None
@@ -115,16 +122,16 @@ def complete(status, error=None):
     for process in processes:
         process.wait(timeout=5)
     report = {'blender': bpy.app.version_string, 'status': status, 'checks': checks,
-              'heartbeat_count': len(heartbeats), 'error': error}
+              'heartbeat_count': len(heartbeats), 'heartbeats': heartbeats, 'error': error}
     (args.artifacts / 'ui_checks.json').write_text(json.dumps(report, indent=2))
     print('PROGRESSIVE_UI_CHECKS', json.dumps(report), flush=True)
     bpy.ops.wm.quit_blender()
 
 
 def tick():
-    global phase, hold_until, paused_once, extra_scene, scene, popups_before_cancel
+    global phase, hold_until, paused_once, extra_scene, scene, popups_before_cancel, partial_heartbeats
     try:
-        assert time.monotonic() - started < 50, 'UI test timed out'
+        assert time.monotonic() - started < 120, 'UI test timed out'
         assert not hasattr(glTFImporter, '_patch_convert_functions')
         # Every heartbeat runs through Blender's real event loop and moves the
         # viewport while the helper waits on deliberately delayed HTTP replies.
@@ -134,6 +141,10 @@ def tick():
                 area.tag_redraw()
         count = sum(obj.type == 'MESH' for obj in scene.objects)
         heartbeats.append((phase, count, time.monotonic() - started))
+        if runtime.active is not None and count > meshes_before_import:
+            partial_heartbeats += 1
+            if partial_heartbeats >= 5:
+                second_tile_gate.touch()
         if phase == 'start':
             reset_scene()
             assert scene.blosm.concurrentDownloads is True

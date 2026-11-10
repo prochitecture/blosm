@@ -17,7 +17,7 @@ from urllib.request import urlopen
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gltf_test_support import bpy, REPO, fixture, make_glb, make_b3dm, reset_scene, no_tile_writes_or_operator
+from gltf_test_support import bpy, REPO, PACKAGE, fixture, make_glb, make_b3dm, reset_scene, no_tile_writes_or_operator
 import addon_utils
 
 parser = argparse.ArgumentParser()
@@ -25,7 +25,7 @@ parser.add_argument('--artifacts', type=Path, required=True)
 parser.add_argument('--helsinki', type=Path)
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
 args.artifacts.mkdir(parents=True, exist_ok=True)
-package = REPO.name
+package = PACKAGE
 addon_utils.enable(package, default_set=True)
 m = importlib.import_module(package + '.threed_tiles.manager')
 r = importlib.import_module(package + '.threed_tiles.blender')

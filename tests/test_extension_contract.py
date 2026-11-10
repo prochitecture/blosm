@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-ROOT = Path(__file__).resolve().parents[1]
+from release_target import ADDON_ROOT as ROOT
 sys.path.insert(0, str(ROOT))
 from downloads.access import OnlineAccessError, require_online_access
 from downloads.transport import DownloadTransport

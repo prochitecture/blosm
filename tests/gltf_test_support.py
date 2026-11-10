@@ -18,10 +18,10 @@ import zlib
 import bpy
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
+from release_target import REPO, PACKAGE, PROFILE
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(REPO.parent))
-PACKAGE = os.environ.get('BLOSM_TEST_PACKAGE', REPO.name)
+if PROFILE == 'general' and PACKAGE == REPO.name:
+    sys.path.insert(0, str(REPO.parent))
 BlenderRenderer = importlib.import_module(PACKAGE + '.threed_tiles.blender').BlenderRenderer
 import_gltf = importlib.import_module(PACKAGE + '.threed_tiles.gltf_import').import_gltf
 BaseManager = importlib.import_module(PACKAGE + '.threed_tiles.manager').BaseManager

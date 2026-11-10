@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gltf_test_support import bpy, REPO, reset_scene, no_tile_writes_or_operator
+from gltf_test_support import bpy, REPO, PACKAGE, reset_scene, no_tile_writes_or_operator
 from live_tile_datasets import DATASETS
 import addon_utils
 import numpy as np
@@ -33,7 +33,7 @@ parser.add_argument('--max-tiles', type=int, default=80)
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
 args.artifacts.mkdir(parents=True, exist_ok=True)
 bpy.context.preferences.filepaths.temporary_directory = str(args.artifacts)
-package = REPO.name
+package = PACKAGE
 addon_utils.enable(package, default_set=True)
 m = importlib.import_module(package + '.threed_tiles.manager')
 r = importlib.import_module(package + '.threed_tiles.blender')

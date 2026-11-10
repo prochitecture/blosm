@@ -9,7 +9,7 @@ import traceback
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gltf_test_support import bpy, REPO, reset_scene
+from gltf_test_support import bpy, REPO, PACKAGE, reset_scene
 from live_tile_datasets import DATASETS
 import addon_utils
 
@@ -18,7 +18,7 @@ parser.add_argument('--artifacts', type=Path, required=True)
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
 args.artifacts.mkdir(parents=True, exist_ok=True)
 bpy.context.preferences.filepaths.temporary_directory = str(args.artifacts)
-package = REPO.name
+package = PACKAGE
 addon_utils.enable(package, default_set=True)
 runtime = importlib.import_module(package + '.progressive.blender')
 transport = importlib.import_module(package + '.downloads.transport')

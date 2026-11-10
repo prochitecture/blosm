@@ -1,0 +1,157 @@
+# Selected input specification; this is not a test-result report.
+# Paths are relative to a configurable osm_extracts root.
+schema_version = 1
+repository = "https://github.com/prochitecture/osm_extracts.git"
+reviewed_revision = "0fec21466717dde28297c5a35b9ca07ae8920520"
+network_policy = "offline"
+
+[[osm]]
+id = "karl_marx_allee"
+path = "facade_visibility/berlin_karl_marx_allee.osm"
+tier = "core"
+required_for_release = true
+purpose = "Required end-to-end OSM fixture: 2D, Buildify, simple, realistic and import-for-export; both single-object settings where supported."
+sha256 = "d22cf78ef0bd8daa2473dea0a85687f5483f1bd8567c2d7d8deebf9e6c2583dc"
+tracked_at_review = true
+load_missing_members = true
+companion_path = "facade_visibility/berlin_karl_marx_allee_extra.osm"
+companion_sha256 = "36b0d88cdc62fc30332884b3575f352e6c4c94f1acf3fe5f219093a23ab85175"
+
+[[osm]]
+id = "rectangle"
+path = "fit_rectangles/rectangle_01.osm"
+tier = "core"
+required_for_release = true
+purpose = "Minimal rectangular building baseline."
+sha256 = "d6d3516d81253519d5544b6dfd1979c528d05efbb7a675c1f27ccd00fa6cdf2a"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "quadrangle"
+path = "fit_rectangles/quadrangle_01.osm"
+tier = "core"
+required_for_release = true
+purpose = "Nonrectangular quadrangle baseline."
+sha256 = "c5f4c9322d83278534bcba7295642a9e2198e293d16849c37244d4c6c1c01848"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "complex_outline"
+path = "feature_detection/complex_01.osm"
+tier = "core"
+required_for_release = true
+purpose = "Complex single building outline."
+sha256 = "4d50cc7a44e8bacf3071ad293920335c66133b7d374327a986ad345bbd450e59"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "curved_outline"
+path = "feature_detection/curved_01.osm"
+tier = "core"
+required_for_release = true
+purpose = "Dense curved building footprint."
+sha256 = "c2e002730b5d649c5115844e6b3b9f78e3b887818d8a0fc8e9a9fcd14531beff"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "shared_edges"
+path = "feature_detection/shared_edges_03.osm"
+tier = "core"
+required_for_release = true
+purpose = "Three adjacent building outlines; grouping and independent editing."
+sha256 = "eaf20a73d6c242bdbf3ef4185b2d597b7beed3b34873a3cd5fbe58ccea210905"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "pentagon_courtyards"
+path = "fit_rectangles/washington_pentagon.osm"
+tier = "core"
+required_for_release = true
+purpose = "Building multipolygon with outer and inner members; hole preservation."
+sha256 = "f3ed11f446aeabe3f776ee4c440f6b2c22e385bbaaaa89e178a89d2f0134e497"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "building_parts"
+path = "dev/building_part_detection.osm"
+tier = "core"
+required_for_release = true
+purpose = "One building outline and nine tagged parts; association and grouping."
+sha256 = "44e48da8e5d2df28944de6fc0ecad469835066295e9d21cc48d5e78fe85f510a"
+tracked_at_review = false
+load_missing_members = false
+availability_note = "Present locally but untracked in osm_extracts; provision this exact file for other runners."
+
+[[osm]]
+id = "madrid_hipped"
+path = "multipolygon/madrid_palacio_de_nuenavista_hipped_roof.osm"
+tier = "core"
+required_for_release = true
+purpose = "Hipped-tagged building multipolygon with inner rings; mode-specific roof behavior."
+sha256 = "7932c52f750a14013b75045bab9fdf90a6a0973c48efffe6a4f46fabeb439a8c"
+tracked_at_review = false
+load_missing_members = false
+availability_note = "Present locally but untracked in osm_extracts; provision this exact file for other runners."
+
+[[osm]]
+id = "magdeburg_hipped"
+path = "multipolygon/magdeburg_university_building_14_hipped_roof.osm"
+tier = "core"
+required_for_release = true
+purpose = "Building multipolygon and four tagged building parts; hipped/gabled cases."
+sha256 = "18c8d21443a195d2052dc05c942ba3526d86a9c218d09f2ccf1a45d8c4f9fc40"
+tracked_at_review = false
+load_missing_members = false
+availability_note = "Present locally but untracked in osm_extracts; provision this exact file for other runners."
+
+[[osm]]
+id = "frankfurter_allee"
+path = "streets/berlin_frankfurter_allee.osm"
+tier = "core"
+required_for_release = true
+purpose = "Road/rail curve layers, category toggles and terrain projection using the release renderer."
+sha256 = "4dea64ea1ca2f739c2a81eb427f5e42d1a83b80747a671d6100c3ffe8a1dba77"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "kuzmice_railways"
+path = "railways/kuzmice.osm"
+tier = "core"
+required_for_release = true
+purpose = "Railway-focused layer and import toggle regression."
+sha256 = "07150bfde2fee0ed6fff6972e7d8fa7e363b8cac58a2b55ca2f83dbbaf3be837"
+tracked_at_review = true
+load_missing_members = false
+
+[[osm]]
+id = "bratislava_old_town"
+path = "facade_visibility/bratislava_old_town.osm"
+tier = "extended"
+required_for_release = false
+purpose = "Larger urban snapshot with mansard, pyramidal, hipped and other roof tags; partial relation coverage."
+sha256 = "4b762d98fc6d601460c1c15a5b4224f803310b7ad1089dea240942f4ab938b21"
+tracked_at_review = true
+load_missing_members = true
+companion_path = "facade_visibility/bratislava_old_town_extra.osm"
+companion_sha256 = "bf146461e69ae6ecb83149d456ec6ce50720e9902df1ca64eba01d54331011c9"
+completeness_note = "Some multipolygon/building relation members remain absent after loading the companion; assert snapshot behavior, not complete area coverage."
+
+[[osm]]
+id = "moscow_roof_mix"
+path = "facade_visibility/moscow_leningradski_prospekt.osm"
+tier = "extended"
+required_for_release = false
+purpose = "Broader roof tags, building relations, landuse and natural areas; partial relation coverage."
+sha256 = "9142f56575d129461ab976cc4a29568f3f9c87fa48c30b1a76ab5f6f8242c938"
+tracked_at_review = true
+load_missing_members = true
+companion_path = "facade_visibility/moscow_leningradski_prospekt_extra.osm"
+companion_sha256 = "a399a4f97687dc8732533d67b9ced365a73356216a93a660ada910fee6a0a2f9"
+completeness_note = "Some multipolygon/building relation members remain absent after loading the companion; assert snapshot behavior, not complete area coverage."

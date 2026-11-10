@@ -12,7 +12,7 @@ from unittest.mock import patch
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gltf_test_support import (
-    bpy, REPO, fixture, make_glb, make_b3dm, reset_scene, no_tile_writes_or_operator,
+    bpy, REPO, PACKAGE, fixture, make_glb, make_b3dm, reset_scene, no_tile_writes_or_operator,
 )
 import addon_utils
 
@@ -21,8 +21,7 @@ parser.add_argument("--artifacts", type=Path, required=True)
 args = parser.parse_args(sys.argv[sys.argv.index("--")+1:])
 args.artifacts.mkdir(parents=True, exist_ok=True)
 existing_json_files = set(args.artifacts.rglob("*.json"))
-sys.path.insert(0, str(REPO.parent))
-package = REPO.name
+package = PACKAGE
 addon_utils.enable(package, default_set=True)
 try:
     assert package in bpy.context.preferences.addons

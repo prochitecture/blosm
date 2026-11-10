@@ -5,8 +5,11 @@ import socket
 import sys
 import threading
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_target import ADDON_ROOT
+sys.path.insert(0, str(ADDON_ROOT))
 from downloads import worker
+assert Path(worker.__file__).resolve() == ADDON_ROOT / 'downloads/worker.py'
 
 mode = sys.argv.pop(1)
 worker.WORKER_DEADLINE_GRACE = .35
