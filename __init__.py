@@ -106,6 +106,9 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
             layout.box().label(text="Thank you for purchasing the Pro version!")
             if self.enableExperimentalFeatures:
                 layout.row().prop(self, "screenType", expand=True)
+        else:
+            row = layout.box().row()
+            row.operator("blosm.get_pro_version", text="Unlock more features with Blosm Pro!")
         
         if self.screenType == "ape":
             self.drawApe(context)
