@@ -2,7 +2,7 @@ import os, sys
 import bpy, bmesh
 from ..util.blender import loadMaterialsFromFile, addShrinkwrapModifier
 
-_isBlender291 = bpy.app.version[1] >= 91
+_isBlender291 = bpy.app.version >= (2, 91, 0)
 _curveBevelObjectName = "gpx_bevel"
 
 _bevelCurves = {
@@ -53,7 +53,7 @@ class GpxRenderer:
         gpxProjectOnTerrain = app.gpxProjectOnTerrain
         if gpxProjectOnTerrain and not terrain:
             gpxProjectOnTerrain = False
-        terrainOffset = terrain.terrain.get("terrain_offset") if terrain and not gpxProjectOnTerrain else None
+        terrainOffset = terrain.terrain.get("height_offset") if terrain and not gpxProjectOnTerrain else None
         
         bm = bmesh.new()
         
@@ -78,7 +78,10 @@ class GpxRenderer:
         # cleanup
         bm.free()
         
-        return bpy.data.objects.new(name, mesh)
+        obj = bpy.data.objects.new(name, mesh)
+        if terrain and gpxProjectOnTerrain:
+            addShrinkwrapModifier(obj, terrain.terrain, GpxRenderer.swOffset)
+        return obj
     
     def makeCurve(self, gpx, name):
         app = self.app

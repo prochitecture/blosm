@@ -104,14 +104,18 @@ def mesh_state():
 
 def undo():
     global scene
+    print("UI_ACTION", phase, "undo", flush=True)
     bpy.ops.ed.undo()
     scene = bpy.context.scene  # Undo replaces Blender data-block wrappers.
+    yield
 
 
 def redo():
     global scene
+    print("UI_ACTION", phase, "redo", flush=True)
     bpy.ops.ed.redo()
     scene = bpy.context.scene
+    yield
 
 
 def complete(status, error=None):
@@ -128,9 +132,9 @@ def complete(status, error=None):
     bpy.ops.wm.quit_blender()
 
 
-def tick():
+def steps():
     global phase, hold_until, paused_once, extra_scene, scene, popups_before_cancel, partial_heartbeats
-    try:
+    while True:
         assert time.monotonic() - started < 120, 'UI test timed out'
         assert not hasattr(glTFImporter, '_patch_convert_functions')
         # Every heartbeat runs through Blender's real event loop and moves the
@@ -151,10 +155,12 @@ def tick():
             scene.blosm.progressiveImport = False
             bpy.ops.ed.undo_push(message='Blocking import baseline')
             assert bpy.ops.blosm.import_data('EXEC_DEFAULT', True) == {'FINISHED'}
+            # Let Blender finish dependency-graph/redraw work before Undo.
+            yield
             assert mesh_state() == (2, 6) and runtime.active is None
-            undo()
+            yield from undo()
             assert mesh_state() == (0, 0)
-            redo()
+            yield from redo()
             assert mesh_state() == (2, 6)
             checks.append('blocking concurrent import uses one ordinary undo step')
             scene.blosm.progressiveImport = True
@@ -168,9 +174,9 @@ def tick():
             assert sum(p == 'complete' and n == 0 for p, n, t in heartbeats) > 3
             assert sum(p == 'complete' and n == 1 for p, n, t in heartbeats) > 3
             checks.append('real HTTP helper + viewport timer heartbeats + incremental tiles')
-            undo()
+            yield from undo()
             assert mesh_state() == (0, 0), 'One Undo must remove all separate tiles'
-            redo()
+            yield from redo()
             assert mesh_state() == (2, 6), 'One Redo must restore all separate tiles'
             assert runtime.active is None, 'Redo must not restart downloading'
             checks.append('one Undo/Redo removes/restores entire unjoined import')
@@ -180,18 +186,18 @@ def tick():
             phase = 'joined'
         elif phase == 'joined' and runtime.active is None:
             assert mesh_state() == (1, 6)
-            undo()
+            yield from undo()
             assert mesh_state() == (0, 0), 'One Undo must remove joined tiles, not split them'
-            redo()
+            yield from redo()
             assert mesh_state() == (1, 6)
             checks.append('final join shares the import undo step; Redo restores joined mesh')
             start_import()
             phase = 'second_import'
         elif phase == 'second_import' and runtime.active is None:
             assert mesh_state() == (2, 12)
-            undo()
+            yield from undo()
             assert mesh_state() == (1, 6), 'Undo must retain the preceding import'
-            redo()
+            yield from redo()
             assert mesh_state() == (2, 12)
             checks.append('consecutive imports retain separate undo groups')
             reset_scene()
@@ -203,17 +209,17 @@ def tick():
             phase = 'after_user_edit'
         elif phase == 'after_user_edit' and runtime.active is None:
             assert mesh_state() == (1, 6)
-            undo()
+            yield from undo()
             assert mesh_state() == (1, 3), 'Undo only the tiles imported after the user edit'
             assert len([obj for obj in scene.objects if obj.type == 'EMPTY']) == 1
-            undo()
+            yield from undo()
             assert mesh_state() == (1, 3)
             assert not [obj for obj in scene.objects if obj.type == 'EMPTY']
-            undo()
+            yield from undo()
             assert mesh_state() == (0, 0)
-            redo()
-            redo()
-            redo()
+            yield from redo()
+            yield from redo()
+            yield from redo()
             assert mesh_state() == (1, 6)
             assert len([obj for obj in scene.objects if obj.type == 'EMPTY']) == 1
             checks.append('user scene edit splits import groups and remains independently undoable')
@@ -228,16 +234,16 @@ def tick():
             assert sum(obj.type == 'MESH' for obj in scene.objects) == 1
             assert len(result_popups) == popups_before_cancel + 1 and 'Import cancelled.' in result_popups[-1][1]
             checks.append('Cancel button keeps first tile and stops helper')
-            undo()
+            yield from undo()
             assert mesh_state() == (0, 0)
-            redo()
+            yield from redo()
             assert mesh_state() == (1, 3)
             checks.append('cancelled partial import can be undone/redone as a group')
             reset_scene()
             start_import()
             phase = 'undo'
         elif phase == 'undo' and count == 1:
-            undo()
+            yield from undo()
             assert runtime.active is None
             assert len(result_popups) == popups_before_cancel + 1, 'Undo must not open a result popup'
             assert not [obj for obj in scene.objects if obj.type == 'MESH']
@@ -278,7 +284,21 @@ def tick():
             assert len(result_popups) == popups_before_cancel + 2, 'Silent lifecycle cleanup must not open a popup'
             complete('passed')
             return None
+        yield
+
+
+# Undo/Redo replaces Blender data and schedules UI/dependency-graph work.
+# Model separate user events instead of issuing a burst of history operations
+# inside one app-timer callback (which can terminate Blender 5.x natively).
+scenario = steps()
+
+
+def tick():
+    try:
+        next(scenario)
         return .03
+    except StopIteration:
+        return None
     except Exception:
         complete('failed', traceback.format_exc())
         return None

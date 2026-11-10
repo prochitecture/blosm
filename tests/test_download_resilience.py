@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 
 sys.dont_write_bytecode = True
@@ -310,10 +310,34 @@ class ResilienceChecks(unittest.TestCase):
         transport.submit(Request(self.url + '/truncated', timeout=.1))
         failure = self.replies(transport)[0][2]
         self.assertEqual(failure.code, 'timeout')
-        self.assertEqual(failure.attempts, 1)
+        # The counter can advance just before the final deadline check rejects
+        # a scheduled retry. Verify the observable contract: no second GET.
+        self.assertEqual(self.servers[0][0].requests['/truncated'], 1)
         self.assertLess(time.monotonic() - start, 1.5)
         transport.submit(self.url + '/ok')
         self.assertEqual(self.replies(transport)[0][1:], (b'OK', None))
+
+    def test_incomplete_retry_exhausts_one_shared_deadline(self):
+        from downloads import worker
+        deadline = Mock()
+        deadline.check.return_value = .1
+        deadline.expired.is_set.return_value = True
+        deadline.wait.side_effect = worker.Failure('timeout', 'Download deadline exceeded')
+        job = dict(url=self.url + '/truncated', timeout=.1, headers={},
+                   verify_tls=True, decode_gzip=False)
+        with patch.object(worker, 'Deadline', return_value=deadline) as create, \
+                patch.object(worker, 'make_opener') as opener, \
+                patch.object(worker, 'read_body', side_effect=worker.Failure('incomplete_response', 'Truncated')), \
+                patch.object(worker, 'retry_delay', return_value=.25):
+            kind, payload = worker.result(job, 1024, worker.ProviderGate(1))
+        create.assert_called_once_with(.1)
+        opener.assert_called_once_with(deadline, True)
+        self.assertEqual(opener.return_value.open.call_count, 1)
+        deadline.wait.assert_called_once_with(.25)
+        deadline.close.assert_called_once_with()
+        self.assertEqual(kind, b'E')
+        detail = json.loads(payload)
+        self.assertEqual((detail['code'], detail['attempts']), ('timeout', 1))
 
     def test_supervisor_stops_stalled_dns_even_with_heartbeats(self):
         transport = self.supervised_transport('dns')

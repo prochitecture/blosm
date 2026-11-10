@@ -145,6 +145,17 @@ Run `--suite ui` separately with desktop access, retaining `--profile` and
 sufficient. The runner hides its dedicated window on Windows.
 The HTTP fixture holds the second tile until the UI has processed five ticks
 with a partial import, so incremental-import assertions do not race redraw speed.
+The UI scenario yields to Blender's event loop after the blocking import and each
+Undo/Redo action. This allows redraw and dependency-graph work to complete between
+history operations; issuing them back-to-back inside a timer callback can crash
+Blender 5.x. `UI_ACTION` console entries identify the last history operation.
+The HTTP fixture retires its active request under the same lock used to send the
+response. This prevents completed serial requests from inflating the concurrency
+peak while retaining the assertions for genuinely overlapping requests.
+The incomplete-transfer deadline check asserts the HTTP server's request count;
+a retry may be counted internally immediately before its final deadline check
+rejects it. A separate deterministic test verifies that retry backoff exhausts
+one shared deadline without starting another request.
 
 ## Assertions and limits
 

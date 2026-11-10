@@ -33,12 +33,26 @@ class Handler(BaseHTTPRequestHandler):
             peak = max(peak, active)
             requests.append(self.path)
         try:
-            self.serve_payload()
-        finally:
+            status, content, length = self.prepare_payload()
+        except BaseException:
             with guard:
                 active -= 1
+            raise
+        # Retire the request before another handler can count itself after the
+        # client has received this response. Delays remain outside the lock, so
+        # genuinely overlapping downloads still contribute to the peak.
+        with guard:
+            try:
+                self.send_response(status)
+                self.send_header('Content-Length', str(length))
+                self.end_headers()
+                self.wfile.write(content)
+            except ConnectionError:
+                pass
+            finally:
+                active -= 1
 
-    def serve_payload(self):
+    def prepare_payload(self):
         key = self.path.split('?', 1)[0].lstrip('/')
         time.sleep(configuration.get('delays', {}).get(key, 0))
         # Optional UI-test barrier: do not race a fixed sleep against viewport
@@ -48,24 +62,19 @@ class Handler(BaseHTTPRequestHandler):
             deadline = time.monotonic() + 120
             while not Path(gate).exists():
                 if time.monotonic() > deadline:
-                    self.send_error(503, 'Test gate timed out')
-                    return
+                    content = b'Test gate timed out'
+                    return 503, content, len(content)
                 time.sleep(0.02)
         content = payloads.get(key)
         if content is None:
-            self.send_error(404)
-            return
-        self.send_response(200)
-        self.send_header('Content-Length', str(len(content)))
-        self.end_headers()
+            content = b'Not found'
+            return 404, content, len(content)
+        length = len(content)
         with guard:
             first_attempt = requests.count(self.path) == 1
         if key in configuration.get('truncate_once', ()) and first_attempt:
             content = content[:max(1, len(content) // 2)]
-        try:
-            self.wfile.write(content)
-        except ConnectionError:
-            pass
+        return 200, content, length
 
 
 server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
