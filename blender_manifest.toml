@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "blosm"
-version = "2.7.28"
+version = "2.8.0"
 name = "Blosm"
 tagline = "Import Google 3D cities, OpenStreetMap, terrain and imagery"
 maintainer = "Vladimir Elistratov <prokitektura@gmail.com>"
@@ -14,24 +14,3 @@ license = ["SPDX:GPL-3.0-or-later"]
 network = "Download 3D Tiles, OpenStreetMap, satellite imagery and terrain"
 files = "Import local data and store downloaded maps, imagery and terrain"
 clipboard = "Copy and paste the coordinates of an area of interest"
-
-[build]
-paths_exclude_pattern = [
-  "__pycache__/",
-  ".*",
-  "/*.zip",
-  "*.pyc",
-  "*.blend1",
-  "*_access_token.txt",
-  "*api_key.txt",
-  "/tests/",
-  "/tools/",
-  "/docs/",
-  "/script/",
-  "/pml/tests/",
-  "/setup/test_*.py",
-  "/assets/*",
-  "!/assets/base.blend",
-  "!/assets/roofs.blend",
-  "!/assets/way_profiles.blend",
-]

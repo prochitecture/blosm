@@ -7,34 +7,37 @@ Disk**, then open the Blosm tab in the 3D View sidebar.
 
 ## Build and validate
 
-Build from Git-visible source to avoid including ignored local experiments.
-The manifest excludes credentials, development scripts, tests, bytecode and
-development assets; only the three shipped `.blend` files are included.
-Keep output and validation profiles outside the repository, under
-`C:/dev/workspace/artifacts/blosm-extension-compatibility` in this workspace.
+Release tooling and Base/Pro inventories live in the sibling
+[`blosm_build` repository](../../blosm_build/README.md). This repository's
+`blender_manifest.toml` contains runtime metadata only; do not add `[build]` here.
+Direct builds with Blender's default exclusions are not release packages.
+
+Run these commands from the Blosm repository root with Python 3.11+.
+Filesystem paths below are relative to that root; adjust the example Blender
+executable location to your setup.
 
 ```powershell
-python tools/build_extension.py --blender 'C:/Program Files/Blender Foundation/Blender 4.5/blender.exe' --output-dir C:/dev/workspace/artifacts/blosm-extension-compatibility/package
-blender --command extension validate
-blender --command extension validate C:/dev/workspace/artifacts/blosm-extension-compatibility/package/blosm-2.7.28.zip
+$blender = '../tools/blender/blender.exe'
+
+# Official build from committed source, with tests before publication:
+python ../blosm_build/build_extension.py --source . --ref release --edition both --test --blender $blender
+
+# Preview uncommitted changes:
+python ../blosm_build/build_extension.py --source . --working-tree --edition both --test --blender $blender
 ```
 
-Use an isolated profile for the installation test; it installs and enables the
-actual ZIP under `bl_ext.blosm_test.blosm`. This leaves normal Blender preferences
-and installed add-ons untouched.
+Output defaults to `../artifacts/blosm-releases`. Each run has its
+own logs, input hashes, provenance report and `packages/` directory. With
+`--test`, standalone Blosm tests run before candidate packaging and the actual
+Base and Pro ZIPs are installed and exercised in isolated Blender profiles.
+No release ZIPs are published to `packages/` if any required check fails.
+Without `--test`, manifest, ZIP and edition-inventory validation still run.
 
-```powershell
-$env:BLENDER_USER_RESOURCES = 'C:/dev/workspace/artifacts/blosm-extension-compatibility/test-profile'
-$env:PYTHONDONTWRITEBYTECODE = '1'
-blender --background --factory-startup --python-exit-code 1 --python tests/check_extension.py -- --package C:/dev/workspace/artifacts/blosm-extension-compatibility/package/blosm-2.7.28.zip --artifacts C:/dev/workspace/artifacts/blosm-extension-compatibility/install-test
-python -B -m unittest discover -s tests -p 'test_*.py'
-```
-
-Download transport tests use localhost fixture servers and need loopback socket
-access. The installation test covers registration, preferences, namespace
-collisions, PML, local storage, offline guards, and GLB/B3DM geometry. The direct
-glTF and progressive integration tests under `tests/` also verify placement,
-attribution, cancellation and failure cleanup.
+The install checker accepts `--edition base` or `--edition pro` (default: pro).
+It checks preferences, namespaces, offline behavior, local OSM, GLB/B3DM, and
+Pro PML when applicable. The broader release tests under `tests/` can additionally
+exercise real datasets, UI and external Pro asset packs; see the
+[General, Base and Pro test profiles](../tests/README.md).
 
 ## Runtime conventions
 

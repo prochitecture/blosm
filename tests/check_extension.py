@@ -20,6 +20,7 @@ import addon_utils
 sys.dont_write_bytecode = True
 parser = argparse.ArgumentParser()
 parser.add_argument('--package', type=Path, required=True)
+parser.add_argument('--edition', choices=('base', 'pro'), default='pro')
 parser.add_argument('--artifacts', type=Path, required=True)
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
 args.artifacts.mkdir(parents=True, exist_ok=True)
@@ -50,22 +51,29 @@ assert package in bpy.context.preferences.addons
 assert addon_utils.check(package)[1]
 addon = importlib.import_module(package)
 assert addon.BlosmPreferences.bl_idname == package
+assert addon.blenderApp.app.isPro == (args.edition == 'pro')
+assert ('realistic/__init__.py' in names) == (args.edition == 'pro')
 assert sys.path == paths_before
 assert all(sys.modules[name] is value for name, value in sentinels.items())
 checks.append('install, enable, preferences and namespace isolation')
 
-for name in ('setup.base', 'setup.premium_default', 'setup.realistic_dev', 'style',
-             'threed_tiles.blender', 'threed_tiles.progressive',
+for name in ('setup.base', 'threed_tiles.blender', 'threed_tiles.progressive',
              'threed_tiles.py3dtiles.tileset.content.tile_content_reader'):
     importlib.import_module(package + '.' + name)
-checks.append('OSM, PML, premium and 3D Tiles imports')
+checks.append('shared OSM and 3D Tiles imports')
 
-pml_file = args.artifacts / 'test.pml'
-pml_file.write_text('footprint { height: 10; }', encoding='utf-8')
-store = importlib.import_module(package + '.style').StyleStore(
-    type('App', (), {'pmlFilepath': str(pml_file), 'assetsDir': str(args.artifacts)})())
-assert 'test' in store.styles
-checks.append('PML parse and style compilation')
+if args.edition == 'pro':
+    for name in ('setup.premium_default', 'setup.realistic_dev', 'style'):
+        importlib.import_module(package + '.' + name)
+    pml_file = args.artifacts / 'test.pml'
+    pml_file.write_text('footprint { height: 10; }', encoding='utf-8')
+    store = importlib.import_module(package + '.style').StyleStore(
+        type('App', (), {'pmlFilepath': str(pml_file), 'assetsDir': str(args.artifacts)})())
+    assert 'test' in store.styles
+    checks.append('Pro PML parse and style compilation')
+else:
+    assert not any(name.startswith(('realistic/', 'pml/', 'util/blender_extra/')) for name in names)
+    checks.append('Base excludes Pro modules')
 
 prefs = bpy.context.preferences.addons[package].preferences
 prefs.dataDir = ''
@@ -183,6 +191,6 @@ assert addon_utils.enable(package, default_set=True) is not None
 addon_utils.disable(package, default_set=True)
 checks.append('disable, re-enable and cleanup')
 
-report = {'status': 'passed', 'blender': bpy.app.version_string, 'checks': checks}
+report = {'edition': args.edition, 'status': 'passed', 'blender': bpy.app.version_string, 'checks': checks}
 (args.artifacts / 'extension_validation.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 print(json.dumps(report, indent=2))
