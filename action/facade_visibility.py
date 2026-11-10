@@ -2,7 +2,7 @@ from math import sqrt
 import numpy as np
 from bisect import bisect_left
 from operator import itemgetter
-from defs.facade_classification import searchRange, FacadeClass, WayLevel, CrossedFacades, FrontFacadeSight
+from ..defs.facade_classification import searchRange, FacadeClass, WayLevel, CrossedFacades, FrontFacadeSight
 
 
 

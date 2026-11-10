@@ -1,4 +1,4 @@
-from util.blender import getBmesh, setBmesh
+from ..util.blender import getBmesh, setBmesh
 
 
 def _getCachedBMVert(vector, data, bm):

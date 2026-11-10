@@ -1,7 +1,7 @@
 from . import Action
-import parse
+from .. import parse
 
-from util import zAxis
+from ..util import zAxis
 
 
 class Terrain(Action):

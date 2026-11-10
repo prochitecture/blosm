@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import sys
 from . import BaseApp, AppType
 from .asset_store import AssetStore
-from util.polygon import PolygonOLD
+from ..util.polygon import PolygonOLD
 
 if "bpy" in sys.modules:
     import os, json, math, gzip, struct
@@ -373,20 +373,12 @@ class BlenderApp(BaseApp):
         
         self.setTerrain(context, createFlatTerrain=True, createBvhTree=False)
     
-    def init3dTiles(self, context, manager, subdirName):
-        from threed_tiles.manager import BaseManager
-        
+    def init3dTiles(self, context, manager):
         addon = context.scene.blosm
         addonName = self.addonName
         
-        self.setDataDir(context, self.basePath, addonName)
-        tilesDir = os.path.join(self.dataDir, "3d_tiles", subdirName)
-        if not os.path.exists(tilesDir):
-            os.makedirs(tilesDir)
-        manager.tilesDir = tilesDir
-        
         manager.setGeometricError(
-            BaseManager.geometricErrors.get(self.lodOf3dTiles)\
+            manager.geometricErrors.get(self.lodOf3dTiles)\
             if addon.threedTilesSource == "google" else\
             addon.geometricError
         )
@@ -416,69 +408,6 @@ class BlenderApp(BaseApp):
             raise Exception("A valid GPX file isn't set")
         self.gpxFilepath = gpxFilepath
     
-    def initGeoJson(self, op, context):
-        prefs = context.preferences.addons
-        
-        if app.has(defs.Keys.mode3d) and self.mode != "2D":
-            self.mode = BaseApp.realistic\
-                if app.has(defs.Keys.mode3dRealistic) and self.mode == "3Drealistic"\
-                else BaseApp.simple
-        else:
-            self.mode = BaseApp.twoD
-            
-        if self.mode is BaseApp.realistic:
-            # first try the <assetsDir> from the addon GUI
-            assetsDir = self.assetsDir
-            if not assetsDir:
-                # second try the <assetsDir> from the addon preferences
-                assetsDir = prefs[addonName].preferences.assetsDir if addonName in prefs else None
-            if assetsDir:
-                assetsDir = os.path.realpath(bpy.path.abspath(assetsDir))
-                if not os.path.isdir(assetsDir):
-                    raise Exception(
-                        "The directory with assets %s doesn't exist. " % assetsDir +
-                        _setAssetsDirStr
-                    )
-                self.assetsDir = assetsDir
-                bldgMaterialsFilepath = os.path.join(assetsDir, self.bldgMaterialsFileName)
-                if not os.path.isfile(bldgMaterialsFilepath):
-                    raise Exception(
-                        "The directory with assets %s doesn't contain the file %s. " % (assetsDir, self.bldgMaterialsFileName) +
-                        _setAssetsDirStr
-                    )
-                self.bldgMaterialsFilepath = bldgMaterialsFilepath
-                if self.forests:
-                    vegetationFilepath = os.path.join(assetsDir, self.vegetationFileName)
-                    if not os.path.isfile(vegetationFilepath):
-                        raise Exception(
-                            "The directory with assets %s doesn't contain the file %s. " % (assetsDir, self.vegetationFileName) +
-                            _setAssetsDirStr
-                        )
-                    self.vegetationFilepath = vegetationFilepath
-            else:
-                raise Exception(_setAssetsDirStr)
-        
-        basePath = self.basePath
-        self.op = op
-        self.assetPath = os.path.join(basePath, "assets")
-        
-        # a Python dict to cache Blender meshes loaded from Blender files serving as an asset library
-        self.meshes = {}
-        
-        self.layerIndices = {}
-        self.layers = []
-        
-        self.osmFilepath = os.path.realpath(bpy.path.abspath(self.osmFilepath))
-        
-        # managers (derived from manager.Manager) performing some processing
-        self.managers = []
-        
-        # renderers (derived from renderer.Renderer) actually making 3D objects
-        self.renderers = []
-        
-        # tangent to check if an angle of the polygon is straight
-        PolygonOLD.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
-    
     def setAttributes(self, context):
         """
         Copies properties from <context.scene.blosm>
@@ -497,7 +426,7 @@ class BlenderApp(BaseApp):
         if addonName in prefs:
             dataDir = prefs[addonName].preferences.dataDir
             if not dataDir:
-                raise Exception("A valid directory for data in the addon preferences isn't set")
+                dataDir = bpy.utils.extension_path_user(addonName, create=True)
             dataDir = os.path.realpath(bpy.path.abspath(dataDir))
             if not os.path.isdir(dataDir):
                 raise Exception("The directory for data in the addon preferences doesn't exist")
@@ -559,8 +488,6 @@ class BlenderApp(BaseApp):
                 has = os.path.isdir(os.path.join(self.basePath, "realistic"))
             elif key == "overlay":
                 has = os.path.isdir(os.path.join(self.basePath, "overlay"))
-            elif key == "geojson":
-                has = os.path.isdir(os.path.join(self.basePath, "geojson"))
             self._keys[key] = has
             
         return has
@@ -790,7 +717,7 @@ class BlenderApp(BaseApp):
         if bpyproj:
             projection = bpyproj.getProjection(lat, lon)
         if not projection:
-            from util.transverse_mercator import TransverseMercator
+            from ..util.transverse_mercator import TransverseMercator
             # fall back to the Transverse Mercator
             projection = TransverseMercator(lat=lat, lon=lon)
         self.projection = projection

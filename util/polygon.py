@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from mathutils import Vector
-from util import zero, zAxis, zeroVector
+from . import zero, zAxis, zeroVector
 
 
 class PolygonOLD:

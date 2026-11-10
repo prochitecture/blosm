@@ -1,5 +1,5 @@
 from .. import ItemRenderer
-from util.blender import loadImage
+from ...util.blender import loadImage
 from ..util import getPath
 
 

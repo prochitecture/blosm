@@ -1,5 +1,5 @@
 from .item import Item
-from way.way_properties import turnsFromPatterns
+from ..way_properties import turnsFromPatterns
 
 
 class SideLane(Item):

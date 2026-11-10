@@ -1,6 +1,6 @@
 from .roof import Roof
-from item.facade import Facade
-from item.roof_flat import RoofFlat as ItemRoofFlat
+from ...item.facade import Facade
+from ...item.roof_flat import RoofFlat as ItemRoofFlat
 from .geometry.rectangle import RectangleFRA
 from mathutils import Vector
 

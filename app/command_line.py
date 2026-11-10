@@ -1,7 +1,7 @@
 import os, argparse
 
 from . import BaseApp, AppType
-from util.transverse_mercator import TransverseMercator
+from ..util.transverse_mercator import TransverseMercator
 
 
 class Layer:
@@ -116,7 +116,7 @@ class CommandLineApp(BaseApp):
         self.renderers = None
     
     def initOverlay(self):
-        from overlay.command_line import OverlayMixin
+        from ..overlay.command_line import OverlayMixin
         
         overlay = self.setOverlay(OverlayMixin)
         overlay.originAtTop = True

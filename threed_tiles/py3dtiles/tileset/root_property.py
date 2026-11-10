@@ -3,12 +3,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from py3dtiles.typing import ExtraDictType, RootPropertyDictType
+from ..typing import ExtraDictType, RootPropertyDictType
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from py3dtiles.tileset.extension import BaseExtension
+    from .extension import BaseExtension
 
 _JsonDictT = TypeVar("_JsonDictT", bound=RootPropertyDictType)
 

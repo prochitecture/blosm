@@ -1,7 +1,7 @@
 import bmesh
 from mathutils import Vector
 from . import ItemRendererTexture
-from util import zAxis
+from ...util import zAxis
 
 
 def _getEdge(bmVert):

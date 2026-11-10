@@ -77,7 +77,7 @@ class BuildingRenderer(Renderer2d):
         # initializing the stuff dealing with the default number of levels
         defaultLevels = bpy.context.scene.blosm.defaultLevels
         if not defaultLevels:
-            from gui import addDefaultLevels
+            from ..gui import addDefaultLevels
             addDefaultLevels()
         self.randomLevels = RandomWeighted(tuple((e.levels, e.weight) for e in defaultLevels))
         self.randomLevelsHouse = RandomWeighted(self.defaultLevelsHouse)

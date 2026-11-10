@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from py3dtiles.tileset.extension.base_extension import BaseExtension
-from py3dtiles.typing import ExtensionDictType, HierarchyClassDictType
+from .base_extension import BaseExtension
+from ...typing import ExtensionDictType, HierarchyClassDictType
 
 
 class HierarchyInstance:

@@ -1,8 +1,8 @@
 #from manager import BaseManager, Linestring, Polygon, PolygonAcceptBroken
-from building.manager import BaseBuildingManager
-from way.manager import RealWayManager
-from mpl.renderer import BuildingRenderer, WayRenderer, BuildingVisibilityRender
-from action.facade_visibility import FacadeVisibilityOther
+from ..building.manager import BaseBuildingManager
+from ..way.manager import RealWayManager
+from ..mpl.renderer import BuildingRenderer, WayRenderer, BuildingVisibilityRender
+from ..action.facade_visibility import FacadeVisibilityOther
 
 #from manager.logging import Logger
 

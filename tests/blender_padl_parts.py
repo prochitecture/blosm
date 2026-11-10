@@ -1,6 +1,8 @@
 """Building parts: both backends, common datum, courtyards, packing and reopen."""
 from pathlib import Path
 from dataclasses import replace
+import importlib
+import os
 import sys
 
 def rect(x, y, w, h):
@@ -30,14 +32,17 @@ def bounds(output):
 def main():
     import bpy, addon_utils
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root.parent))
-    addon_utils.enable(root.name, default_set=True)
-    from blosm.padl.geometry import Footprint
-    from blosm.padl.persistence import read_footprints
-    from blosm.padl.api import edit_parameter, create_input_object
-    from blosm.padl.errors import PadlError
-    from blosm.building.padl_integration.backends import BuildingGenerationService
-    from blosm.building.padl_integration.source import group_buildings
+    package = os.environ.get('BLOSM_TEST_PACKAGE', root.name)
+    if not package.startswith('bl_ext.'):
+        sys.path.insert(0, str(root.parent))
+    assert addon_utils.enable(package, default_set=True) is not None
+    Footprint = importlib.import_module(package + '.padl.geometry').Footprint
+    read_footprints = importlib.import_module(package + '.padl.persistence').read_footprints
+    api = importlib.import_module(package + '.padl.api')
+    edit_parameter, create_input_object = api.edit_parameter, api.create_input_object
+    PadlError = importlib.import_module(package + '.padl.errors').PadlError
+    BuildingGenerationService = importlib.import_module(package + '.building.padl_integration.backends').BuildingGenerationService
+    group_buildings = importlib.import_module(package + '.building.padl_integration.source').group_buildings
     collection = bpy.context.collection
     terrain_mesh = bpy.data.meshes.new('Parts terrain')
     terrain_mesh.from_pydata([(-10,-10,8),(80,-10,26),(80,30,26),(-10,30,8)], [], [(0,1,2,3)])
@@ -125,7 +130,8 @@ def main():
         assert next(s for s in partial.statuses if s['footprint_id'] == 104)['error']
         print('PARTS_FIXTURE_OK', backend, flush=True)
     assert_bounds(outputs['geometry_nodes'],outputs['python'])
-    destination = root.parent / 'artifacts/padl_parts/parts_fixtures.blend'
+    destination = Path(os.environ.get('BLOSM_TEST_ARTIFACTS', root.parent / 'artifacts/padl_parts')) / 'parts_fixtures.blend'
+    destination.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(destination))
     bpy.ops.wm.open_mainfile(filepath=str(destination))
     for backend in ('geometry_nodes','python'):

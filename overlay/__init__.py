@@ -18,7 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import math, os, sys
-from threading import Thread
 import numpy
 from urllib import request
 import ssl
@@ -266,6 +265,8 @@ class Overlay:
                 (self.tileCounter, self.numTiles, tileUrl)
             )
         else:
+            from ..downloads.access import require_online_access
+            require_online_access()
             app.print(
                 "(%s of %s) Downloading the tile image %s" %
                 (self.tileCounter, self.numTiles, tileUrl)

@@ -103,5 +103,5 @@ class Item:
                     self.building.renderInfo._cache[counter] = 1
 
 
-from grammar.building import perBuilding
-from grammar.width_type import WidthType
+from ..grammar.building import perBuilding
+from ..grammar.width_type import WidthType

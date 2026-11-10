@@ -1,5 +1,5 @@
 from . import Geometry
-from util import zero
+from ....util import zero
 
 
 class PolygonHB(Geometry):

@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 import bpy
 from .layer import MeshLayer
-from util.blender import appendObjectsFromFile, createDiffuseMaterial, createCollection, addShrinkwrapModifier
+from ..util.blender import appendObjectsFromFile, createDiffuseMaterial, createCollection, addShrinkwrapModifier
 
 _isBlender291 = bpy.app.version[1] >= 91
 

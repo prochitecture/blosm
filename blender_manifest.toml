@@ -1,0 +1,16 @@
+schema_version = "1.0.0"
+id = "blosm"
+version = "2.8.0"
+name = "Blosm"
+tagline = "Import Google 3D cities, OpenStreetMap, terrain and imagery"
+maintainer = "Vladimir Elistratov <prokitektura@gmail.com>"
+type = "add-on"
+website = "https://github.com/vvoovv/blosm/wiki/Premium-Version"
+tags = ["Import-Export"]
+blender_version_min = "5.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+network = "Download 3D Tiles, OpenStreetMap, satellite imagery and terrain"
+files = "Import local data and store downloaded maps, imagery and terrain"
+clipboard = "Copy and paste the coordinates of an area of interest"

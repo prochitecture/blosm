@@ -22,8 +22,8 @@ import bpy, bmesh
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 from . import Renderer
-from terrain import direction
-from util.osm import assignTags
+from ..terrain import direction
+from ..util.osm import assignTags
 
 
 class CurveRenderer(Renderer):

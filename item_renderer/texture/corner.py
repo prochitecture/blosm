@@ -2,7 +2,7 @@ from math import cos, radians
 from operator import itemgetter
 from bisect import bisect_left
 
-from util.blender import linkCollectionFromFile
+from ...util.blender import linkCollectionFromFile
 from ..util import getFilepath
 
 

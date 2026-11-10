@@ -1,9 +1,9 @@
 from mathutils import Vector
 from . import ItemRendererTexture
 from ..util import initUvAlongPolygonEdge
-from grammar import smoothness
+from ...grammar import smoothness
 
-from util import zAxis
+from ...util import zAxis
 
 
 class RoofPyramidal(ItemRendererTexture):

@@ -5,7 +5,7 @@ import struct
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import InvalidB3dmError
+from ...exceptions import InvalidB3dmError
 
 from .b3dm_feature_table import B3dmFeatureTable
 from .batch_table import BatchTable

@@ -17,41 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-bl_info = {
-    "name": "Blosm",
-    "author": "Vladimir Elistratov <prokitektura+support@gmail.com>",
-    "version": (2, 7, 28),
-    "blender": (5, 2, 0),
-    "location": "Right side panel > \"Blosm\" tab",
-    "description": "A few clicks import of OpenStreetMap, Google 3D cities, terrain, satellite imagery, web maps",
-    "warning": "",
-    "wiki_url": "https://github.com/vvoovv/blosm/wiki/Premium-Version",
-    "tracker_url": "https://github.com/vvoovv/blosm/issues",
-    "support": "COMMUNITY",
-    "category": "Import-Export",
-    "blosmAssets": "2021.05.07"
-}
+import os, textwrap, tomllib
 
-import os, sys, textwrap
-
-# force cleanup of sys.modules to avoid conflicts with the other addons for Blender
-for m in [
-        "action", "ape", "app", "building", "building2", "defs", "gpx", "grammar", "gui",
-        "item", "item_renderer", "lib", "manager", "material", "mpl", "overlay", "parse",
-        "pml", "realistic", "renderer", "script", "setup", "style", "terrain",
-        "threed_tiles", "util", "way"
-    ]:
-    sys.modules.pop(m, 0)
-
-def _checkPath():
-    path = os.path.dirname(os.path.realpath(__file__))
-    if path in sys.path:
-        sys.path.remove(path)
-    # make <path> the first one to search for a module
-    sys.path.insert(0, path)
-    sys.path.insert(1, os.path.join(path, "pml"))
-    sys.path.insert(2, os.path.join(path, "threed_tiles"))
-_checkPath()
+with open(os.path.join(os.path.dirname(__file__), "blender_manifest.toml"), "rb") as _file:
+    _manifest = tomllib.load(_file)
 
 
 import bpy, bmesh, blf
@@ -59,19 +28,21 @@ import bpy, bmesh, blf
 from .app import blender as blenderApp
 # Important: <blenderApp.app> attributes must be set before importing gui, since <app.isPro> is used there
 # set the minimum version for BLOSM assets
-blenderApp.app.setMinAssetsVersion(bl_info["blosmAssets"])
+blenderApp.app.setMinAssetsVersion("2021.05.07")
 # set addon version
-blenderApp.app.version = bl_info["version"]
+blenderApp.app.version = tuple(int(part) for part in _manifest["version"].split('.'))
 blenderApp.app.isPro = os.path.isdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), "realistic"))
 
 from .renderer import Renderer
 from .parse.osm import Osm
 from . import gui, ape
 from .defs import Keys
+from .progressive import blender as progressiveImport
+from .downloads.access import OnlineAccessError
 
 
 class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
-    bl_idname = __name__
+    bl_idname = __package__
     
     screenType: bpy.props.EnumProperty(
         name = "Screen type for addon preferences",
@@ -86,7 +57,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
     dataDir: bpy.props.StringProperty(
         name = '',
         subtype = 'DIR_PATH',
-        description = "Directory to store downloaded OpenStreetMap and terrain files"
+        description = "Directory for downloaded data; leave empty to use Blender's extension storage"
     )
     
     assetsDir: bpy.props.StringProperty(
@@ -135,11 +106,14 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
             layout.box().label(text="Thank you for purchasing the Pro version!")
             if self.enableExperimentalFeatures:
                 layout.row().prop(self, "screenType", expand=True)
+        else:
+            row = layout.box().row()
+            row.operator("blosm.get_pro_version", text="Unlock more features with Blosm Pro!")
         
         if self.screenType == "ape":
             self.drawApe(context)
         else:
-            layout.label(text="Directory to store downloaded OpenStreetMap and terrain files:")
+            layout.label(text="Data directory (empty uses Blender's extension storage):")
             layout.prop(self, "dataDir")
             
             if blenderApp.app.isPro:
@@ -252,7 +226,14 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
     bl_description = "Import data of the selected type (OpenStreetMap, Google 3D Tiles, terrain, etc)"
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context):
+        return progressiveImport.active is None
+
     def execute(self, context):
+        if progressiveImport.active is not None:
+            self.report({'WARNING'}, 'A Blosm import is already running')
+            return {'CANCELLED'}
         a = blenderApp.app
         dataType = context.scene.blosm.dataType
         
@@ -271,8 +252,6 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             return self.importGpx(context)
         elif dataType == "3d-tiles":
             return self.import3dTiles(context)
-        elif dataType == "geojson":
-            return self.importGeoJson(context)
         
         return {'FINISHED'}
 
@@ -401,14 +380,9 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
                     "The script file doesn't exist"
                 )
             return None
-        import importlib.util
-        moduleName = os.path.splitext(os.path.basename(setupScript))[0]
         try:
-            spec = importlib.util.spec_from_file_location(moduleName, setupScript)
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[moduleName] = module
-            spec.loader.exec_module(module)
-            return module.setup
+            from .util.setup_script import load_setup_script
+            return load_setup_script(setupScript)
         except Exception:
             self.report({'ERROR'},
                 "Unable to execute the setup script! See the error message in the Blender console!"
@@ -464,8 +438,13 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         if blosm.commandLineMode:
             hasTiles = True
-            while hasTiles:
-                hasTiles = blenderApp.app.overlay.importNextTile()
+            try:
+                while hasTiles:
+                    hasTiles = blenderApp.app.overlay.importNextTile()
+            except OnlineAccessError as exc:
+                self.report({'ERROR'}, str(exc))
+                a.area = None
+                return {'CANCELLED'}
             if blenderApp.app.overlay.finalizeImport():
                 self.report({'INFO'}, "Overlay import is finished!")
             else:
@@ -485,6 +464,15 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         addon = context.scene.blosm
         google3dTiles = addon.threedTilesSource == "google"
+        progressive = addon.progressiveImport and not addon.commandLineMode
+        if progressive:
+            if bpy.app.background or context.window is None:
+                self.report({'ERROR'}, 'Progressive import requires an interactive Blender window. Disable Progressive import for background jobs.')
+                return {'CANCELLED'}
+            if context.mode != 'OBJECT':
+                self.report({'ERROR'}, 'Start progressive import in Object Mode')
+                return {'CANCELLED'}
+            from .threed_tiles.progressive import ProgressiveRenderer, TilesImport
 
         if not blenderApp.app.isPro and google3dTiles and addon.lodOf3dTiles == "lod6":
             def _draw_pro_popup(self, context):
@@ -499,22 +487,22 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             )
             return {'CANCELLED'}
         
-        renderer = BlenderRenderer(
+        renderer = (ProgressiveRenderer if progressive else BlenderRenderer)(
             "Google 3D Tiles" if google3dTiles else "3D Tiles",
             addon.join3dTilesObjects,
-            addon.instanceName
+            addon.instanceName,
+            report=(lambda levels, message: progressiveImport.notify(next(iter(levels)), message)) if progressive else self.report
         )
         manager = BaseManager(
             "https://tile.googleapis.com/v1/3dtiles/root.json" if google3dTiles else addon.threedTilesUrl,
             renderer
         )
-        
-        manager.cacheJsonFiles = addon.cacheJsonFiles
-        manager.cache3dFiles = addon.cache3dFiles
+        manager.concurrentDownloads = addon.concurrentDownloads
+        manager.downloadWorkers = addon.downloadWorkers
         
         a = blenderApp.app
         try:
-            a.init3dTiles(context, manager, '')
+            a.init3dTiles(context, manager)
         except Exception as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -526,6 +514,15 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         else:
             renderer.calculateHeightOffset = True
         
+        if progressive:
+            try:
+                task = TilesImport(manager, (a.minLon, a.minLat, a.maxLon, a.maxLat), context, setLatLonHeight)
+                progressiveImport.start(task, context)
+            except Exception as exc:
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
+            return {'FINISHED'}
+
         result = manager.render(a.minLon, a.minLat, a.maxLon, a.maxLat)
         
         if len(result) == 1:
@@ -603,78 +600,6 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             self.setCenterLatLon(context, gpx.lat, gpx.lon)
         return {'FINISHED'}
 
-    def importGeoJson(self, context):
-        from .parse.geojson import GeoJson
-        
-        a = blenderApp.app
-        addon = context.scene.blosm
-        
-        try:
-            a.initGeoJson(self, context)
-        except Exception as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-        
-        createFlatTerrain = a.mode is a.realistic and a.forests
-        forceExtentCalculation = createFlatTerrain
-        
-        # check if have a terrain Blender object set
-        a.setTerrain(
-            context,
-            createFlatTerrain = createFlatTerrain,
-            createBvhTree = True
-        )
-        
-        setupScript = addon.setupScript
-        if setupScript:
-            setup_function = self.loadSetupScript(setupScript, reportError=True)
-            if not setup_function:
-                return {'CANCELLED'}
-        else:
-            if a.mode is a.realistic:
-                from .setup.premium_default import setup as setup_function
-            else:
-                from .setup.geojson_base import setup as setup_function
-        
-        scene = context.scene
-        
-        self.setObjectMode(context)
-        bpy.ops.object.select_all(action='DESELECT')
-        
-        data = GeoJson(a)
-        setup_function(a, data)
-        a.createLayers(data)
-        
-        setLatLon = False
-        if "lat" in scene and "lon" in scene and a.relativeToInitialImport:
-            a.setProjection(scene["lat"], scene["lon"])
-        elif a.coordinatesAsFilter:
-            a.setProjection( (a.minLat+a.maxLat)/2., (a.minLon+a.maxLon)/2. )
-        else:
-            setLatLon = True
-        
-        data.parse(a.osmFilepath, forceExtentCalculation=forceExtentCalculation)
-        
-        if forceExtentCalculation:
-            a.minLat = data.minLat
-            a.maxLat = data.maxLat
-            a.minLon = data.minLon
-            a.maxLon = data.maxLon
-        
-        a.initLayers()
-        
-        a.process()
-        a.render()
-        
-        # setting <lon> and <lat> attributes for <scene> if necessary
-        if setLatLon:
-            # <osm.lat> and <osm.lon> have been set in osm.parse(..)
-            self.setCenterLatLon(context, data.lat, data.lon)
-        
-        a.clean()
-        
-        return {'FINISHED'}
-    
     def setObjectMode(self, context):
         scene = context.scene
         # setting active object if there is no active object
@@ -700,7 +625,13 @@ class BLOSM_OT_ControlOverlay(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
-            hasTiles = blenderApp.app.overlay.importNextTile()
+            try:
+                hasTiles = blenderApp.app.overlay.importNextTile()
+            except OnlineAccessError as exc:
+                self.stop(context)
+                blenderApp.app.area = None
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
             if not hasTiles:
                 self.stop(context)
                 if blenderApp.app.overlay.finalizeImport():
@@ -773,6 +704,7 @@ _classes = (
 )
 
 def register():
+    progressiveImport.register()
     for c in _classes:
         bpy.utils.register_class(c)
     gui.register()
@@ -786,7 +718,7 @@ def register():
     # Pro-only: register optional baking tools if available
     if blenderApp.app.isPro:
         try:
-            from util.blender_extra import baking as _baking
+            from .util.blender_extra import baking as _baking
             if hasattr(_baking, 'register'):
                 _baking.register()
         except Exception:
@@ -797,6 +729,7 @@ def unregister():
     if bpy.app.version >= (5, 2, 0):
         from .way.street_network.python_backend import ui as python_street_ui
         python_street_ui.unregister()
+    progressiveImport.unregister()
     for c in _classes:
         bpy.utils.unregister_class(c)
     gui.unregister()

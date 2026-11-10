@@ -1,5 +1,5 @@
 from mathutils import Vector
-from defs.facade_classification import *
+from ..defs.facade_classification import *
 
 
 class FacadeClassification:

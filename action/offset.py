@@ -1,6 +1,6 @@
 from mathutils import Vector
 from . import Action
-import parse
+from .. import parse
 
 
 class Offset(Action):

@@ -1,6 +1,6 @@
 import os
 
-from util.blender import appendNodeGroupFromFile, addGeometryNodesModifier
+from ..util.blender import appendNodeGroupFromFile, addGeometryNodesModifier
 
 
 class Footprint:

@@ -1,5 +1,5 @@
 from .div import Div
-from defs.facade_classification import FacadeClass
+from ..defs.facade_classification import FacadeClass
 
 
 class Facade(Div):

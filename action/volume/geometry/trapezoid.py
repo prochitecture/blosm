@@ -1,4 +1,4 @@
-from util import zero, zAxis
+from ....util import zero, zAxis
 
 from . import Geometry
 from .rectangle import RectangleFRA

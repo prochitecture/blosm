@@ -10,7 +10,7 @@ facade(item.front and style.count<=1) {
 """,
 """
 Facade(
-    condition = lambda item : item.front and self.count <= 1,
+    condition = lambda item : item.front and item.styleBlock.count <= 1,
     cl = "facade_with_door"
 )
 """

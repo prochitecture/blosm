@@ -1,16 +1,14 @@
-from os.path import basename, join as joinStrings, exists as pathExists
-from os import remove as removeFile
+from os.path import basename
 from math import radians, atan, sqrt, pi
-import re
 from operator import itemgetter
 import sys
 
 import bpy
 from mathutils import Vector, Matrix
 
-from util.blender import createCollection
+from ..util.blender import createCollection
 
-from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
+from .gltf_import import import_gltf
 
 
 def find_layer_collection(layer_col: bpy.types.LayerCollection, target_col: bpy.types.Collection):
@@ -30,23 +28,17 @@ def find_layer_collection(layer_col: bpy.types.LayerCollection, target_col: bpy.
 
 class BlenderRenderer:
     
-    def __init__(self, threedTilesName, join3dTilesObjects, instanceName):
+    def __init__(self, threedTilesName, join3dTilesObjects, instanceName, report=None):
         self.threedTilesName = threedTilesName
         self.join3dTilesObjects = join3dTilesObjects
         self.instanceName = instanceName
+        self.report = report
         
         self.calculateHeightOffset = False
         self.heightOffset = 0.
         
-        self.licenseRePattern = re.compile(b'\"copyright\":\s*\"(\w+)\"')
         self.copyrightHolders = {}
         
-        # <self._gltfImporterPatched> is used to store some Python objects related to Blender's glTF importer if its patching is performed
-        self._gltfImporterPatched = None
-        # the original static function <BlenderGlTF.set_convert_functions> of the glTF importer will be stored in the attribute below
-        self._set_convert_functions = None
-        # the original static function <BlenderScene.select_imported_objects> of the glTF importer will be stored in the attribute below
-        self._select_imported_objects = None
     
     def prepare(self, manager):
         self.num_imported_tiles = 0
@@ -65,10 +57,6 @@ class BlenderRenderer:
         
         self.centerCoords = manager.fromGeographic(manager.centerLat, manager.centerLon, 0.)
         
-        # Blender's glTF importer will be patched by default. A position offset will be applied during the import.
-        glTFImporter._patch_convert_functions = True
-        # the check <if "io_scene_gltf2" in sys.modules> is performed in <blosm.app>
-        self.patchGltfImporter()
     
     def finalize(self, manager):
         bpy.data.collections.remove(self.collection_import)
@@ -79,8 +67,6 @@ class BlenderRenderer:
             bpy.data.collections.remove(self.collection)
             self.collection = None
 
-            if self._gltfImporterPatched:
-                self.cleanupGltfImporterPatching()
             return
         
         bpy.ops.object.select_all(action='DESELECT')
@@ -145,7 +131,7 @@ class BlenderRenderer:
             
             # set the origin of the resulting Blender object at <centerCoords>
             _cursorLocation = bpy.context.scene.cursor.location.copy()
-            bpy.context.scene.cursor.location = (0., 0., 0.) if self._gltfImporterPatched else centerCoords
+            bpy.context.scene.cursor.location = (0., 0., 0.)
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
             bpy.context.scene.cursor.location = _cursorLocation
             
@@ -154,12 +140,7 @@ class BlenderRenderer:
             # set the matrix_local of the resulting Blender object
             self.collection.objects[0].matrix_local = matrix#Matrix.Translation(location) @ matrix
         else:
-            if not self._gltfImporterPatched:
-                # rotate the vector <centerCoords>
-                centerCoords = matrix @ centerCoords
             for obj, location in zip(self.collection.objects, locationsAfterRotation):
-                if not self._gltfImporterPatched:
-                    location[2] -= centerCoords[2]
                 obj.matrix_local = Matrix.Translation(location) @ matrix
                 obj.select_set(True)
         
@@ -174,96 +155,43 @@ class BlenderRenderer:
             )
         )
 
-        if self._gltfImporterPatched:
-            self.cleanupGltfImporterPatching()
-        
         self.collection = None
     
-    def renderGlb(self, manager, uri, path, transformMatrix, cacheContent):
-        context = bpy.context
-        
-        filepath = joinStrings(
-            manager.tilesDir,
-            basename(path) if cacheContent else ("current_file_" + self.instanceName + ".glb" if self.instanceName else "current_file.glb")
-        )
-        
-        if cacheContent:
-            if not pathExists(filepath):
-                fileContent = manager.download(uri)
-                with open(filepath, 'wb') as f:
-                    f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
-        else:
-            fileContent = manager.download(uri)
+    def renderGlb(self, manager, uri, path, transformMatrix, *, content=None):
+        # The filename supplies the source identity; the tile stays in memory.
+        result = import_gltf(basename(path), content=manager.download(uri) if content is None else content,
+                             report=self.report, coordinate_offset=self.centerCoords)
+        self.processCopyrightInfo(result.copyright)
+        if self.collection_import.objects or self.collection_import.children:
+            self.finalize_glb_import(transformMatrix)
 
-            # check if <fileContent> contains copyright information
-            match = re.search(self.licenseRePattern, fileContent)
-            if match:
-                self.processCopyrightInfo(match.group(1).decode('utf-8'))
-            
-            with open(filepath, 'wb') as f:
-                f.write(fileContent)
-            
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
-
-            if self.collection_import.objects:
-                self.finalize_glb_import(filepath, transformMatrix)
-
-    def renderB3dm(self, manager, uri, path, transformMatrix, cacheContent):
+    def renderB3dm(self, manager, uri, path, transformMatrix, *, content=None):
         import numpy
         from .py3dtiles.tileset.content.tile_content_reader import read_array
-        
-        filepath = joinStrings(
-            manager.tilesDir,
-            basename(path)[:-4] + "glb" if cacheContent else ("current_file_" + self.instanceName + ".glb" if self.instanceName else "current_file.glb")
-        )
-        
-        if cacheContent:
-            if not pathExists(filepath):
-                fileContent = manager.download(uri)
-                with open(filepath, 'wb') as f:
-                    f.write(fileContent)
-            bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
-        else:
-            fileContent = manager.download(uri)
-            # check if <fileContent> contains copyright information
-            match = re.search(self.licenseRePattern, fileContent)
-            if match:
-                self.processCopyrightInfo(match.group(1).decode('utf-8'))
-            
-            b3dmContent = read_array( numpy.frombuffer(fileContent, dtype=numpy.uint8) )
-            if b3dmContent is None or b3dmContent.header is None:
-                raise Exception("The file doesn't contain a valid data.")
-            
-            gltfContent = b3dmContent.body.gltf
-            # RTC means "Relative To Center"
-            rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
-            if rtc_center:
-                from io_scene_gltf2.io.imp.gltf2_io_gltf import glTFImporter
-                _patch_convert_functions = glTFImporter._patch_convert_functions
-                # No need to patch Blender's glTF importer if the property <RTC_CENTER> is provided.
-                glTFImporter._patch_convert_functions = False
-            
-            with open(filepath, 'wb') as f:
-                f.write(gltfContent.to_array())
-            
-            try:
-                bpy.ops.import_scene.gltf(filepath=filepath, import_scene_as_collection=True)
-            finally:
-                # Restore <glTFImporter._patch_convert_functions> for all possible outcomes
-                # of the import operator including any failures. Remember that the finally clause is
-                # always executed after the try block, even if an exception is raised and not handled.
-                if rtc_center:
-                    glTFImporter._patch_convert_functions = _patch_convert_functions
-            
-            if self.collection_import.objects or self.collection_import.children:
-                if rtc_center:
-                    self.process_rtc(rtc_center)
-                self.finalize_glb_import(filepath, transformMatrix)
-    
+
+        fileContent = manager.download(uri) if content is None else content
+        b3dmContent = read_array(numpy.frombuffer(fileContent, dtype=numpy.uint8))
+        if b3dmContent is None or b3dmContent.header is None or not hasattr(b3dmContent.body, 'gltf'):
+            raise ValueError("The file doesn't contain valid B3DM data.")
+
+        # Keep B3DM conversion in memory. RTC is separate from the embedded GLB
+        # and must survive conversion.
+        rtc_center = b3dmContent.body.feature_table.header.data.get("RTC_CENTER")
+        hasRtc = rtc_center is not None
+        result = import_gltf(basename(path), content=b3dmContent.body.gltf.to_array(),
+                             report=self.report, coordinate_offset=(0., 0., 0.) if hasRtc else self.centerCoords)
+
+        self.processCopyrightInfo(result.copyright)
+        if self.collection_import.objects or self.collection_import.children:
+            if hasRtc:
+                self.process_rtc(rtc_center)
+            self.finalize_glb_import(transformMatrix)
+
     def processCopyrightInfo(self, info):
         for copyrightHolder in info.split(';'):
             copyrightHolder = copyrightHolder.strip()
+            if not copyrightHolder:
+                continue
             if not copyrightHolder in self.copyrightHolders:
                 self.copyrightHolders[copyrightHolder] = 0
             self.copyrightHolders[copyrightHolder] += 1
@@ -292,8 +220,7 @@ class BlenderRenderer:
                 # See also doc/Transforms.md
                 #
     
-    def finalize_glb_import(self, filepath, transformMatrix):
-        removeFile(filepath)
+    def finalize_glb_import(self, transformMatrix):
 
         # Find Blender collection where the imported objects are located
         collection = self.collection_import
@@ -344,51 +271,3 @@ class BlenderRenderer:
         #bpy.ops.mesh.select_all(action='SELECT')
         #bpy.ops.mesh.remove_doubles()
         #bpy.ops.object.mode_set(mode='OBJECT')
-    
-    def patchGltfImporter(self):
-        bv = bpy.app.version
-
-        if (bv[0] == 3 and bv[1] == 6) or (bv[0] == 4 and bv[1] <= 2):
-            from .gltf_patch import set_convert_functions_4_5, select_imported_objects_4_1
-            from io_scene_gltf2.blender.imp.gltf2_blender_gltf import BlenderGlTF
-            from io_scene_gltf2.blender.imp.gltf2_blender_scene import BlenderScene
-
-            glTFImporter._offset = self.centerCoords
-            
-            self._set_convert_functions = BlenderGlTF.set_convert_functions
-            BlenderGlTF.set_convert_functions = set_convert_functions_4_5
-            
-            self._select_imported_objects = BlenderScene.select_imported_objects
-            BlenderScene.select_imported_objects = select_imported_objects_4_1
-            
-            self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
-        elif (bv[0] == 4 and 3 <= bv[1]) or bv[0] > 4:
-            from .gltf_patch import set_convert_functions_4_5, select_imported_objects_4_1
-            from io_scene_gltf2.blender.imp.blender_gltf import BlenderGlTF
-            from io_scene_gltf2.blender.imp.scene import BlenderScene
-            
-            glTFImporter._offset = self.centerCoords
-
-            self._set_convert_functions = BlenderGlTF.set_convert_functions
-            BlenderGlTF.set_convert_functions = set_convert_functions_4_5
-            
-            self._select_imported_objects = BlenderScene.select_imported_objects
-            BlenderScene.select_imported_objects = select_imported_objects_4_1
-            
-            self._gltfImporterPatched = (glTFImporter, BlenderGlTF, BlenderScene)
-    
-    def cleanupGltfImporterPatching(self):
-        glTFImporter, BlenderGlTF, BlenderScene = self._gltfImporterPatched
-        
-        # clean everything up after patching
-        
-        BlenderGlTF.set_convert_functions = self._set_convert_functions
-        self._set_convert_functions = None
-
-        delattr(glTFImporter, "_patch_convert_functions")
-        delattr(glTFImporter, "_offset")
-        
-        BlenderScene.select_imported_objects = self._select_imported_objects
-        self._select_imported_objects = None
-        
-        self._gltfImporterPatched = None

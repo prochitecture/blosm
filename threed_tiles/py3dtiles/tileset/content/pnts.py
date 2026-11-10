@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
-from py3dtiles.exceptions import InvalidPntsError
+from ...exceptions import InvalidPntsError
 
 from .batch_table import BatchTable
 from .pnts_feature_table import (

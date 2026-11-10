@@ -1,5 +1,5 @@
-from parse.osm import Osm
-from app.command_line import CommandLineApp
+from ..parse.osm import Osm
+from ..app.command_line import CommandLineApp
 
 
 def importOsm():
@@ -20,7 +20,7 @@ def importOsm():
         if not setup_function:
             return
     else:
-        from setup.base import setup as setup_function
+        from ..setup.base import setup as setup_function
     
     osm = Osm(a)
     

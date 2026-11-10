@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from .layer import Layer
-from util import zeroVector
+from ..util import zeroVector
 
 
 class NodeLayer(Layer):

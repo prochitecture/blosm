@@ -1,5 +1,5 @@
 from . import ItemRendererTexture
-from grammar import smoothness
+from ...grammar import smoothness
 
 
 class RoofProfile(ItemRendererTexture):

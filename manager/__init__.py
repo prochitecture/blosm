@@ -17,11 +17,15 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-import parse
-from material import colors
+from .. import parse
+from ..material import colors
 
 
 class Manager:
+
+    def cleanup(self):
+        """Release manager-specific state after rendering, if any."""
+        pass
     
     # <hexdigits> are used to check validity of colors in the hex form
     hexdigits = set("0123456789abcdef")

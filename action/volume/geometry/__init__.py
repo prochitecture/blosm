@@ -1,6 +1,6 @@
 from math import floor
 
-from util import zero
+from ....util import zero
 
 minLevelHeightFactor = 0.7
 threshold = 0.05

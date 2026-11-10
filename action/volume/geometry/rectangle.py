@@ -1,6 +1,6 @@
 from math import floor
 from mathutils import Vector
-from util import zAxis
+from ....util import zAxis
 
 from . import Geometry
 

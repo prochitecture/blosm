@@ -1,11 +1,11 @@
 import math
 from mathutils import Vector
 from .roof_flat import RoofLeveled
-from item.roof_hipped import RoofHipped as ItemRoofHipped
+from ...item.roof_hipped import RoofHipped as ItemRoofHipped
 
-from lib.bpypolyskel.bpypolyskel import polygonize
+from ...lib.bpypolyskel.bpypolyskel import polygonize
 
-from util import zAxis
+from ...util import zAxis
 
 #from util.debug import dumpInputHippedRoof
 

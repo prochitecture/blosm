@@ -10,6 +10,10 @@ This file contains an example  description of a style, written in PML, as far as
 ***PML2PythonTranslator.py:***
 This file contains a demo main program that starts the translation process. The parser created by ANTLR4 creates a parse tree from any file containing PML style code and the walker class then calls the translating functions using the generated listener class.
 
+For Blender extension packaging, internal imports (including generated parser
+imports) are relative. Preserve these imports when regenerating the parser so
+the bundled ANTLR runtime stays within the extension namespace.
+
 ***PythonListener.py:***
 This file contains an interface class between the ANTLR4 listnener *pmlListener* and the coder class *PythonCoder*. It just calls the parser rule functions with the same name in the coder class, transferring the retrieved content from the parse tree. In principle, all the code in *PythonCoder* could be written directly in *PythonListener*, but as *PythonListener* depends on the ANTLR4 classes, it could not be reused in other programs without the ANTLR4 runtime for Python. *PythonListener* provides a method *getCode()* that gets the result of the translation for the *PythonCoder*.
 

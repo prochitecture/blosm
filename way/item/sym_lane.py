@@ -1,5 +1,5 @@
 from .item import Item
-from defs.way_cluster_params import transitionSlope
+from ...defs.way_cluster_params import transitionSlope
 
 class SymLane(Item):
     # This class describes a transition between two Sections, where one of them has 

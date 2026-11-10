@@ -1,5 +1,5 @@
 from .item import Item
-from way.way_properties import getWidth
+from ..way_properties import getWidth
 
 
 class Section(Item):

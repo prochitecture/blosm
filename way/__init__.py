@@ -1,5 +1,5 @@
 from mathutils import Vector
-from defs.way import allWayCategoriesSet, allRoadwayCategoriesSet, allRailwayCategoriesSet
+from ..defs.way import allWayCategoriesSet, allRoadwayCategoriesSet, allRailwayCategoriesSet
 
 
 class WaySegment:

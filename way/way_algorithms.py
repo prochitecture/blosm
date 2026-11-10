@@ -1,6 +1,6 @@
 from collections import deque
 import heapq
-from way.way_network import WayNetwork, NetSection
+from .way_network import WayNetwork, NetSection
 from mathutils import Vector
 
 

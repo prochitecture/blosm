@@ -1,12 +1,12 @@
 import sys
 import os
-from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
-from pml_grammar.pmlLexer import pmlLexer
-from pml_grammar.pmlParser import pmlParser
-from PythonListener import PythonListener
-from ExceptionManagement import ParserExceptionListener
-from PML_Preprocessor import PML_Preprocessor
-from ExceptionManagement import ParserException
+from .antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
+from .pml_grammar.pmlLexer import pmlLexer
+from .pml_grammar.pmlParser import pmlParser
+from .PythonListener import PythonListener
+from .ExceptionManagement import ParserExceptionListener
+from .PML_Preprocessor import PML_Preprocessor
+from .ExceptionManagement import ParserException
 
 def main(argv):
     # argv[2] is the path to the folder where the asset packages

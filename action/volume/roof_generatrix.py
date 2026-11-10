@@ -1,5 +1,5 @@
 from .roof_flat import RoofLeveled
-from item.roof_generatrix import RoofGeneratrix as ItemRoofGeneratrix
+from ...item.roof_generatrix import RoofGeneratrix as ItemRoofGeneratrix
 
 
 class RoofGeneratrix(RoofLeveled):

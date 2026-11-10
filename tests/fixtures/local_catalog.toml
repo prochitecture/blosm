@@ -1,0 +1,8 @@
+# User-supplied binary inputs live under the configurable artifacts fixture root.
+[gpx]
+path = "gpx/2026-04-16_13-16_Thu.gpx"
+sha256 = "4c933280057fecf74ab26a077cecdf1d57e4a98e89c56b36570fa3cc6b2c903d"
+
+[gn2d]
+path = "gn2d/buildify_1.0.blend"
+sha256 = "d3438b0a02ca0ab8f7b790cd10fc87dbff68c668c7142044d79fade75ab5147a"

@@ -1,4 +1,4 @@
-from util import zero
+from ....util import zero
 
 from . import Geometry
 

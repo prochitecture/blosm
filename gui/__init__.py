@@ -18,12 +18,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import bpy
-import os, math, webbrowser, importlib.util, importlib
+import os, math, webbrowser
 from bpy.app.handlers import persistent
 from ..app.blender import app
 from ..defs import Keys
 from .asset_libraries import classes as asset_library_classes
 from ..way.street_network.backends import registry as street_backends, migrate_saved_selection
+from ..progressive import blender as progressiveImport
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
@@ -42,8 +43,6 @@ def getDataTypes():
             ),
             ("gpx", "gpx", "GPX tracks")
         ]
-        if app.has(Keys.geojson):
-            items.append(("geojson", "GeoJson", "GeoJson"))
         return items
 
 
@@ -405,8 +404,7 @@ class BLOSM_PT_Extent(bpy.types.Panel):
         if (addon.dataType == "osm" and addon.osmSource == "server") or\
             (addon.dataType == "overlay" and not bpy.data.objects.get(addon.terrainObject)) or\
             addon.dataType == "terrain" or\
-            addon.dataType == "3d-tiles" or\
-            (addon.dataType == "geojson" and addon.coordinatesAsFilter):
+            addon.dataType == "3d-tiles":
             box = layout.box()
             row = box.row()
             row.alignment = "CENTER"
@@ -427,9 +425,14 @@ class BLOSM_PT_Extent(bpy.types.Panel):
             split.split(factor=0.67).prop(addon, "minLat")
         
         box = layout.box()
+        if addon.dataType == '3d-tiles':
+            box.prop(addon, 'progressiveImport')
         row = box.row(align=True)
         row.prop(addon, "dataType", text="")
         row.operator("blosm.import_data", text="import")
+        if progressiveImport.active is not None:
+            box.label(text=progressiveImport.active.status)
+            box.operator('blosm.cancel_progressive', text='Cancel import', icon='CANCEL')
 
 
 class PanelRealisticTools():#(bpy.types.Panel):
@@ -481,23 +484,16 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             self.draw3dTiles(context)
         elif dataType == "gpx":
             self.drawGpx(context)
-        elif dataType == "geojson":
-            self.drawOsm(context)
     
     def drawOsm(self, context):
         layout = self.layout
         addon = context.scene.blosm
         mode3dRealistic = _has3dRealistic and addon.mode == "3Drealistic"
-        isOsm = addon.dataType == "osm"
-        isGeoJson = addon.dataType == "geojson"
         
         box = layout.box()
-        if isOsm:
-            box.prop(addon, "osmSource", text="Import from")
-        if isGeoJson or addon.osmSource == "file":
+        box.prop(addon, "osmSource", text="Import from")
+        if addon.osmSource == "file":
             box.prop(addon, "osmFilepath", text="File")
-        if isGeoJson:
-            box.prop(addon, "coordinatesAsFilter")
         
         layout.box().prop_search(addon, "terrainObject", context.scene, "objects")
             
@@ -696,7 +692,7 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             box.label(text="Level of details:")
             box.prop(addon, "lodOf3dTiles", text='')
         
-        layout.prop(addon, "join3dTilesObjects")
+        layout.prop(addon, "join3dTilesObjects", text='Join 3D Tiles objects when finished' if addon.progressiveImport else 'Join 3D Tiles objects')
         layout.prop(addon, "relativeToInitialImport")
     
     def drawGpx(self, context):
@@ -739,13 +735,10 @@ class BLOSM_PT_Tools(bpy.types.Panel):
         active_mesh = context.object and context.object.type == 'MESH'
         baking_mod = None
         if isPro:
-            for name in ('util.blender_extra.baking', 'blosm.util.blender_extra.baking'):
-                try:
-                    if importlib.util.find_spec(name):
-                        baking_mod = importlib.import_module(name)
-                        break
-                except Exception:
-                    continue
+            try:
+                from ..util.blender_extra import baking as baking_mod
+            except ImportError:
+                pass
         if isPro and baking_mod and active_mesh:
             box = layout.box()
             box.label(text="Bake: single texture")
@@ -900,12 +893,6 @@ class BlosmProperties(bpy.types.PropertyGroup):
         min = -180.,
         max = 180.,
         default= -73.9812 if _has3dRealistic else 12.37983
-    )
-    
-    coordinatesAsFilter: bpy.props.BoolProperty(
-        name = "Use coordinates as filter",
-        description = "Use coordinates as a filter for the import from the file",
-        default = False
     )
     
     buildings: bpy.props.BoolProperty(
@@ -1181,23 +1168,31 @@ class BlosmProperties(bpy.types.PropertyGroup):
         description = "Join 3D Tiles objects and remove double vertices",
         default = True
     )
+
+    progressiveImport: bpy.props.BoolProperty(
+        name = "Progressive import",
+        description = "Show tiles as they load and allow viewport navigation between tile imports. Large tiles and final joining can briefly pause the viewport",
+        default = True
+    )
+
+    concurrentDownloads: bpy.props.BoolProperty(
+        name = "Concurrent downloads",
+        description = "Download several 3D Tiles at once in progressive or blocking mode",
+        default = True,
+        options = {'HIDDEN'}
+    )
+
+    downloadWorkers: bpy.props.IntProperty(
+        name = "Simultaneous downloads",
+        description = "Maximum outstanding downloads, including tiles waiting to be imported",
+        default = 4, min = 1, max = 8,
+        options = {'HIDDEN'}
+    )
     
     copyright: bpy.props.StringProperty(
         name = "Copyright message",
         description = "Copyright for the imported content",
         default = ''
-    )
-    
-    cacheJsonFiles: bpy.props.BoolProperty(
-        name = "Cache JSON Files",
-        description = "Cache JSON Files that define tilesets",
-        default = False
-    )
-    
-    cache3dFiles: bpy.props.BoolProperty(
-        name = "Cache 3D Files",
-        description = "Cache 3D Files (for example in .glb format)",
-        default = False
     )
     
     replaceMaterialsWith: bpy.props.EnumProperty(

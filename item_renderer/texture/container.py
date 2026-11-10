@@ -1,11 +1,11 @@
 from math import floor
 from . import ItemRendererTexture
 from .corner import Corner
-from grammar.arrangement import Horizontal, Vertical
-from grammar.symmetry import MiddleOfLast, RightmostOfLast
-from util import rgbToHex
-from util.blender import createMeshObject, addGeometryNodesModifier, useAttributeForGnInput
-from util.geometry_nodes import getGnInput, setGnInput, iterGnInputs, getGnInputAttribute
+from ...grammar.arrangement import Horizontal, Vertical
+from ...grammar.symmetry import MiddleOfLast, RightmostOfLast
+from ...util import rgbToHex
+from ...util.blender import createMeshObject, addGeometryNodesModifier, useAttributeForGnInput
+from ...util.geometry_nodes import getGnInput, setGnInput, iterGnInputs, getGnInputAttribute
 
 
 def _getTileWidthM(facadeTextureInfo):

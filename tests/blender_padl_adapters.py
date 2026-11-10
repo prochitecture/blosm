@@ -1,5 +1,7 @@
 """Installed-addon strategies: all roofs, holes, packing, reuse and strict terrain."""
 from pathlib import Path
+import importlib
+import os
 import sys
 
 
@@ -24,12 +26,14 @@ def main():
     import bpy
     import addon_utils
     root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(root.parent))
-    addon_utils.enable(root.name, default_set=True)
-    from blosm.building.padl_integration.backends import BuildingGenerationService
-    from blosm.padl.geometry import Footprint
-    from blosm.padl.persistence import read_footprints
-    from blosm.building.padl_integration.mapping import OsmFaceAttributeMapper
+    package = os.environ.get('BLOSM_TEST_PACKAGE', root.name)
+    if not package.startswith('bl_ext.'):
+        sys.path.insert(0, str(root.parent))
+    assert addon_utils.enable(package, default_set=True) is not None
+    BuildingGenerationService = importlib.import_module(package + '.building.padl_integration.backends').BuildingGenerationService
+    Footprint = importlib.import_module(package + '.padl.geometry').Footprint
+    read_footprints = importlib.import_module(package + '.padl.persistence').read_footprints
+    OsmFaceAttributeMapper = importlib.import_module(package + '.building.padl_integration.mapping').OsmFaceAttributeMapper
     terrain_mesh = bpy.data.meshes.new('Terrain')
     terrain_mesh.from_pydata([(-10,-10,0), (150,-10,0), (150,30,0), (-10,30,0)], [], [(0,1,2,3)])
     terrain = bpy.data.objects.new('Terrain', terrain_mesh)

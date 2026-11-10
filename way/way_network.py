@@ -2,8 +2,8 @@ from mathutils import Vector
 from functools import cmp_to_key
 from math import atan2, pi
 
-from defs.way import allRoadwayCategoriesRank
-from way.way_properties import lanePattern
+from ..defs.way import allRoadwayCategoriesRank
+from .way_properties import lanePattern
 
 # from osmPlot import *
 PI2 = 2.*pi

@@ -3,14 +3,14 @@ from .scope import *
 
 from . import Item
 
-from item.div import Div as ItemDiv
-from item.level import Level as ItemLevel
-from item.top import Top as ItemTop
-from item.bottom import Bottom as ItemBottom
-from item.window import Window as ItemWindow
-from item.balcony import Balcony as ItemBalcony
-from item.entrance import Entrance as ItemEntrance
-from item.corner import Corner as ItemCorner
+from ..item.div import Div as ItemDiv
+from ..item.level import Level as ItemLevel
+from ..item.top import Top as ItemTop
+from ..item.bottom import Bottom as ItemBottom
+from ..item.window import Window as ItemWindow
+from ..item.balcony import Balcony as ItemBalcony
+from ..item.entrance import Entrance as ItemEntrance
+from ..item.corner import Corner as ItemCorner
 
 
 # style attributes that are evaluated once per building by default

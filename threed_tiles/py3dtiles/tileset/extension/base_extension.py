@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from py3dtiles.typing import ExtensionDictType
+from ...typing import ExtensionDictType
 
 
 class BaseExtension(ABC):

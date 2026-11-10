@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import math
 from . import Roof
 from ...padl.profile_geometry import ProfiledRoofGeometry, ProfiledVert, Slot
-from util.osm import parseNumber
+from ...util.osm import parseNumber
 
 
 # Use https://raw.githubusercontent.com/wiki/vvoovv/blosm/assets/roof_profiles.blend

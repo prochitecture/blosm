@@ -19,8 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bmesh
 from mathutils import Vector
-from util.polygon import PolygonOLD
-from util.blender import pointNormalUpward
+from ...util.polygon import PolygonOLD
+from ...util.blender import pointNormalUpward
 from . import Roof
 
 

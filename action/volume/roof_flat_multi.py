@@ -1,7 +1,7 @@
 from mathutils import Vector
 from .roof_flat import RoofFlat
-from item.facade import Facade
-from item.roof_flat_multi import RoofFlatMulti as ItemRoofFlatMulti
+from ...item.facade import Facade
+from ...item.roof_flat_multi import RoofFlatMulti as ItemRoofFlatMulti
 
 
 class RoofMulti:

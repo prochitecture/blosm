@@ -1,9 +1,16 @@
 from math import radians, cos, sin, sqrt
 from urllib import request, error
 from urllib.parse import urlparse
-from os.path import splitext, basename, dirname, join as joinStrings, exists as pathExists
+from os.path import splitext, dirname
 import json, ssl, gzip
+from functools import partial
+from hashlib import sha256
+from time import sleep
 from mathutils import Vector, Matrix
+from ..downloads import Request
+from ..downloads.diagnostics import redact_text, redact_url
+from ..downloads.transport import DownloadTransport
+from ..progressive.core import Job, Download, Drain
 
 
 # heights above the sea level
@@ -47,51 +54,90 @@ class BaseManager:
         # <self.uriQuery> is returned by a 3D Tiles server (e.g. a session ID), it is appended
         # to all subsequent URI requests
         self.uriQuery = ''
+        self.concurrentDownloads = False
+        self.downloadWorkers = 4
         
-        self.tilesDir = ''
-        
-        self.cacheJsonFiles = True
-        self.cache3dFiles = False
-    
     def setGeometricError(self, geometricError):
         self.geometricError = geometricError
     
     def render(self, minLon, minLat, maxLon, maxLat):
+        steps = self.iterRender(minLon, minLat, maxLon, maxLat)
+        if self.concurrentDownloads:
+            try:
+                transport = DownloadTransport(max_requests=self.downloadWorkers)
+            except Exception as exc:
+                return ('Unable to start the download helper: %s' % redact_text(exc),)
+            job = Job(steps, transport)
+            try:
+                while not job.done:
+                    job.step()
+                    if job.waiting:
+                        sleep(.001)  # Only the explicitly blocking runner waits.
+                return (str(job.error),) if job.error else job.result
+            finally:
+                if not job.done:
+                    job.cancel()
+        value, failure = None, None
+        try:
+            while True:
+                uri = steps.throw(failure) if failure else steps.send(value)
+                value, failure = None, None
+                if uri is not None:
+                    try:
+                        value = self.download(uri.url)
+                    except Exception as exc:
+                        failure = exc
+        except StopIteration as finished:
+            return finished.value
+        finally:
+            steps.close()
+
+    def iterRender(self, minLon, minLat, maxLon, maxLat):
+        """Yield download URLs or cooperative checkpoints, accepting bytes back.
+
+        Both blocking and progressive modes use the same traversal and errors.
+        The renderer determines whether final positioning happens per tile.
+        """
         self.errors = []
         self.initAreaData(minLon, minLat, maxLon, maxLat)
         
         self.renderer.prepare(self)
-        
+
         try:
-            tileset = self.getJsonFile(self.rootUri, None, False)
-            self.renderTileset(tileset, self.baseUri, None)
+            critical = yield from self.iterContents()
+            if self.concurrentDownloads:
+                yield Drain()
+        finally:
+            # Drain even after a traversal error, but never yield on close().
+            self.renderer.finalize(self)
+        return critical or (self.renderer.num_imported_tiles, self.errors)
+
+    def iterContents(self):
+        try:
+            tileset = json.loads((yield self.downloadRequest(self.rootUri)))
+            yield from self.renderTileset(tileset, self.baseUri, None)
         except error.HTTPError as e:
             error_message = "Unable to process the root URI of the 3D Tiles: %s" % str(e)
             if self.uriServer == "https://tile.googleapis.com":
-                response = e.read()
-                if response:
-                    if isinstance(response, bytes):
-                        response = response.decode('utf-8')
-                    try:
-                        response = json.loads(response)
-                        if "error" in response and "message" in response["error"]:
-                            error_message += "\nMessage from Google Cloud:\n%s" % response["error"]["message"]
-                    except json.JSONDecodeError:
-                        pass
-            self.renderer.finalize(self)
-            return (error_message,)
+                try:
+                    response = json.loads(e.read(65536))
+                    if isinstance(response, dict) and isinstance(response.get('error'), dict):
+                        message = response['error'].get('message')
+                        if isinstance(message, str):
+                            error_message += "\nMessage from Google Cloud:\n%s" % message
+                except Exception:
+                    # Error details are optional, including on the old blocking
+                    # path. A broken body must not hide the original HTTP error.
+                    pass
+                finally:
+                    e.close()
+            return (redact_text(error_message, self.rootUri),)
         except Exception as e:
-            self.renderer.finalize(self)
             # return only a critical error
-            return ("Unable to process the root URI of the 3D Tiles: %s" % str(e),)
-        
-        self.renderer.finalize(self)
-        
-        # return the number of rendered tiles and uncritical errors
-        return self.renderer.num_imported_tiles, self.errors
+            return ("Unable to process the root URI of the 3D Tiles: %s" % redact_text(e, self.rootUri),)
     
     def renderTileset(self, tileset, baseUri, transformMatrix):
-        self.renderTile(tileset["root"], baseUri, transformMatrix)
+        yield from self.renderTile(tileset["root"], baseUri, transformMatrix)
     
     def renderTile(self, element, baseUri, transformMatrix):
         """
@@ -99,6 +145,7 @@ class BaseManager:
         and if their geometric error is smaller than <self.geometricError>.
         """
         
+        yield None
         transformMatrix = ( transformMatrix @ BaseManager.initMatrixFromTransform(element["transform"]) if transformMatrix else BaseManager.initMatrixFromTransform(element["transform"]) )\
             if "transform" in element else transformMatrix
 
@@ -107,22 +154,22 @@ class BaseManager:
             #if self.geometricErrorMin < geometricError <= self.geometricErrorMax:
             if geometricError <= self.geometricError:
                 if "content" in element:
-                    self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=False)
+                    yield from self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=False)
                 else:
                     children = element.get("children")
                     if children:
-                        self.renderChildren(children, baseUri, transformMatrix)
+                        yield from self.renderChildren(children, baseUri, transformMatrix)
             else:
                 children = element.get("children")
                 if children:
-                    self.renderChildren(children, baseUri, transformMatrix)
+                    yield from self.renderChildren(children, baseUri, transformMatrix)
                 elif "content" in element:
-                    self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=True)
+                    yield from self.renderTileContent(element, baseUri, transformMatrix, jsonOnly=True)
     
     def renderChildren(self, children, baseUri, transformMatrix):
         # render children
         for tile in children:
-            self.renderTile(tile, baseUri, transformMatrix)
+            yield from self.renderTile(tile, baseUri, transformMatrix)
         
     def renderTileContent(self, tile, baseUri, transformMatrix, jsonOnly):
         content = tile["content"]
@@ -143,14 +190,37 @@ class BaseManager:
             
             try:
                 if contentExtension == ".json":
-                    tileset = self.getJsonFile(uri, uriComponents.path, self.cacheJsonFiles)
-                    self.renderTileset(tileset, baseUri, transformMatrix)
-                elif contentExtension == ".glb":
-                    self.renderer.renderGlb(self, uri, uriComponents.path, transformMatrix, self.cache3dFiles)
-                elif contentExtension == ".b3dm":
-                    self.renderer.renderB3dm(self, uri, uriComponents.path, transformMatrix, self.cache3dFiles)
+                    tileset = json.loads((yield self.downloadRequest(uri)))
+                    yield from self.renderTileset(tileset, baseUri, transformMatrix)
+                elif contentExtension in (".glb", ".b3dm"):
+                    consume = partial(self.consumeContent, uri, uriComponents.path, transformMatrix, contentExtension)
+                    if self.concurrentDownloads:
+                        yield Download(self.downloadRequest(uri), consume)
+                    else:
+                        consume((yield self.downloadRequest(uri)), None)
             except Exception as e:
                 self.processError(e, uri)
+
+    def downloadRequest(self, uri):
+        # Preserve this provider adapter's existing gzip/TLS behavior; the
+        # reusable transport itself verifies certificates and returns raw bytes.
+        scope, reasons = '', ()
+        if urlparse(uri).hostname == 'tile.googleapis.com':
+            # The helper has no Google-specific policy. Only this adapter opts
+            # into stopping a confirmed invalid credential/session scope.
+            scope = sha256((self.constantUriQuery + '\n' + urlparse(uri).query).encode()).hexdigest()
+            reasons = ('API_KEY_INVALID', 'API_KEY_EXPIRED', 'SESSION_EXPIRED', 'UNAUTHENTICATED', 'expired')
+        return Request(uri, decode_gzip=True, verify_tls=False,
+                       auth_scope=scope, auth_error_reasons=reasons)
+
+    def consumeContent(self, uri, path, transformMatrix, extension, content, failure):
+        try:
+            if failure is not None:
+                raise failure
+            render = self.renderer.renderGlb if extension == '.glb' else self.renderer.renderB3dm
+            render(self, uri, path, transformMatrix, content=content)
+        except Exception as exc:
+            self.processError(exc, uri)
     
     def getUri(self, uriComponents, baseUri):
         if uriComponents.netloc:
@@ -221,24 +291,9 @@ class BaseManager:
         self.areaMaxLon = radians(maxLon)
         self.areaMaxLat = radians(maxLat)
     
-    def getJsonFile(self, uri, path, cacheContent):
-        if cacheContent:
-            filePath = joinStrings(self.tilesDir, basename(path))
-            if pathExists(filePath):
-                with open(filePath, 'r') as jsonFile:
-                    result = json.load(jsonFile)
-            else:
-                result = self.download(uri)
-                with open(filePath, 'wb') as jsonFile:
-                    jsonFile.write(result)
-                result = json.loads(result)
-        else:
-            result = self.download(uri)
-            result = json.loads(result)
-        
-        return result
-    
     def download(self, url):
+        from ..downloads.access import require_online_access
+        require_online_access()
         req = request.Request(
             url,
             data = None,
@@ -513,5 +568,5 @@ class BaseManager:
     
     def processError(self, e, uri):
         self.errors.append(
-            "There was an error when processing the URI %s: %s" % (uri, str(e))
+            "There was an error when processing the URI %s: %s" % (redact_url(uri), redact_text(e, uri))
         )
