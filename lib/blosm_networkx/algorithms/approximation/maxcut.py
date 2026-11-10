@@ -1,5 +1,5 @@
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils.decorators import not_implemented_for, py_random_state
+from .... import blosm_networkx as nx
+from ...utils.decorators import not_implemented_for, py_random_state
 
 __all__ = ["randomized_partitioning", "one_exchange"]
 

@@ -1,10 +1,10 @@
 """Percolation centrality measures."""
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.centrality.betweenness import (
+from .... import blosm_networkx as nx
+from .betweenness import (
     _single_source_dijkstra_path_basic as dijkstra,
 )
-from lib.blosm_networkx.algorithms.centrality.betweenness import (
+from .betweenness import (
     _single_source_shortest_path_basic as shortest_path,
 )
 

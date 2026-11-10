@@ -1,7 +1,7 @@
 """One-mode (unipartite) projections of bipartite graphs."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXAlgorithmError
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from ...exception import NetworkXAlgorithmError
+from ...utils import not_implemented_for
 
 __all__ = [
     "projected_graph",

@@ -4,8 +4,8 @@ Boykov-Kolmogorov algorithm for maximum flow problems.
 from collections import deque
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.flow.utils import build_residual_network
+from .... import blosm_networkx as nx
+from .utils import build_residual_network
 
 __all__ = ["boykov_kolmogorov"]
 

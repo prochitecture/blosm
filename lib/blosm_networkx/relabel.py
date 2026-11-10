@@ -1,4 +1,4 @@
-import lib.blosm_networkx as nx
+from .. import blosm_networkx as nx
 
 __all__ = ["convert_node_labels_to_integers", "relabel_nodes"]
 

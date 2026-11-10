@@ -1,7 +1,7 @@
 """Distance measures approximated metrics."""
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils.decorators import py_random_state
+from .... import blosm_networkx as nx
+from ...utils.decorators import py_random_state
 
 __all__ = ["diameter"]
 

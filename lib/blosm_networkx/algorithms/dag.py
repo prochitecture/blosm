@@ -11,8 +11,8 @@ from functools import partial
 from itertools import chain, combinations, product, starmap
 from math import gcd
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import arbitrary_element, not_implemented_for, pairwise
+from ... import blosm_networkx as nx
+from ..utils import arbitrary_element, not_implemented_for, pairwise
 
 __all__ = [
     "descendants",

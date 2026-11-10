@@ -1,7 +1,7 @@
 """
 Utilities for connectivity package
 """
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["build_auxiliary_node_connectivity", "build_auxiliary_edge_connectivity"]
 

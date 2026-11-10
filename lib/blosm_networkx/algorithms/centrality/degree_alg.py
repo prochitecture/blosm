@@ -1,6 +1,6 @@
 """Degree centrality measures."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils.decorators import not_implemented_for
 
 __all__ = ["degree_centrality", "in_degree_centrality", "out_degree_centrality"]
 

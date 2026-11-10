@@ -2,9 +2,9 @@
 
 from itertools import count
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.community.community_utils import is_partition
-from lib.blosm_networkx.utils import BinaryHeap, not_implemented_for, py_random_state
+from .... import blosm_networkx as nx
+from .community_utils import is_partition
+from ...utils import BinaryHeap, not_implemented_for, py_random_state
 
 __all__ = ["kernighan_lin_bisection"]
 

@@ -3,7 +3,7 @@ Shortest path algorithms for unweighted graphs.
 """
 import warnings
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = [
     "bidirectional_shortest_path",

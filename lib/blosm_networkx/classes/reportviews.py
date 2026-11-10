@@ -84,7 +84,7 @@ EdgeDataView
 """
 from collections.abc import Mapping, Set
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = [
     "NodeView",

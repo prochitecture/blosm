@@ -1,5 +1,5 @@
 """Unary operations on graphs"""
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["complement", "reverse"]
 

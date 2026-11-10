@@ -10,8 +10,8 @@ an AT-free graph. The class of AT-free graphs is a graph class for which
 many NP-complete problems are solvable in polynomial time. Amongst them,
 independent set and coloring.
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = ["is_at_free", "find_asteroidal_triple"]
 

@@ -3,9 +3,9 @@ graph.
 
 """
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.classes import DiGraph, MultiDiGraph
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..classes import DiGraph, MultiDiGraph
+from ..utils import not_implemented_for
 
 __all__ = ["stochastic_graph"]
 

@@ -24,8 +24,8 @@ For each edge (u, v) the node u is assigned to part 0 and the node v to part 1.
 """
 __all__ = ["generate_edgelist", "write_edgelist", "parse_edgelist", "read_edgelist"]
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for, open_file
+from .... import blosm_networkx as nx
+from ...utils import not_implemented_for, open_file
 
 
 @open_file(1, mode="wb")

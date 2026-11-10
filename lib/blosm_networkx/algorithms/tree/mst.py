@@ -10,8 +10,8 @@ from math import isnan
 from operator import itemgetter
 from queue import PriorityQueue
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import UnionFind, not_implemented_for, py_random_state
+from .... import blosm_networkx as nx
+from ...utils import UnionFind, not_implemented_for, py_random_state
 
 __all__ = [
     "minimum_spanning_edges",

@@ -5,11 +5,11 @@ Flow based connectivity algorithms
 import itertools
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 # Define the default maximum flow function to use in all flow based
 # connectivity algorithms.
-from lib.blosm_networkx.algorithms.flow import (
+from ..flow import (
     boykov_kolmogorov,
     build_residual_network,
     dinitz,

@@ -14,8 +14,8 @@ For more information, see the Wikipedia article on small-world network [1]_.
 .. [1] Small-world network:: https://en.wikipedia.org/wiki/Small-world_network
 
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for, py_random_state
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for, py_random_state
 
 __all__ = ["random_reference", "lattice_reference", "sigma", "omega"]
 
@@ -68,7 +68,7 @@ def random_reference(G, niter=1, connectivity=True, seed=None):
     if len(G.edges) < 2:
         raise nx.py_networkxError("Graph has fewer that 2 edges")
 
-    from lib.blosm_networkx.utils import cumulative_distribution, discrete_sequence
+    from ..utils import cumulative_distribution, discrete_sequence
 
     local_conn = nx.connectivity.local_edge_connectivity
 
@@ -169,7 +169,7 @@ def lattice_reference(G, niter=5, D=None, connectivity=True, seed=None):
     """
     import numpy as np
 
-    from lib.blosm_networkx.utils import cumulative_distribution, discrete_sequence
+    from ..utils import cumulative_distribution, discrete_sequence
 
     local_conn = nx.connectivity.local_edge_connectivity
 

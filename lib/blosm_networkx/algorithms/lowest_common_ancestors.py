@@ -3,8 +3,8 @@ from collections import defaultdict
 from collections.abc import Mapping, Set
 from itertools import combinations_with_replacement
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import UnionFind, arbitrary_element, not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import UnionFind, arbitrary_element, not_implemented_for
 
 __all__ = [
     "all_pairs_lowest_common_ancestor",

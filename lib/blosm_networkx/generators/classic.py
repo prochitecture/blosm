@@ -13,10 +13,10 @@ in this module return a Graph class (i.e. a simple, undirected graph).
 import itertools
 import numbers
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.classes import Graph
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import nodes_or_number, pairwise
+from ... import blosm_networkx as nx
+from ..classes import Graph
+from ..exception import NetworkXError
+from ..utils import nodes_or_number, pairwise
 
 __all__ = [
     "balanced_tree",

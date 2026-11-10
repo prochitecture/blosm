@@ -7,7 +7,7 @@ is incident to at least one node in the subset.
 .. |vertex cover| replace:: *vertex cover*
 
 """
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["min_weighted_vertex_cover"]
 

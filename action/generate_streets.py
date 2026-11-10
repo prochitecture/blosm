@@ -350,7 +350,7 @@ class StreetGenerator():
 
         # Debug plot of street[self.plotStreetID].
         if self.plotStreetID and self.app.type == AppType.commandLine:
-            from debug import plt, plotQualifiedNetwork, randomColor, plotStreet, plotEnd
+            from ..way.debug import plt, plotQualifiedNetwork, randomColor, plotStreet, plotEnd
 
             plotStreet(self.streets[self.plotStreetID],'red')
             p = self.streets[self.plotStreetID].dst
@@ -391,7 +391,7 @@ class StreetGenerator():
 
         # Debug plot of possibly circular streets
         if self.debugCircularStreets and self.app.type == AppType.commandLine:
-            from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
+            from ..way.debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             plotQualifiedNetwork(self.sectionNetwork,False)
             for street in circularStreets:
@@ -521,7 +521,7 @@ class StreetGenerator():
 
         # DEBUG: Show clusters of parallel way-sections.
         if debugParallelStreets:
-            from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
+            from ..way.debug import plt, plotQualifiedNetwork, randomColor, plotEnd
 
             inBundles = False
 
@@ -570,7 +570,7 @@ class StreetGenerator():
         debugBundle = self.debugBundle and self.app.type == AppType.commandLine
 
         if debugBundle:
-            from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
+            from ..way.debug import plt, plotQualifiedNetwork, randomColor, plotEnd
             colorIter = randomColor(19)
 
 

@@ -1,6 +1,6 @@
 """Connected components."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils.decorators import not_implemented_for
 
 from ...utils import arbitrary_element
 

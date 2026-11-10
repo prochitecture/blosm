@@ -3,10 +3,10 @@ from collections import deque
 from heapq import heappop, heappush
 from itertools import count
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.shortest_paths.weighted import _weight_function
-from lib.blosm_networkx.utils import py_random_state
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from .... import blosm_networkx as nx
+from ..shortest_paths.weighted import _weight_function
+from ...utils import py_random_state
+from ...utils.decorators import not_implemented_for
 
 __all__ = ["betweenness_centrality", "edge_betweenness_centrality"]
 

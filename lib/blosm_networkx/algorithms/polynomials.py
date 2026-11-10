@@ -23,8 +23,8 @@ x**4 - 6*x**2 - 8*x - 3
 """
 from collections import deque
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = ["tutte_polynomial", "chromatic_polynomial"]
 

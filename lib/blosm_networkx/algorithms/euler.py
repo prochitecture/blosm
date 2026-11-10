@@ -3,7 +3,7 @@ Eulerian circuits and graphs.
 """
 from itertools import combinations
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 from ..utils import arbitrary_element, not_implemented_for
 

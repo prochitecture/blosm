@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.readwrite.json_graph import adjacency_data, adjacency_graph
-from lib.blosm_networkx.utils import graphs_equal
+from ..... import blosm_networkx as nx
+from .. import adjacency_data, adjacency_graph
+from ....utils import graphs_equal
 
 
 class TestAdjacency:

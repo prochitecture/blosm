@@ -5,10 +5,10 @@ from collections import defaultdict
 from collections.abc import Mapping
 from functools import cached_property
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.approximation import local_node_connectivity
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from . import local_node_connectivity
+from ...exception import NetworkXError
+from ...utils import not_implemented_for
 
 __all__ = ["k_components"]
 

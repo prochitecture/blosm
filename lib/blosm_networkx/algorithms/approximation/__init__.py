@@ -9,14 +9,14 @@ Another option is to import the specific function with
 ``from lib.blosm_networkx.algorithms.approximation import function_name``.
 
 """
-from lib.blosm_networkx.algorithms.approximation.clustering_coefficient import *
-from lib.blosm_networkx.algorithms.approximation.clique import *
-from lib.blosm_networkx.algorithms.approximation.connectivity import *
-from lib.blosm_networkx.algorithms.approximation.distance_measures import *
-from lib.blosm_networkx.algorithms.approximation.kcomponents import *
-from lib.blosm_networkx.algorithms.approximation.matching import *
-from lib.blosm_networkx.algorithms.approximation.ramsey import *
-from lib.blosm_networkx.algorithms.approximation.steinertree import *
-from lib.blosm_networkx.algorithms.approximation.treewidth import *
-from lib.blosm_networkx.algorithms.approximation.vertex_cover import *
-from lib.blosm_networkx.algorithms.approximation.maxcut import *
+from .clustering_coefficient import *
+from .clique import *
+from .connectivity import *
+from .distance_measures import *
+from .kcomponents import *
+from .matching import *
+from .ramsey import *
+from .steinertree import *
+from .treewidth import *
+from .vertex_cover import *
+from .maxcut import *

@@ -3,9 +3,9 @@ Closeness centrality measures.
 """
 import functools
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from .... import blosm_networkx as nx
+from ...exception import NetworkXError
+from ...utils.decorators import not_implemented_for
 
 __all__ = ["closeness_centrality", "incremental_closeness_centrality"]
 

@@ -1,10 +1,10 @@
 """Provides functions for computing minors of a graph."""
 from itertools import chain, combinations, permutations, product
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx import density
-from lib.blosm_networkx.exception import NetworkXException
-from lib.blosm_networkx.utils import arbitrary_element
+from .... import blosm_networkx as nx
+from ... import density
+from ...exception import NetworkXException
+from ...utils import arbitrary_element
 
 __all__ = [
     "contracted_edge",

@@ -10,7 +10,7 @@ nodes in *S* that are outside *S*.
 """
 from itertools import chain
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = ["edge_boundary", "node_boundary"]
 

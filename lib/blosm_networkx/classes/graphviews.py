@@ -23,17 +23,17 @@ the chain is tricky and much harder with restricted_views than
 with induced subgraphs.
 Often it is easiest to use .copy() to avoid chains.
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.classes.coreviews import (
+from ... import blosm_networkx as nx
+from .coreviews import (
     FilterAdjacency,
     FilterAtlas,
     FilterMultiAdjacency,
     UnionAdjacency,
     UnionMultiAdjacency,
 )
-from lib.blosm_networkx.classes.filters import no_filter
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import deprecate_positional_args, not_implemented_for
+from .filters import no_filter
+from ..exception import NetworkXError
+from ..utils import deprecate_positional_args, not_implemented_for
 
 __all__ = ["generic_graph_view", "subgraph_view", "reverse_view"]
 

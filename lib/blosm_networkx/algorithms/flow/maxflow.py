@@ -1,7 +1,7 @@
 """
 Maximum flow (and minimum cut) algorithms on capacitated graphs.
 """
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 from .boykovkolmogorov import boykov_kolmogorov
 from .dinitz_alg import dinitz

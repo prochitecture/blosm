@@ -3,8 +3,8 @@
 from heapq import heappop, heappush
 from itertools import count
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.shortest_paths.weighted import _weight_function
+from .... import blosm_networkx as nx
+from .weighted import _weight_function
 
 __all__ = ["astar_path", "astar_path_length"]
 

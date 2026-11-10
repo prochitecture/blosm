@@ -1,5 +1,5 @@
 """Generators of  x-y pairs of node data."""
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["node_attribute_xy", "node_degree_xy"]
 

@@ -3,11 +3,11 @@ Flow based cut algorithms
 """
 import itertools
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 # Define the default maximum flow function to use in all flow based
 # cut algorithms.
-from lib.blosm_networkx.algorithms.flow import build_residual_network, edmonds_karp
+from ..flow import build_residual_network, edmonds_karp
 
 default_flow_func = edmonds_karp
 

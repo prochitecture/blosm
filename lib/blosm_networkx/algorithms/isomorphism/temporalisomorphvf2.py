@@ -65,7 +65,7 @@ Handles directed and undirected graphs and graphs with parallel edges.
 
 """
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 from .isomorphvf2 import DiGraphMatcher, GraphMatcher
 

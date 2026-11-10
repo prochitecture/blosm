@@ -32,8 +32,8 @@ from enum import Enum
 from operator import itemgetter
 from queue import PriorityQueue
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state
+from .... import blosm_networkx as nx
+from ...utils import py_random_state
 
 from .recognition import is_arborescence, is_branching
 

@@ -2,7 +2,7 @@
 from functools import partial
 from itertools import accumulate, chain
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["join", "join_trees"]
 

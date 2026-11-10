@@ -10,11 +10,11 @@ For directed graphs see DiGraph and MultiDiGraph.
 from copy import deepcopy
 from functools import cached_property
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx import convert
-from lib.blosm_networkx.classes.coreviews import AdjacencyView
-from lib.blosm_networkx.classes.reportviews import DegreeView, EdgeView, NodeView
-from lib.blosm_networkx.exception import NetworkXError
+from ... import blosm_networkx as nx
+from .. import convert
+from .coreviews import AdjacencyView
+from .reportviews import DegreeView, EdgeView, NodeView
+from ..exception import NetworkXError
 
 __all__ = ["Graph"]
 

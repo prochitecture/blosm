@@ -35,10 +35,17 @@ class ExtensionContractChecks(unittest.TestCase):
             process.assert_not_called()
 
     def test_runtime_imports_stay_in_the_extension_namespace(self):
-        roots = {path.name for path in ROOT.iterdir()
-                 if path.is_dir() and (path / '__init__.py').is_file()}
-        roots.update(('antlr4', 'pml_grammar'))
-        for path in ROOT.rglob('*.py'):
+        # Include namespace packages and nested modules, not only root folders
+        # with __init__.py. The old check missed lib.blosm_networkx, debug and
+        # the generated parser's top-level fallback. Stdlib imports such as
+        # random/typing remain valid despite same-named internal files.
+        runtime_paths = [path for path in ROOT.rglob('*.py')
+                         if path.relative_to(ROOT).parts[0] not in ('tests', 'tools', 'docs', '.git')]
+        roots = {path.relative_to(ROOT).parts[0] for path in runtime_paths
+                 if len(path.relative_to(ROOT).parts) > 1}
+        roots.update(path.stem for path in runtime_paths)
+        roots.difference_update(sys.stdlib_module_names)
+        for path in runtime_paths:
             relative = path.relative_to(ROOT)
             if relative.parts[0] in ('tests', 'tools', 'docs', '.git') or relative.as_posix() == 'downloads/worker.py':
                 continue  # The download helper deliberately runs outside Blender.
@@ -51,6 +58,12 @@ class ExtensionContractChecks(unittest.TestCase):
                     names = [alias.name for alias in node.names]
                 for name in names:
                     self.assertNotIn(name.split('.')[0], roots, f'{relative}:{node.lineno}: {name}')
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in ('files', 'import_module') and node.args
+                        and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
+                    name = node.args[0].value
+                    self.assertNotIn(name.split('.')[0], roots,
+                                     f'{relative}:{node.lineno}: dynamic package reference {name}')
 
     def test_revoking_online_access_closes_existing_transport(self):
         fake_bpy = SimpleNamespace(app=SimpleNamespace(online_access=False))

@@ -16,12 +16,12 @@ be found about `Triangular Tiling`_, and `Square, Hex and Triangle Grids`_
 from itertools import repeat
 from math import sqrt
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.classes import set_node_attributes
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.generators.classic import cycle_graph, empty_graph, path_graph
-from lib.blosm_networkx.relabel import relabel_nodes
-from lib.blosm_networkx.utils import flatten, nodes_or_number, pairwise
+from ... import blosm_networkx as nx
+from ..classes import set_node_attributes
+from ..exception import NetworkXError
+from .classic import cycle_graph, empty_graph, path_graph
+from ..relabel import relabel_nodes
+from ..utils import flatten, nodes_or_number, pairwise
 
 __all__ = [
     "grid_2d_graph",
@@ -124,7 +124,7 @@ def grid_graph(dim, periodic=False):
     >>> len(G)
     6
     """
-    from lib.blosm_networkx.algorithms.operators.product import cartesian_product
+    from ..algorithms.operators.product import cartesian_product
 
     if not dim:
         return empty_graph(0)
@@ -245,7 +245,7 @@ def triangular_lattice_graph(
     H.add_edges_from(((i, j), (i + 1, j + 1)) for j in rows[1:m:2] for i in cols[:N])
     H.add_edges_from(((i + 1, j), (i, j + 1)) for j in rows[:m:2] for i in cols[:N])
     # identify boundary nodes if periodic
-    from lib.blosm_networkx.algorithms.minors import contracted_nodes
+    from ..algorithms.minors import contracted_nodes
 
     if periodic is True:
         for i in cols:
@@ -341,7 +341,7 @@ def hexagonal_lattice_graph(
     G.remove_node((n, (M + 1) * (n % 2)))
 
     # identify boundary nodes if periodic
-    from lib.blosm_networkx.algorithms.minors import contracted_nodes
+    from ..algorithms.minors import contracted_nodes
 
     if periodic:
         for i in cols[:n]:

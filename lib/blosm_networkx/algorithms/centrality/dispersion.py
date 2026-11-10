@@ -1,6 +1,6 @@
 from itertools import combinations
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["dispersion"]
 

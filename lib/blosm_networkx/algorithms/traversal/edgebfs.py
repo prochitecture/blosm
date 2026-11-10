@@ -8,7 +8,7 @@ Algorithms for a breadth-first traversal of edges in a graph.
 """
 from collections import deque
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 FORWARD = "forward"
 REVERSE = "reverse"

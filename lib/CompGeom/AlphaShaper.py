@@ -9,8 +9,8 @@ import sys
 from operator import itemgetter
 
 # From BLOSM library:
-from lib.CompGeom.delaunay_voronoi import computeDelaunayTriangulation
-from lib.CompGeom.centerline import pointInPolygon
+from .delaunay_voronoi import computeDelaunayTriangulation
+from .centerline import pointInPolygon
 
 EPS = sys.float_info.min
 

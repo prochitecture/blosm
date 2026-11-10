@@ -12,9 +12,9 @@ For more information, see the `graph6`_ homepage.
 """
 from itertools import islice
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import not_implemented_for, open_file
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
+from ..utils import not_implemented_for, open_file
 
 __all__ = ["from_graph6_bytes", "read_graph6", "to_graph6_bytes", "write_graph6"]
 

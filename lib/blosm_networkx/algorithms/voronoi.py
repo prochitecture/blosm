@@ -1,6 +1,6 @@
 """Functions for computing the Voronoi cells of a graph."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import groups
+from ... import blosm_networkx as nx
+from ..utils import groups
 
 __all__ = ["voronoi_cells"]
 

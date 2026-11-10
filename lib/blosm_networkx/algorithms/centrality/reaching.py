@@ -1,7 +1,7 @@
 """Functions for computing reaching centrality of a node or a graph."""
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import pairwise
+from .... import blosm_networkx as nx
+from ...utils import pairwise
 
 __all__ = ["global_reaching_centrality", "local_reaching_centrality"]
 

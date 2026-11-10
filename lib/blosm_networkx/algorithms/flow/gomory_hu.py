@@ -1,8 +1,8 @@
 """
 Gomory-Hu tree of undirected Graphs.
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils import not_implemented_for
 
 from .edmondskarp import edmonds_karp
 from .utils import build_residual_network

@@ -1,7 +1,7 @@
 from itertools import tee, accumulate
 from bisect import bisect_left
 from mathutils import Vector
-from lib.CompGeom.delaunay_voronoi import computeDelaunayTriangulation
+from .delaunay_voronoi import computeDelaunayTriangulation
 
 def pairs(iterable):
     # s -> (s0,s1), (s1,s2), (s2, s3), ...

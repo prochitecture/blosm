@@ -3,8 +3,8 @@
 
 import math
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state
+from ... import blosm_networkx as nx
+from ..utils import py_random_state
 
 __all__ = ["double_edge_swap", "connected_double_edge_swap", "directed_edge_swap"]
 

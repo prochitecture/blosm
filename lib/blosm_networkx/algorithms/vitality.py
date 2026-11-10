@@ -3,7 +3,7 @@ Vitality measures.
 """
 from functools import partial
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = ["closeness_vitality"]
 

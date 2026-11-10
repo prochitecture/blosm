@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.readwrite.json_graph import node_link_data, node_link_graph
+from ..... import blosm_networkx as nx
+from .. import node_link_data, node_link_graph
 
 
 class TestNodeLink:

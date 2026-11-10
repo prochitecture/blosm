@@ -9,7 +9,7 @@ the root.
 
 __all__ = ["nonisomorphic_trees", "number_of_nonisomorphic_trees"]
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 
 @nx._dispatch(graphs=None)

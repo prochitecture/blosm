@@ -1,7 +1,7 @@
 """Generate graphs with a given joint degree and directed joint degree"""
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state
+from ... import blosm_networkx as nx
+from ..utils import py_random_state
 
 __all__ = [
     "is_valid_joint_degree",

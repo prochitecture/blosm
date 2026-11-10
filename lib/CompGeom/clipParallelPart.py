@@ -1,9 +1,9 @@
 import numpy as np
 from math import ceil
 from mathutils import Vector
-from lib.CompGeom.piecewise import piecewise
-from lib.CompGeom.centerline import centerlineOf
-from lib.CompGeom.PolyLine import PolyLine
+from .piecewise import piecewise
+from .centerline import centerlineOf
+from .PolyLine import PolyLine
 
 #from osmPlot import *
 

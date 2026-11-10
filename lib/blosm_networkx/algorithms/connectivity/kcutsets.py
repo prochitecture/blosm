@@ -6,8 +6,8 @@ from collections import defaultdict
 from itertools import combinations
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.flow import (
+from .... import blosm_networkx as nx
+from ..flow import (
     build_residual_network,
     edmonds_karp,
     shortest_augmenting_path,

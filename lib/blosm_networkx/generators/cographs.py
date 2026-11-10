@@ -11,8 +11,8 @@ References
     Discrete Applied Mathematics, Volume 3, Issue 3, 1981, Pages 163-174,
     ISSN 0166-218X.
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state
+from ... import blosm_networkx as nx
+from ..utils import py_random_state
 
 __all__ = ["random_cograph"]
 

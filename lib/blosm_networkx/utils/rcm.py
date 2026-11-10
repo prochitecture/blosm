@@ -4,7 +4,7 @@ Cuthill-McKee ordering of graph nodes to produce sparse matrices
 from collections import deque
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 from ..utils import arbitrary_element
 

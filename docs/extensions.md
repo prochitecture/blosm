@@ -83,6 +83,71 @@ exercise real datasets, UI and external Pro asset packs; see the
 - Regenerated ANTLR parser files must retain relative imports of the bundled
   `pml.antlr4` runtime. No dependency installation is performed at runtime.
 
+## Repository-wide import audit — 10 November 2026
+
+The vendored graph package still contained absolute `lib.blosm_networkx` imports
+after the outer addon modules were migrated. Removing the old sys.path setup
+therefore exposed `ModuleNotFoundError: No module named 'lib.blosm_networkx'`.
+Do not resolve this by installing NetworkX, restoring sys.path injection or
+aliasing Blender's global `lib` module.
+
+The audit covered all **819 runtime Python files**, with separate review of
+standalone tests/tools, dynamic imports, resource lookup and generated PML.
+Corrections include:
+
+- 658 absolute imports in 222 NetworkX files and five CompGeom files now resolve
+  relative to the importing package. Vendored implementation bodies were checked
+  against the reference revision and preserved.
+- Graph-atlas resource lookup uses `importlib.resources.files(__package__)`, so
+  the data file is found inside any installed extension repository namespace.
+- Seven street debug imports now reference the local `way.debug` module.
+- The generated PML listener consistently imports its sibling parser relatively.
+  Preserve this adjustment when regenerating the ANTLR files.
+- `lib.pygeos.index_chain` imports Envelope/Quadrant from the existing `shared`
+  module, replacing a reference to a nonexistent `constants` module.
+
+The strengthened `tests/test_extension_contract.py` checks nested module names,
+namespace packages without __init__.py and literal dynamic package references.
+The previous root-package-only scan missed these cases. Absolute standard-library,
+Blender and external-library imports remain appropriate. The download worker's
+top-level `downloads` imports are intentional: it executes in a separate Python
+process and does not add global modules or paths to Blender. Test and CLI entry
+points have their own bootstrap code outside addon runtime. The bundled ANTLR
+`_pygrun` CLI likewise executes its path setup only as a standalone tool.
+
+One existing optional target remains absent: the legacy standalone
+`app.command_line.initOverlay` references `overlay.command_line`. This is a
+missing CLI implementation, not an extension namespace issue; this audit does
+not add a command-line overlay renderer.
+
+### Regression checks
+
+`tests/test_vendor_imports.py` exercises the graph package under ordinary and
+nested `bl_ext.<repository>.blosm` names with a conflicting global `lib` module.
+It checks independent graph types across two extension repositories, graph
+algorithms, serialization/pickling and the atlas resource without sys.path
+changes. It can run with ordinary Python without Blender:
+
+```powershell
+python -B tests/test_vendor_imports.py
+```
+
+`tests/check_vendor_imports.py` runs those tests and the extension contract in
+Blender, followed by the real extension-repository checks. Its native check now
+imports WayMap and exercises its graph operations instead of only importing the
+street-renderer facade. See the file's `--repository` and `--artifacts` options.
+The configured repository must contain a `blosm` link to that checkout. Where
+links are unavailable, qualify a copied candidate and run the test script from
+inside that exact candidate; verify its source hashes first.
+
+The isolated Blender 5.2 run passed **8 host contracts and 14 native checks**,
+including discovery/registration, conflicting module names, PML compilation,
+WayMap operations, atlas data, local 2D imports, GN/Python simple-3D imports in
+both grouping modes, disable/re-enable and namespace cleanup. Source hashes,
+logs and the audit report are under
+`artifacts/streets/extension_relative_imports/`. No files in the reserved main
+checkout or default Blender installation were changed during qualification.
+
 This is technical extension compatibility. Submission to extensions.blender.org
 is a separate publishing process with its own content and review requirements.
 

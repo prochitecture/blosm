@@ -1,6 +1,6 @@
 """Trophic levels"""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils import not_implemented_for
 
 __all__ = ["trophic_levels", "trophic_differences", "trophic_incoherence_parameter"]
 

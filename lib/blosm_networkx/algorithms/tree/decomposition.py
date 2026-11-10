@@ -2,9 +2,9 @@ r"""Function for computing a junction tree of a graph."""
 
 from itertools import combinations
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms import chordal_graph_cliques, complete_to_chordal_graph, moral
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from .. import chordal_graph_cliques, complete_to_chordal_graph, moral
+from ...utils import not_implemented_for
 
 __all__ = ["junction_tree"]
 

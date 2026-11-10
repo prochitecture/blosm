@@ -3,9 +3,9 @@ Algorithm"""
 
 from collections import defaultdict, deque
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.community import modularity
-from lib.blosm_networkx.utils import py_random_state
+from .... import blosm_networkx as nx
+from . import modularity
+from ...utils import py_random_state
 
 __all__ = ["louvain_communities", "louvain_partitions"]
 

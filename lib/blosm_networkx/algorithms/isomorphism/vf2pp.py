@@ -63,7 +63,7 @@ References
 """
 import collections
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["vf2pp_isomorphism", "vf2pp_is_isomorphic", "vf2pp_all_isomorphisms"]
 

@@ -1,7 +1,7 @@
 """Time dependent algorithms."""
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = ["cd_index"]
 

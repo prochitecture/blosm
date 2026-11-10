@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.readwrite.json_graph import cytoscape_data, cytoscape_graph
+from ..... import blosm_networkx as nx
+from .. import cytoscape_data, cytoscape_graph
 
 
 def test_graph():

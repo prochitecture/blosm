@@ -32,8 +32,8 @@ __all__ = [
     "read_multiline_adjlist",
 ]
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..utils import open_file
 
 
 def generate_multiline_adjlist(G, delimiter=" "):

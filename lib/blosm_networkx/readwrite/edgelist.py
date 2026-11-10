@@ -36,8 +36,8 @@ __all__ = [
     "write_weighted_edgelist",
 ]
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..utils import open_file
 
 
 def generate_edgelist(G, delimiter=" ", data=True):

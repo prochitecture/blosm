@@ -3,8 +3,8 @@ r""" Computation of graph non-randomness
 
 import math
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = ["non_randomness"]
 

@@ -7,9 +7,9 @@ scale-free graphs.
 import numbers
 from collections import Counter
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.generators.classic import empty_graph
-from lib.blosm_networkx.utils import discrete_sequence, py_random_state, weighted_choice
+from ... import blosm_networkx as nx
+from .classic import empty_graph
+from ..utils import discrete_sequence, py_random_state, weighted_choice
 
 __all__ = [
     "gn_graph",

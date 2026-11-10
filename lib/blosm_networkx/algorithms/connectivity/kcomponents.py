@@ -5,11 +5,11 @@ from collections import defaultdict
 from itertools import combinations
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 # Define the default maximum flow function.
-from lib.blosm_networkx.algorithms.flow import edmonds_karp
-from lib.blosm_networkx.utils import not_implemented_for
+from ..flow import edmonds_karp
+from ...utils import not_implemented_for
 
 default_flow_func = edmonds_karp
 

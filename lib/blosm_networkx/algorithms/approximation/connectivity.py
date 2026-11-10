@@ -3,7 +3,7 @@
 import itertools
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = [
     "local_node_connectivity",

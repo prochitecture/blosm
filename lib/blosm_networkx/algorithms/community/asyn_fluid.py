@@ -2,10 +2,10 @@
 
 from collections import Counter
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.components import is_connected
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import groups, not_implemented_for, py_random_state
+from .... import blosm_networkx as nx
+from ..components import is_connected
+from ...exception import NetworkXError
+from ...utils import groups, not_implemented_for, py_random_state
 
 __all__ = ["asyn_fluidc"]
 

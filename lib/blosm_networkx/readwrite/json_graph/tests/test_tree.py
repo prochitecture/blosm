@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.readwrite.json_graph import tree_data, tree_graph
+from ..... import blosm_networkx as nx
+from .. import tree_data, tree_graph
 
 
 def test_graph():

@@ -3,7 +3,7 @@ Ego graph.
 """
 __all__ = ["ego_graph"]
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 
 @nx._dispatch(preserve_all_attrs=True)

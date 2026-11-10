@@ -1,6 +1,6 @@
 """Algorithms to calculate reciprocity in a directed graph."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx import NetworkXError
+from ... import blosm_networkx as nx
+from .. import NetworkXError
 
 from ..utils import not_implemented_for
 

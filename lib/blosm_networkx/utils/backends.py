@@ -91,9 +91,9 @@ import warnings
 from functools import partial
 from importlib.metadata import entry_points
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
-from lib.blosm_networkx.exception import NetworkXNotImplemented
+from ..exception import NetworkXNotImplemented
 
 __all__ = ["_dispatch"]
 

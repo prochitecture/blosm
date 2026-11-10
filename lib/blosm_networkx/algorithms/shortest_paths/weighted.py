@@ -6,8 +6,8 @@ from collections import deque
 from heapq import heappop, heappush
 from itertools import count
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.shortest_paths.generic import _build_paths_from_predecessors
+from .... import blosm_networkx as nx
+from .generic import _build_paths_from_predecessors
 
 __all__ = [
     "dijkstra_path",

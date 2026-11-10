@@ -1,9 +1,9 @@
 from heapq import heappop, heappush
 from itertools import count
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.shortest_paths.weighted import _weight_function
-from lib.blosm_networkx.utils import not_implemented_for, pairwise
+from ... import blosm_networkx as nx
+from .shortest_paths.weighted import _weight_function
+from ..utils import not_implemented_for, pairwise
 
 __all__ = [
     "all_simple_paths",

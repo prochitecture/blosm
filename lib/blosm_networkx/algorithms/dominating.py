@@ -1,8 +1,8 @@
 """Functions for computing dominating sets in a graph."""
 from itertools import chain
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import arbitrary_element
+from ... import blosm_networkx as nx
+from ..utils import arbitrary_element
 
 __all__ = ["dominating_set", "is_dominating_set"]
 

@@ -2,8 +2,8 @@
 from collections import Counter
 from itertools import combinations, repeat
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = [
     "is_matching",

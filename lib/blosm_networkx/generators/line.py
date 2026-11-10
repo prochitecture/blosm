@@ -3,9 +3,9 @@ from collections import defaultdict
 from functools import partial
 from itertools import combinations
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import arbitrary_element
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import arbitrary_element
+from ..utils.decorators import not_implemented_for
 
 __all__ = ["line_graph", "inverse_line_graph"]
 

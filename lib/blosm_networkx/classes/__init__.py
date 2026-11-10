@@ -1,13 +1,13 @@
-from lib.blosm_networkx.classes.graph import Graph
-from lib.blosm_networkx.classes.digraph import DiGraph
-from lib.blosm_networkx.classes.multigraph import MultiGraph
-from lib.blosm_networkx.classes.multidigraph import MultiDiGraph
+from .graph import Graph
+from .digraph import DiGraph
+from .multigraph import MultiGraph
+from .multidigraph import MultiDiGraph
 
-from lib.blosm_networkx.classes.function import *
+from .function import *
 from .graphviews import subgraph_view, reverse_view
 
-from lib.blosm_networkx.classes import filters
+from . import filters
 
-from lib.blosm_networkx.classes import coreviews
-from lib.blosm_networkx.classes import graphviews
-from lib.blosm_networkx.classes import reportviews
+from . import coreviews
+from . import graphviews
+from . import reportviews

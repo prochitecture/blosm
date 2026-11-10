@@ -31,8 +31,8 @@ edges. Observe that node labeled "c" has an outgoing edge to
 itself. Indeed, self-loops are allowed. Node index starts from 0.
 
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..utils import open_file
 
 
 @open_file(1, mode="w")

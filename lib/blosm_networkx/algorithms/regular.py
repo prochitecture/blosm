@@ -1,6 +1,6 @@
 """Functions for computing and verifying regular graphs."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = ["is_regular", "is_k_regular", "k_factor"]
 
@@ -107,7 +107,7 @@ def k_factor(G, k, matching_weight="weight"):
        Information processing letters, 2009.
     """
 
-    from lib.blosm_networkx.algorithms.matching import is_perfect_matching, max_weight_matching
+    from .matching import is_perfect_matching, max_weight_matching
 
     class LargeKGadget:
         def __init__(self, k, degree, node, g):

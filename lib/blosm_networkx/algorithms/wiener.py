@@ -2,7 +2,7 @@
 
 from itertools import chain
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 from .components import is_connected, is_strongly_connected
 from .shortest_paths import shortest_path_length as spl

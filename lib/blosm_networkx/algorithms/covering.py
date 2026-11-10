@@ -3,8 +3,8 @@
 from functools import partial
 from itertools import chain
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import arbitrary_element, not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import arbitrary_element, not_implemented_for
 
 __all__ = ["min_edge_cover", "is_edge_cover"]
 

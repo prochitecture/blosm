@@ -3,7 +3,7 @@ Stoer-Wagner minimum cut algorithm.
 """
 from itertools import islice
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 from ...utils import BinaryHeap, arbitrary_element, not_implemented_for
 

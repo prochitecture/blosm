@@ -26,8 +26,8 @@ from xml.etree.ElementTree import (
     tostring,
 )
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..utils import open_file
 
 __all__ = ["write_gexf", "read_gexf", "relabel_gexf_graph", "generate_gexf"]
 

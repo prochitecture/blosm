@@ -4,7 +4,7 @@
 
 from itertools import chain
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = [
     "boundary_expansion",

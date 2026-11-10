@@ -2,7 +2,7 @@
 Union-find data structure.
 """
 
-from lib.blosm_networkx.utils import groups
+from . import groups
 
 
 class UnionFind:

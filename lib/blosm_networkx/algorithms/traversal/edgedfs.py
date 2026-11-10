@@ -6,7 +6,7 @@ Depth First Search on Edges
 Algorithms for a depth-first traversal of edges in a graph.
 
 """
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 FORWARD = "forward"
 REVERSE = "reverse"

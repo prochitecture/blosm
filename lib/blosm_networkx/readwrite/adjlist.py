@@ -24,8 +24,8 @@ adjacency list (anything following the # in a line is a comment)::
 
 __all__ = ["generate_adjlist", "write_adjlist", "parse_adjlist", "read_adjlist"]
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..utils import open_file
 
 
 def generate_adjlist(G, delimiter=" "):

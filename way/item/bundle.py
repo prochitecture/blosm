@@ -86,7 +86,7 @@ class Bundle(Item):
         return "B({0}){1}{2}".format(self.id, hStreets, tStreets)
 
     def plot(self, streetGenerator, doEnd = True):
-        from debug import plt, plotEnd
+        from ..debug import plt, plotEnd
         from .item import Section, SideLane, SymLane
         for iH,street in enumerate(self.streetsHead):
             p = street.head.polyline[0]
@@ -228,7 +228,7 @@ class StreetGroup():
         return len(self.group)>0
     
     def plot(self,color='blue',width=1,doEnd=False):
-        from debug import plt, plotEnd
+        from ..debug import plt, plotEnd
         for street in self.group:
             allVertices = []
             for item in street.iterItems():
@@ -251,7 +251,7 @@ class StreetGroup():
             plotEnd()
 
     def innerPlot(self,color='blue',width=1,doEnd=False):
-        from debug import plt, plotEnd
+        from ..debug import plt, plotEnd
         for street in self.inner:
             allVertices = []
             for item in street.iterItems():
@@ -1136,7 +1136,7 @@ def twoBundleIntersection(streetGenerator,involvedBundles):
         o_isRightOfLeft = (b[0] - a[0])*(o[1] - a[1]) - (b[1] - a[1])*(o[0] - a[0]) <=  epsilon
         o_isLeftOfRight = (d[0] - c[0])*(o[1] - c[1]) - (d[1] - c[1])*(o[0] - c[0]) >= -epsilon
         # print( o_isRightOfLeft, o_isLeftOfRight)
-        # from debug import plt, plotQualifiedNetwork, randomColor, plotEnd
+        # from ..debug import plt, plotQualifiedNetwork, randomColor, plotEnd
         # plt.close()
         # plt.plot([a[0],b[0]],[a[1],b[1]],'g',linewidth=4,zorder=950)
         # plt.plot([c[0],d[0]],[c[1],d[1]],'r',linewidth=4,zorder=950)
@@ -1192,7 +1192,7 @@ def twoBundleIntersection(streetGenerator,involvedBundles):
             #     firstVertex = street.head.centerline[1] if street.src==p else street.tail.centerline[-2]
             #     vectors.append(firstVertex-p)
             # sorted(zip(vectors,streetsLeftOfBundle), key=lambda x: _pseudoangle(x[0]))
-            # from debug import plt, plotQualifiedNetwork, plotStreetGroup, randomColor, plotEnd
+            # from ..debug import plt, plotQualifiedNetwork, plotStreetGroup, randomColor, plotEnd
             # plotQualifiedNetwork(streetGenerator.sectionNetwork)
             # print('sorted', [s.id for s in streetsLeftOfBundle] )
             # plotStreetGroup(streetsLeftOfBundle,'red',True)

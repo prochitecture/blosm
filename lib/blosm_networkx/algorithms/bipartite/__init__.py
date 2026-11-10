@@ -73,11 +73,11 @@ For other bipartite graph generators see
 
 """
 
-from lib.blosm_networkx.algorithms.bipartite.basic import *
-from lib.blosm_networkx.algorithms.bipartite.centrality import *
-from lib.blosm_networkx.algorithms.bipartite.cluster import *
-from lib.blosm_networkx.algorithms.bipartite.edgelist import *
-from lib.blosm_networkx.algorithms.bipartite.projection import *
-from lib.blosm_networkx.algorithms.bipartite.redundancy import *
-from lib.blosm_networkx.algorithms.bipartite.generators import *
-from lib.blosm_networkx.algorithms.bipartite.extendability import *
+from .basic import *
+from .centrality import *
+from .cluster import *
+from .edgelist import *
+from .projection import *
+from .redundancy import *
+from .generators import *
+from .extendability import *

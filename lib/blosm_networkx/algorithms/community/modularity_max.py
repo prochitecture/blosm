@@ -2,10 +2,10 @@
 
 from collections import defaultdict
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.community.quality import modularity
-from lib.blosm_networkx.utils import not_implemented_for
-from lib.blosm_networkx.utils.mapped_queue import MappedQueue
+from .... import blosm_networkx as nx
+from .quality import modularity
+from ...utils import not_implemented_for
+from ...utils.mapped_queue import MappedQueue
 
 __all__ = [
     "greedy_modularity_communities",

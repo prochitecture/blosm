@@ -1,9 +1,9 @@
 """
 Mixing matrices for node attributes and degree.
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.assortativity.pairs import node_attribute_xy, node_degree_xy
-from lib.blosm_networkx.utils import dict_to_numpy_array
+from .... import blosm_networkx as nx
+from .pairs import node_attribute_xy, node_degree_xy
+from ...utils import dict_to_numpy_array
 
 __all__ = [
     "attribute_mixing_matrix",

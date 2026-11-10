@@ -3,8 +3,8 @@ Utilities for generating random numbers, random sequences, and
 random selections.
 """
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state
+from ... import blosm_networkx as nx
+from . import py_random_state
 
 __all__ = [
     "powerlaw_sequence",

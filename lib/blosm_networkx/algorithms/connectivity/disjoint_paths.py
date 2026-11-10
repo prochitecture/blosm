@@ -1,14 +1,14 @@
 """Flow based node and edge disjoint paths."""
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 # Define the default maximum flow function to use for the underlying
 # maximum flow computations
-from lib.blosm_networkx.algorithms.flow import (
+from ..flow import (
     edmonds_karp,
     preflow_push,
     shortest_augmenting_path,
 )
-from lib.blosm_networkx.exception import NetworkXNoPath
+from ...exception import NetworkXNoPath
 
 default_flow_func = edmonds_karp
 from itertools import filterfalse as _filterfalse

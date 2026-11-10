@@ -3,8 +3,8 @@ Label propagation community detection algorithms.
 """
 from collections import Counter, defaultdict, deque
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import groups, not_implemented_for, py_random_state
+from .... import blosm_networkx as nx
+from ...utils import groups, not_implemented_for, py_random_state
 
 __all__ = [
     "label_propagation_communities",

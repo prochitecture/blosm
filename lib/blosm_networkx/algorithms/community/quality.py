@@ -5,10 +5,10 @@ communities).
 
 from itertools import combinations
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx import NetworkXError
-from lib.blosm_networkx.algorithms.community.community_utils import is_partition
-from lib.blosm_networkx.utils.decorators import argmap
+from .... import blosm_networkx as nx
+from ... import NetworkXError
+from .community_utils import is_partition
+from ...utils.decorators import argmap
 
 __all__ = ["modularity", "partition_quality"]
 

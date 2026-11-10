@@ -35,7 +35,7 @@ import numpy as np
 from bisect import bisect_left
 from math import floor
 
-from lib.CompGeom.OffsetGenerator import OffsetGenerator
+from .OffsetGenerator import OffsetGenerator
 
 # helper functions -----------------------------------------------
 def pairs(iterable):

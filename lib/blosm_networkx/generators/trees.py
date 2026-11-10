@@ -32,8 +32,8 @@ import warnings
 from collections import Counter, defaultdict
 from math import comb, factorial
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state
+from ... import blosm_networkx as nx
+from ..utils import py_random_state
 
 __all__ = [
     "prefix_tree",

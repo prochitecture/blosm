@@ -1,7 +1,7 @@
 """
 Operations on graphs including union, intersection, difference.
 """
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = [
     "union",

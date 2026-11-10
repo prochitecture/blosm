@@ -1,5 +1,5 @@
 """Algorithm to select influential nodes in a graph using VoteRank."""
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["voterank"]
 

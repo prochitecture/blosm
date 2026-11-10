@@ -10,7 +10,7 @@ References
 .. [1] https://en.wikipedia.org/wiki/Graph_minor
 """
 
-from lib.blosm_networkx.algorithms.minors.contraction import (
+from .contraction import (
     contracted_edge,
     contracted_nodes,
     equivalence_classes,

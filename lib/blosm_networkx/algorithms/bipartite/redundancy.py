@@ -1,8 +1,8 @@
 """Node redundancy for bipartite graphs."""
 from itertools import combinations
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx import NetworkXError
+from .... import blosm_networkx as nx
+from ... import NetworkXError
 
 __all__ = ["node_redundancy"]
 

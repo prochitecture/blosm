@@ -16,8 +16,8 @@ for format information.
 
 import warnings
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..utils import open_file
 
 __all__ = ["read_pajek", "parse_pajek", "generate_pajek", "write_pajek"]
 

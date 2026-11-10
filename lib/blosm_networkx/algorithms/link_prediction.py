@@ -5,8 +5,8 @@ Link prediction algorithms.
 
 from math import log
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = [
     "resource_allocation_index",

@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = ["check_planarity", "is_planar", "PlanarEmbedding"]
 

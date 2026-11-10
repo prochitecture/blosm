@@ -3,9 +3,9 @@ Dinitz' algorithm for maximum flow problems.
 """
 from collections import deque
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.flow.utils import build_residual_network
-from lib.blosm_networkx.utils import pairwise
+from .... import blosm_networkx as nx
+from .utils import build_residual_network
+from ...utils import pairwise
 
 __all__ = ["dinitz"]
 

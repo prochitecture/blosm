@@ -15,8 +15,8 @@ References
 
 """
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
 
 __all__ = ["hnm_harary_graph", "hkn_harary_graph"]
 

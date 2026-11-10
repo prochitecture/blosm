@@ -7,9 +7,9 @@ https://en.wikipedia.org/wiki/Chordal_graph
 """
 import sys
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.components import connected_components
-from lib.blosm_networkx.utils import arbitrary_element, not_implemented_for
+from ... import blosm_networkx as nx
+from .components import connected_components
+from ..utils import arbitrary_element, not_implemented_for
 
 __all__ = [
     "is_chordal",

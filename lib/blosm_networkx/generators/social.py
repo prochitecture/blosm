@@ -1,7 +1,7 @@
 """
 Famous social networks.
 """
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = [
     "karate_club_graph",

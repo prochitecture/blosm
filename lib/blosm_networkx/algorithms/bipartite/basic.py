@@ -3,9 +3,9 @@
 Bipartite Graph Algorithms
 ==========================
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.components import connected_components
-from lib.blosm_networkx.exception import AmbiguousSolution
+from .... import blosm_networkx as nx
+from ..components import connected_components
+from ...exception import AmbiguousSolution
 
 __all__ = [
     "is_bipartite",

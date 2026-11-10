@@ -13,7 +13,7 @@
 #
 from math import pi, atan2
 
-from lib.CompGeom.centerline import pointInPolygon
+from .centerline import pointInPolygon
 
 
 class ConcaveHull(object):

@@ -13,9 +13,9 @@ See http://www.algorithmic-solutions.info/leda_guide/graphs/leda_native_graph_fi
 
 __all__ = ["read_leda", "parse_leda"]
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
+from ..utils import open_file
 
 
 @open_file(0, mode="rb")

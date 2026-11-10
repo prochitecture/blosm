@@ -20,7 +20,7 @@ nx_agraph, nx_pydot
 import warnings
 from collections.abc import Collection, Generator, Iterator
 
-import lib.blosm_networkx as nx
+from .. import blosm_networkx as nx
 
 __all__ = [
     "to_networkx_graph",

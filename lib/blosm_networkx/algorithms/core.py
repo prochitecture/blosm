@@ -28,7 +28,7 @@ Scientific Reports 6, 31708 (2016)
 http://doi.org/10.1038/srep31708
 
 """
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = [
     "core_number",

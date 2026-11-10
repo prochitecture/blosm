@@ -7,7 +7,7 @@ For now, only Weisfeiler-Lehman hashing is implemented.
 from collections import Counter, defaultdict
 from hashlib import blake2b
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = ["weisfeiler_lehman_graph_hash", "weisfeiler_lehman_subgraph_hashes"]
 

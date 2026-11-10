@@ -6,8 +6,8 @@
 digraphs on three nodes.
 
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.classes import DiGraph
+from ... import blosm_networkx as nx
+from ..classes import DiGraph
 
 __all__ = ["triad_graph"]
 

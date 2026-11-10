@@ -36,9 +36,9 @@ from enum import Enum
 from io import StringIO
 from typing import Any, NamedTuple
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import open_file
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
+from ..utils import open_file
 
 __all__ = ["read_gml", "parse_gml", "generate_gml", "write_gml"]
 

@@ -7,7 +7,7 @@ __all__ = ["capacity_scaling"]
 from itertools import chain
 from math import log
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 from ...utils import BinaryHeap, arbitrary_element, not_implemented_for
 

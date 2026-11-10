@@ -5,7 +5,7 @@ Highest-label preflow-push algorithm for maximum flow problems.
 from collections import deque
 from itertools import islice
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 from ...utils import arbitrary_element
 from .utils import (

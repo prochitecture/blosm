@@ -1,7 +1,7 @@
 """Functions for computing the harmonic centrality of a graph."""
 from functools import partial
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["harmonic_centrality"]
 

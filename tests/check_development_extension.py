@@ -34,7 +34,7 @@ def main():
     checks.append('extension discovery in the add-on list')
 
     sentinels = {name: ModuleType(name) for name in
-                 ('app', 'util', 'building', 'pml', 'antlr4', 'parse', 'defs', 'grammar', 'way', 'padl')}
+                 ('app', 'util', 'building', 'pml', 'antlr4', 'parse', 'defs', 'grammar', 'way', 'padl', 'lib', 'debug', 'pmlParser')}
     sys.modules.update(sentinels)
     paths_before = list(sys.path)
     addon = addon_utils.enable(package, default_set=True)
@@ -51,9 +51,17 @@ def main():
 
     for name in ('setup.base', 'setup.premium_default', 'setup.realistic_dev',
                  'style', 'threed_tiles.blender', 'threed_tiles.progressive',
-                 'building.padl_integration.backends', 'way.renderer_streets'):
+                 'building.padl_integration.backends', 'way.renderer_streets',
+                 'way.waymap.waymap', 'action.generate_streets', 'lib.pygeos.index_chain'):
         module(name)
     checks.append('building, street, realistic and 3D Tiles module imports')
+    nx = module('lib.blosm_networkx')
+    graph = module('way.waymap.waymap').WayMap()
+    graph.add_edge(1, 2)
+    graph.add_edge(2, 3)
+    assert nx.shortest_path(graph, 1, 3) == [1, 2, 3]
+    assert len(nx.graph_atlas_g()) == 1253
+    checks.append('namespaced WayMap graph operations and bundled graph-atlas resource')
 
     pml_file = args.artifacts / 'extension_style.pml'
     pml_file.write_text('footprint { height: 10; }', encoding='utf-8')

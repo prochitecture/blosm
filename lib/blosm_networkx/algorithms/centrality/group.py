@@ -1,13 +1,13 @@
 """Group centrality measures."""
 from copy import deepcopy
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.centrality.betweenness import (
+from .... import blosm_networkx as nx
+from .betweenness import (
     _accumulate_endpoints,
     _single_source_dijkstra_path_basic,
     _single_source_shortest_path_basic,
 )
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from ...utils.decorators import not_implemented_for
 
 __all__ = [
     "group_betweenness_centrality",

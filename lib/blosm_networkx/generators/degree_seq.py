@@ -6,8 +6,8 @@ import math
 from itertools import chain, combinations, zip_longest
 from operator import itemgetter
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import py_random_state, random_weighted_sample
+from ... import blosm_networkx as nx
+from ..utils import py_random_state, random_weighted_sample
 
 __all__ = [
     "configuration_model",

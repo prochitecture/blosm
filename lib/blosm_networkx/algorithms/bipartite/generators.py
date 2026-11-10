@@ -5,8 +5,8 @@ import math
 import numbers
 from functools import reduce
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import nodes_or_number, py_random_state
+from .... import blosm_networkx as nx
+from ...utils import nodes_or_number, py_random_state
 
 __all__ = [
     "configuration_model",

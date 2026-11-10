@@ -41,8 +41,8 @@ References
     Encyclopedia, 3 Dec. 2019. Web. 22 Dec. 2019.
 """
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
 
 __all__ = ["sudoku_graph"]
 

@@ -1,10 +1,10 @@
 """
 Ramsey numbers.
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils import not_implemented_for
 
-from lib.blosm_networkx.utils import arbitrary_element
+from ...utils import arbitrary_element
 
 __all__ = ["ramsey_R2"]
 

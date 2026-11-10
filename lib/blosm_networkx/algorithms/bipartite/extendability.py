@@ -2,8 +2,8 @@
 undirected, simple, connected and bipartite and contains at least one perfect matching."""
 
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils import not_implemented_for
 
 __all__ = ["maximal_extendability"]
 

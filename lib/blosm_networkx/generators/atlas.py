@@ -7,7 +7,7 @@ import os
 import os.path
 from itertools import islice
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = ["graph_atlas", "graph_atlas_g"]
 
@@ -51,7 +51,7 @@ NUM_GRAPHS = 1253
 #:
 
 # Path to the atlas file
-ATLAS_FILE = importlib.resources.files("lib.blosm_networkx.generators") / "atlas.dat.gz"
+ATLAS_FILE = importlib.resources.files(__package__) / "atlas.dat.gz"
 
 
 def _generate_graphs():

@@ -2,19 +2,19 @@
 from copy import deepcopy
 from functools import cached_property
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx import convert
-from lib.blosm_networkx.classes.coreviews import MultiAdjacencyView
-from lib.blosm_networkx.classes.digraph import DiGraph
-from lib.blosm_networkx.classes.multigraph import MultiGraph
-from lib.blosm_networkx.classes.reportviews import (
+from ... import blosm_networkx as nx
+from .. import convert
+from .coreviews import MultiAdjacencyView
+from .digraph import DiGraph
+from .multigraph import MultiGraph
+from .reportviews import (
     DiMultiDegreeView,
     InMultiDegreeView,
     InMultiEdgeView,
     OutMultiDegreeView,
     OutMultiEdgeView,
 )
-from lib.blosm_networkx.exception import NetworkXError
+from ..exception import NetworkXError
 
 __all__ = ["MultiDiGraph"]
 

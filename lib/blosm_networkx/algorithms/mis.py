@@ -2,8 +2,8 @@
 Algorithm to find a maximal (not maximum) independent set.
 
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for, py_random_state
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for, py_random_state
 
 __all__ = ["maximal_independent_set"]
 

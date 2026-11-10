@@ -18,8 +18,8 @@ by Matthew Suderman
 http://crypto.cs.mcgill.ca/~crepeau/CS250/2004/HW5+.pdf
 """
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils.decorators import not_implemented_for
+from .... import blosm_networkx as nx
+from ...utils.decorators import not_implemented_for
 
 __all__ = ["rooted_tree_isomorphism", "tree_isomorphism"]
 

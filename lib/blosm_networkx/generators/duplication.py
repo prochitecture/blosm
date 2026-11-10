@@ -5,9 +5,9 @@ nodes and (partially) duplicate their edges. These functions are
 generally inspired by biological networks.
 
 """
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.utils import py_random_state
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
+from ..utils import py_random_state
 
 __all__ = ["partial_duplication_graph", "duplication_divergence_graph"]
 

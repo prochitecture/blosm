@@ -4,7 +4,7 @@ Shortest augmenting path algorithm for maximum flow problems.
 
 from collections import deque
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 from .edmondskarp import edmonds_karp_core
 from .utils import CurrentEdge, build_residual_network

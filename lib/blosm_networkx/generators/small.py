@@ -31,9 +31,9 @@ __all__ = [
 
 from functools import wraps
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXError
-from lib.blosm_networkx.generators.classic import (
+from ... import blosm_networkx as nx
+from ..exception import NetworkXError
+from .classic import (
     complete_graph,
     cycle_graph,
     empty_graph,

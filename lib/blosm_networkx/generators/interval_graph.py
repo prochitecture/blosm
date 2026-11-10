@@ -3,7 +3,7 @@ Generators for interval graph.
 """
 from collections.abc import Sequence
 
-import lib.blosm_networkx as nx
+from ... import blosm_networkx as nx
 
 __all__ = ["interval_graph"]
 

@@ -1,7 +1,7 @@
 """Provides functions for computing the efficiency of nodes and graphs."""
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.exception import NetworkXNoPath
+from ... import blosm_networkx as nx
+from ..exception import NetworkXNoPath
 
 from ..utils import not_implemented_for
 

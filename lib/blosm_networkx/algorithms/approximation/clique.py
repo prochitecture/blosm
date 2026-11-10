@@ -1,7 +1,7 @@
 """Functions for computing large cliques and maximum independent sets."""
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.algorithms.approximation import ramsey
-from lib.blosm_networkx.utils import not_implemented_for
+from .... import blosm_networkx as nx
+from . import ramsey
+from ...utils import not_implemented_for
 
 __all__ = [
     "clique_removal",

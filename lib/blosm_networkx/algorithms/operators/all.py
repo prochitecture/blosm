@@ -2,7 +2,7 @@
 """
 from itertools import chain, repeat
 
-import lib.blosm_networkx as nx
+from .... import blosm_networkx as nx
 
 __all__ = ["union_all", "compose_all", "disjoint_union_all", "intersection_all"]
 

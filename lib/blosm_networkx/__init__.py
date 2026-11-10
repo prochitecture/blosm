@@ -12,27 +12,27 @@ __version__ = "3.3rc0.dev0"
 
 
 # These are imported in order as listed
-from lib.blosm_networkx.exception import *
+from .exception import *
 
-from lib.blosm_networkx import utils
-from lib.blosm_networkx.utils.backends import _dispatch
+from . import utils
+from .utils.backends import _dispatch
 
-from lib.blosm_networkx import classes
-from lib.blosm_networkx.classes import filters
-from lib.blosm_networkx.classes import *
+from . import classes
+from .classes import filters
+from .classes import *
 
-from lib.blosm_networkx import convert
-from lib.blosm_networkx.convert import *
+from . import convert
+from .convert import *
 
-from lib.blosm_networkx import relabel
-from lib.blosm_networkx.relabel import *
+from . import relabel
+from .relabel import *
 
-from lib.blosm_networkx import generators
-from lib.blosm_networkx.generators import *
+from . import generators
+from .generators import *
 
-from lib.blosm_networkx import readwrite
-from lib.blosm_networkx.readwrite import *
+from . import readwrite
+from .readwrite import *
 
 # Need to test with SciPy, when available
-from lib.blosm_networkx import algorithms
-from lib.blosm_networkx.algorithms import *
+from . import algorithms
+from .algorithms import *

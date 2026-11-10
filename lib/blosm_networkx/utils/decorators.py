@@ -12,8 +12,8 @@ from inspect import Parameter, signature
 from os.path import splitext
 from pathlib import Path
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import create_py_random_state, create_random_state
+from ... import blosm_networkx as nx
+from . import create_py_random_state, create_random_state
 
 __all__ = [
     "not_implemented_for",

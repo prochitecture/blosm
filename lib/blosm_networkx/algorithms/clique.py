@@ -10,8 +10,8 @@ see the Wikipedia article on the clique problem [1]_.
 from collections import defaultdict, deque
 from itertools import chain, combinations, islice
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import not_implemented_for
 
 __all__ = [
     "find_cliques",

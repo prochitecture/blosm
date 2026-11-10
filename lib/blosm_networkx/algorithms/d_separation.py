@@ -120,8 +120,8 @@ References
 
 from collections import deque
 
-import lib.blosm_networkx as nx
-from lib.blosm_networkx.utils import UnionFind, not_implemented_for
+from ... import blosm_networkx as nx
+from ..utils import UnionFind, not_implemented_for
 
 __all__ = ["d_separated", "minimal_d_separator", "is_minimal_d_separator"]
 
