@@ -4,6 +4,7 @@ Yield a URL/Request to await bytes, Download to prefetch with a main-thread
 consumer, None to yield UI time, or Drain before finalizing deferred work.
 """
 from collections import deque
+from collections.abc import Iterator
 from dataclasses import dataclass
 from time import monotonic
 
@@ -11,7 +12,7 @@ from time import monotonic
 @dataclass(frozen=True)
 class Download:
     request: object
-    consume: object  # Callable(data, error), executed only by step(), never poll().
+    consume: object  # Callable(data, error), optionally returning a checkpoint iterator.
 
 
 class Drain:
@@ -33,6 +34,7 @@ class Job:
         self.cancelled = False
         self.result = None
         self.error = None
+        self.consumer = None
         self.value = self.failure = None
 
     @property
@@ -55,6 +57,17 @@ class Job:
                 self.validate()
             for _ in range(max_steps):
                 self.poll()
+                # Parsing/committing a response may itself be cooperative. Keep
+                # one active consumer, bounded by the same turn budget, before
+                # admitting more decoded work. poll() never advances this iterator.
+                if self.consumer is not None:
+                    try:
+                        next(self.consumer)
+                    except StopIteration:
+                        self.consumer = None
+                    if monotonic() >= deadline:
+                        return
+                    continue
                 # Refill a slot freed by the previous consumer before importing
                 # the next ready tile. Otherwise fast downloads and slow imports
                 # would accidentally form batches with idle workers between them.
@@ -65,7 +78,9 @@ class Job:
                     identity, data, error = self.replies.popleft()
                     command = self.pending.pop(identity)
                     if isinstance(command, Download):
-                        command.consume(data, error)
+                        result = command.consume(data, error)
+                        if isinstance(result, Iterator):
+                            self.consumer = result
                         # Let the viewport display each committed result before
                         # another import or finalization, even for tiny tiles.
                         return
@@ -126,7 +141,14 @@ class Job:
         self.replies.clear()
         self.request = self.value = self.failure = None
         try:
-            self.steps.close()
+            try:
+                if self.consumer is not None:
+                    consumer, self.consumer = self.consumer, None
+                    close = getattr(consumer, 'close', None)
+                    if close is not None:
+                        close()
+            finally:
+                self.steps.close()
         except Exception as exc:
             if self.error is None:
                 self.error = exc

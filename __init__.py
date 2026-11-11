@@ -81,6 +81,11 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
         name = "Google 3D Tiles Key",
         description = "A string token (API Key) to access 3D Tiles by Google"
     )
+
+    mapillaryAccessToken: bpy.props.StringProperty(
+        name="Mapillary client access token", subtype='PASSWORD',
+        description="Client access token from your Mapillary developer account; used only for API requests"
+    )
     
     osmServer: bpy.props.EnumProperty(
         name = "OSM data server",
@@ -134,6 +139,8 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
             split = layout.split(factor=0.9)
             split.prop(self, "googleMapsApiKey")
             split.operator("blosm.get_google_maps_api_key", text="Get it!")
+
+            layout.prop(self, "mapillaryAccessToken")
             
             layout.separator()
             layout.box().label(text="Advanced settings:")
@@ -252,6 +259,8 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             return self.importGpx(context)
         elif dataType == "3d-tiles":
             return self.import3dTiles(context)
+        elif dataType == "mapillary":
+            return self.importMapillary(context)
         
         return {'FINISHED'}
 
@@ -458,6 +467,33 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         
         return {'FINISHED'}
     
+    def importMapillary(self, context):
+        from .mapillary.progressive import MapillaryImport
+        from .downloads.diagnostics import redact_text
+        settings = context.scene.blosm
+        progressive = settings.progressiveImport and not settings.commandLineMode
+        if context.mode != 'OBJECT' or (progressive and (bpy.app.background or context.window is None)):
+            self.report({'ERROR'}, 'Mapillary import requires Object Mode. Disable Progressive import for background jobs.')
+            return {'CANCELLED'}
+        prefs = context.preferences.addons.get(blenderApp.app.addonName)
+        token = prefs.preferences.mapillaryAccessToken if prefs else ''
+        try:
+            lat, lon, set_origin = self.getCenterLatLon(context)
+            blenderApp.app.setProjection(lat, lon)
+            task = MapillaryImport(context,
+                (settings.minLon, settings.minLat, settings.maxLon, settings.maxLat),
+                blenderApp.app.projection, (lat, lon), set_origin, token)
+            if progressive:
+                progressiveImport.start(task, context)
+            elif not task.run_blocking():
+                # A fatal late failure can retain cameras. Keep the ordinary
+                # operator undo step for those partial blocking results.
+                return {'FINISHED'} if task.count else {'CANCELLED'}
+        except Exception as exc:
+            self.report({'ERROR'}, redact_text(exc, headers={'Authorization': 'OAuth ' + token} if token else {}))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
     def import3dTiles(self, context):
         from .threed_tiles.manager import BaseManager
         from .threed_tiles.blender import BlenderRenderer

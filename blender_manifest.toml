@@ -11,6 +11,6 @@ blender_version_min = "4.5.0"
 license = ["SPDX:GPL-3.0-or-later"]
 
 [permissions]
-network = "Download 3D Tiles, OpenStreetMap, satellite imagery and terrain"
+network = "Download 3D Tiles, OpenStreetMap, satellite imagery, terrain and Mapillary camera metadata"
 files = "Import local data and store downloaded maps, imagery and terrain"
 clipboard = "Copy and paste the coordinates of an area of interest"

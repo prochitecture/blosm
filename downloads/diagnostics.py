@@ -38,7 +38,9 @@ def redact_text(value, url='', headers=None):
             if key.lower() == 'authorization':
                 secrets.add(value.rsplit(' ', 1)[-1])
     text = _url.sub(lambda match: redact_url(match.group()), text)
-    for secret in sorted(secrets, key=len, reverse=True):
+    # An incomplete Authorization header can contribute an empty suffix. Never
+    # replace the empty string: that inserts redaction markers between all chars.
+    for secret in sorted(filter(None, secrets), key=len, reverse=True):
         for form in (secret, quote(secret, safe=''), quote_plus(secret), json.dumps(secret)[1:-1]):
             text = text.replace(form, '[redacted]')
     # This also covers echoed credentials not present in the request itself.

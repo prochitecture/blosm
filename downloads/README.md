@@ -73,6 +73,11 @@ controller adds UI yielding, context preservation and grouped undo checkpoints.
 
 ## 3D Tiles integration
 
+The [Mapillary camera adapter](../mapillary/README.md) also uses this transport
+in both progressive and blocking modes, with smaller resource limits and bounded
+metadata batches. Its decoding and Blender camera commits remain main-thread
+cooperative work; they are not performed by the HTTP worker threads.
+
 Concurrent downloads are enabled by default, independently of progressive import.
 The toggle and simultaneous-download limit (default four) are internal scene
 parameters, hidden from the UI. They remain accessible in Blender's Python Console:

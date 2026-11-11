@@ -39,7 +39,8 @@ def getDataTypes():
                 "3D Tiles is an open standard by the Open Geospatial Consortium (OGC) " +\
                 "for streaming massive 3D geospatial content such as Photogrammetry and 3D Buildings"
             ),
-            ("gpx", "gpx", "GPX tracks")
+            ("gpx", "gpx", "GPX tracks"),
+            ("mapillary", "Mapillary cameras", "Import georeferenced cameras and metadata from Mapillary")
         ]
         return items
 
@@ -390,7 +391,7 @@ class BLOSM_PT_Extent(bpy.types.Panel):
         if (addon.dataType == "osm" and addon.osmSource == "server") or\
             (addon.dataType == "overlay" and not bpy.data.objects.get(addon.terrainObject)) or\
             addon.dataType == "terrain" or\
-            addon.dataType == "3d-tiles":
+            addon.dataType in ("3d-tiles", "mapillary"):
             box = layout.box()
             row = box.row()
             row.alignment = "CENTER"
@@ -411,7 +412,7 @@ class BLOSM_PT_Extent(bpy.types.Panel):
             split.split(factor=0.67).prop(addon, "minLat")
         
         box = layout.box()
-        if addon.dataType == '3d-tiles':
+        if addon.dataType in ('3d-tiles', 'mapillary'):
             box.prop(addon, 'progressiveImport')
         row = box.row(align=True)
         row.prop(addon, "dataType", text="")
@@ -470,6 +471,10 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             self.draw3dTiles(context)
         elif dataType == "gpx":
             self.drawGpx(context)
+        elif dataType == "mapillary":
+            self.layout.label(text="Import cameras and metadata from Mapillary")
+            self.layout.label(text="Set your client access token in Blosm preferences")
+            self.layout.label(text="Missing altitude: scene Z = 0 (marked approximate)")
     
     def drawOsm(self, context):
         layout = self.layout
@@ -1076,13 +1081,13 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
     progressiveImport: bpy.props.BoolProperty(
         name = "Progressive import",
-        description = "Show tiles as they load and allow viewport navigation between tile imports. Large tiles and final joining can briefly pause the viewport",
+        description = "Show imported data progressively and keep the viewport interactive between scene updates",
         default = True
     )
 
     concurrentDownloads: bpy.props.BoolProperty(
         name = "Concurrent downloads",
-        description = "Download several 3D Tiles at once in progressive or blocking mode",
+        description = "Download several resources at once in progressive or blocking mode",
         default = True,
         options = {'HIDDEN'}
     )

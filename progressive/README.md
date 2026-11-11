@@ -62,6 +62,10 @@ The top-level progressive package is independent of 3D Tiles:
   close/cancel invokes generator finally blocks and closes the transport.
   An optional validate callback runs before each step, allowing adapters to
   stop with an error if user edits invalidate the import destination.
+  A Download consumer may return an iterator yielding cooperative checkpoints.
+  step() advances one active consumer under its time/step budget; paused poll()
+  does not advance it. Drain waits for it and cleanup closes it before closing
+  the producer and transport. Consumers do not yield network commands.
 - downloads.transport.DownloadTransport implements submit, poll and close using a separate
   ordinary Python helper and nonblocking loopback sockets. It discovers Blender's
   bundled Python at runtime. The helper window is hidden on Windows. URLs travel
@@ -100,11 +104,13 @@ Failed-tile objects, temporary collections and newly created
 unused mesh/material/image data are removed. Failures remain console details;
 completion emits one aggregate UI report, rather than an error popup per tile.
 
-Future OSM, bitmap imagery and Mapillary adapters can supply their own generators,
+The [Mapillary camera adapter](../mapillary/README.md) uses cooperative consumers
+for bounded decoding and camera creation. Future OSM and bitmap imagery adapters
+can supply their own generators,
 transports and scene-commit steps. They do not need tile URLs, bounding volumes or
 glTF concepts in the shared scheduler. Large OSM parsing should use a dedicated
 helper task protocol; it is not automatically made non-blocking by this scheduler.
-The concurrent downloader is shared; other data-type integrations are future work.
+The concurrent downloader is shared; additional data-type integrations are future work.
 
 ## Validation
 
