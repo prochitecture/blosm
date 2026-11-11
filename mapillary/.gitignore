@@ -1,0 +1,2 @@
+# Development credentials must never be versioned.
+/mapillary_token.txt

@@ -117,6 +117,8 @@ class MapillaryImport:
                     tile, content = raw.pop()
                     records = []
                     iterator = image_points(content, tile)
+                    processed = 0
+                    checkpoint = time.monotonic()
                     try:
                         while True:
                             started = time.monotonic()
@@ -127,6 +129,7 @@ class MapillaryImport:
                             elapsed = time.monotonic()-started
                             self.metrics['decode_seconds'] += elapsed
                             self.metrics['max_decode_turn'] = max(self.metrics['max_decode_turn'], elapsed)
+                            processed += 1
                             if record is not None and contains(self.bounds, *record['coverage_geometry']):
                                 identity = record['id']
                                 if identity not in self.seen:
@@ -138,7 +141,12 @@ class MapillaryImport:
                                     if len(records) == METADATA_BATCH:
                                         yield self.metadata_download(records)
                                         records = []
-                            yield None
+                            # A dense city tile contains many points outside a
+                            # small ROI. Keep traversal cooperative without an
+                            # entire UI timer turn per few dozen rejected points.
+                            if record is None or processed % 16 == 0 or time.monotonic()-checkpoint >= .002:
+                                yield None
+                                checkpoint = time.monotonic()
                     except ValueError as error:
                         self.failure('coverage_decode', error)
                     finally:

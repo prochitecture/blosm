@@ -7,8 +7,8 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mapillary_test_support import fixture, mvt, BOUNDS, BASE_ID
-from mapillary.tiles import image_points, identifier, tile_coordinates
+from mapillary_test_support import fixture, mvt, field, BOUNDS, BASE_ID
+from mapillary.tiles import image_points, identifier, tile_coordinates, fields, MAX_TILE_BYTES
 from mapillary.pose import interpret, rotation_vector, matrix_product, transpose
 import importlib.util
 spec = importlib.util.spec_from_file_location('blosm_projection', Path(__file__).resolve().parents[1] / 'util/transverse_mercator.py')
@@ -81,6 +81,19 @@ class PoseChecks(unittest.TestCase):
 
 
 class TileChecks(unittest.TestCase):
+    def test_dense_live_style_dictionaries_and_unused_layers(self):
+        tile,data,_=fixture(1)
+        layer=bytes(next(fields(memoryview(data)))[2])
+        # Real coverage exceeded both the original 4 MiB resource cap and the
+        # original small dictionary cap. Keep this regression payload in memory.
+        dense=layer+field(4,field(5,1))*280000
+        irrelevant=field(1,b'sequence')+field(4,field(5,1))*1050000
+        payload=field(3,irrelevant)+field(3,dense)
+        self.assertGreater(len(payload),4*1024*1024)
+        self.assertLess(len(payload),MAX_TILE_BYTES)
+        records=[r for r in image_points(payload,tile) if r is not None]
+        self.assertEqual(records[0]['id'],str(BASE_ID))
+
     def test_decode_extent_ids_duplicates_and_checkpoints(self):
         tile, data, entries = fixture(96)
         decoded = list(image_points(data,tile))

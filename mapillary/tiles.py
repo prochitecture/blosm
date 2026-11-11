@@ -7,8 +7,8 @@ from math import atan, degrees, floor, isfinite, log, pi, radians, sinh, tan
 import struct
 
 ZOOM = 14
-MAX_TILE_BYTES = 4 * 1024 * 1024
-MAX_TABLE = 65536
+MAX_TILE_BYTES = 32 * 1024 * 1024
+MAX_TABLE = 1048576
 
 
 def identifier(value):
@@ -152,12 +152,22 @@ def feature(data, keys, values, extent, tile):
 def image_points(content, tile):
     """Yield records or None checkpoints; retain bytes, not a decoded tile list."""
     if len(content) > MAX_TILE_BYTES:
-        raise ValueError('Mapillary coverage tile exceeds 4 MiB')
+        raise ValueError('Mapillary coverage tile exceeds 32 MiB')
     data = memoryview(content)
     for number, wire, layer in fields(data):
         if number != 3 or wire != 2:
             continue
         name, extent, keys, values = None, 4096, [], []
+        # Other coverage layers (e.g. sequences) can also be very large. Read
+        # their name without allocating dictionaries we will never consume.
+        for index, (number, wire, value) in enumerate(fields(layer)):
+            if number == 1 and wire == 2:
+                name = text(value)
+                break
+            if index % 64 == 0:
+                yield None
+        if name != 'image':
+            continue
         # MVT permits feature fields before dictionaries. First pass gathers
         # only dictionaries; the second pass streams feature records.
         for index, (number, wire, value) in enumerate(fields(layer)):

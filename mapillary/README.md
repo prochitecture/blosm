@@ -56,9 +56,9 @@ an internal memory/processing bound, not a verified provider maximum. Fields are
 `camera_parameters`, `width`, `height`, `exif_orientation`, `sequence`,
 `captured_at`, and `creator`.
 
-The current main API documentation required login and no live credential was
-available. Therefore public implementation evidence was checked, but actual
-provider responses still require a credentialed live-area validation. No
+The current main API documentation required login during initial implementation.
+Public implementation evidence was checked then; subsequent credentialed results
+are recorded in `Validation.md`. No
 undocumented Mapillary error-reason codes were added to shared authentication
 suppression. HTTP 401 stops as authentication failure. HTTP 400/403 and Graph
 error envelopes stop as rejected requests without classifying every rejection
@@ -83,15 +83,15 @@ including during pauses. Deduplication state is capped and released on cleanup.
 | Resource | Explicit bound |
 | --- | --- |
 | Coverage area | At most 4096 tiles; larger selections rejected before downloads |
-| Downloaded/decoded response | 4 MiB per resource, enforced by transport |
+| Downloaded/decoded response | 32 MiB per resource, enforced by transport |
 | JSON metadata parsing | 256 KiB and 32 entities per batch |
-| MVT dictionaries | 65,536 keys and 65,536 values |
+| MVT dictionaries | 1,048,576 keys and values each; unused layers skipped before dictionary allocation |
 | MVT feature or dictionary string | 64 KiB |
 | Global image ID set | 100,000 IDs; stop with a smaller-area error at the limit |
 
 The ID limit is a bookkeeping ceiling, not a recommendation to create 100,000
-cameras with undo enabled. Four workers reserve at most 16 MiB of raw tile bytes
-and another 16 MiB in the HTTP window; an active consumer, dictionaries, copies,
+cameras with undo enabled. Four workers reserve at most 128 MiB of raw tile bytes
+and another 128 MiB in the HTTP window; an active consumer, dictionaries, copies,
 Blender data and undo add overhead. This is not a total process-RSS guarantee.
 See `Validation.md` for measured practical limits.
 
@@ -213,6 +213,20 @@ The launcher uses factory startup, disabled autoexec and this chat's five isolat
 resource paths. Online access is enabled only for the test process. It checks the
 UI JSON report status, not just Blender's GUI exit code. No preferences are saved.
 See `Validation.md` for results, measurements and remaining limits.
+
+### Live development check
+
+`tests/run_mapillary_checks.py --live` reads the credential from
+`C:/dev/workspace/blosm/mapillary/mapillary_token.txt` without copying it into
+the checkout or printing it. Add `--ui` for the real timer controller. Use
+`--bounds west south east north` to select a small test area. Reports and an
+imported camera scene go under `artifacts/mapillary_import/live` or `live_ui`.
+The test has a 2,000-image safety ceiling and compares two live imports for
+blocking/progressive ID and pose parity; changing provider data can affect parity.
+
+The token filename is excluded by `mapillary/.gitignore`; the shared local Git
+info/exclude also protects it across local branches. Never stage or commit a
+token, even when collecting development fixtures or publishing a test scene.
 
 ## Primary sources inspected
 

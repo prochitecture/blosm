@@ -13,7 +13,7 @@ installed addon, bundled Python installation or existing Blender session changed
 
 | Check | Result |
 | --- | --- |
-| `tests/test_mapillary.py` | 9 standalone tests passed |
+| `tests/test_mapillary.py` | 9 initial tests passed; 10 passed after the live dense-tile regression was added |
 | `tests/check_mapillary_import.py` | Background Blender checks passed, including a 5,000-camera run |
 | `tests/check_mapillary_ui.py` | 9 real UI scenarios passed using the production HTTP helper |
 | `tests/test_progressive_transport.py` | 7 existing scheduler/transport regression tests passed |
@@ -114,12 +114,79 @@ Synthetic fixture generators and test code stay in this repository under
 `tests/`; no generated fixture payloads or scenes are tracked. Blender's test
 session recovery files, if created, also remain in the artifact directories.
 
+## Live-data validation, 2026-11-11
+
+A development client token was read only from the user-created local file
+`C:/dev/workspace/blosm/mapillary/mapillary_token.txt`. It was not copied into
+this checkout, preferences, command lines, reports or scenes. The shared local
+Git info/exclude protects the filename across local branches/worktrees; the
+adapter's `.gitignore` also excludes it. Never stage or commit this credential.
+
+The test exercised the real Mapillary coverage and Graph endpoints in an isolated
+Blender 5.2 process. Final bounds were west 24.9395, south 60.1695, east 24.9405,
+north 60.1705 (central Helsinki). The coverage tile contained 7,073,835 decoded
+bytes. Discovery selected 550 candidate IDs; after the final metadata-position
+bounds check, both runs created 546 cameras, all with computed rotation and
+altitude and with no resource/decode errors.
+
+| Final real UI run | Blocking | Progressive (real timer) |
+| --- | ---: | ---: |
+| Cameras with Graph metadata | 546 | 546 |
+| Import time | 8.49 s | 28.59 s |
+| Perspective models | 512 | 512 |
+| Equirectangular / spherical models | 11 / 15 | 11 / 15 |
+| Fisheye models (optical proxy) | 8 | 8 |
+| Maximum metadata batch | 32 | 32 |
+
+The IDs and poses matched between modes. The maximum camera heading difference
+against live `computed_compass_angle`, after accounting for projected grid axes,
+was approximately 0.0000101 degrees (546 comparisons). This is an API-convention
+consistency check, not a survey/ground-truth accuracy claim or optical-image
+alignment verification. Photographs were not downloaded. Fisheye distortion and
+panoramic renderer limitations remain as documented in README.md.
+
+The real-timer test recorded 839 viewport heartbeats, a maximum active heartbeat
+gap of 76.54 ms and a maximum job turn of 8.43 ms. A separate background live
+comparison also passed with 546 cameras in both blocking and stepped modes
+(12.10 / 10.99 seconds). Smaller-area real UI tests passed with six cameras.
+These are individual live runs with variable network/server latency, not a
+statistical speed comparison.
+
+Live data exposed limits absent from the original small synthetic fixtures:
+
+- The 4 MiB response cap rejected the real coverage tile. It is now a bounded
+  32 MiB per resource; the resulting payload budget is documented in README.md.
+- Dense dictionaries exceeded the initial limits. The bound is now 1,048,576
+  entries, and irrelevant layers are skipped before dictionary allocation.
+- Sparse ROI filtering in a dense tile now checkpoints after at most 16 records
+  or roughly 2 ms, as well as every decoder checkpoint, avoiding excessive timer
+  turns for rejected points. Individual work still cannot be preempted.
+- A new in-memory regression fixture exceeds the old 4 MiB limit and exercises
+  dense dictionaries and skipped oversized irrelevant-layer dictionaries.
+
+A broader diagnostic area intentionally stopped at the live test's 2,000-ID
+safety ceiling, retaining 1,856 already committed cameras. It had no network or
+metadata errors and confirmed the small-area test needed a narrower selection;
+this test-only limit is separate from the adapter's 100,000-ID ceiling.
+
+Evidence under `artifacts/mapillary_import`:
+
+- `live/live.json`, `live/blender.log`: passed larger background live comparison.
+- `live/live_cameras.blend`: its imported real cameras and metadata.
+- `live/dense_area_limit.json`: the bounded broader-area diagnostic.
+- `live_ui/live.json`, `live_ui/blender.log`: passed 546-camera real UI comparison.
+- `live_ui/live_cameras.blend`: real UI import scene for inspection.
+- `live_ui/small_area.json`: earlier six-camera real UI report.
+- `live_regression/background.json`: 19 post-fix synthetic Blender checks passed.
+
+All live JSON/log outputs were scanned for the exact token without printing it;
+the scan passed. Persisted scene properties were checked before scene saving.
+
 ## Remaining limits
 
-- No Mapillary token was available, so a real-area import and current live API
-  responses have not been validated. Public SDK/viewer source confirms the
-  requested fields and multi-image query; the main current API page required
-  login. Do not claim a verified API maximum for the internal 32-ID batch size.
+- The live test validates current fields and 32-image requests with this client
+  token and area, not every account/provider state or an API maximum. The main
+  current API documentation was login-gated during initial implementation.
 - Camera frames/poses and metadata are imported; photos, image viewers, accurate
   fisheye projection and radial-distortion rendering are subsequent work.
 - EXIF mirrors are approximate. Missing altitude uses the explicitly marked
