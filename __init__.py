@@ -57,7 +57,7 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
     dataDir: bpy.props.StringProperty(
         name = '',
         subtype = 'DIR_PATH',
-        description = "Directory for downloaded data; leave empty to use Blender's extension storage"
+        description = "Existing data directory required for every OSM import; other downloads use extension storage when empty"
     )
     
     assetsDir: bpy.props.StringProperty(
