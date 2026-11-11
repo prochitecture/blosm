@@ -108,6 +108,11 @@ The concurrent downloader is shared; other data-type integrations are future wor
 
 ## Validation
 
+Windows Import performance requests are scoped to processing and finalization
+callbacks, with the previous policy restored between callbacks and while
+paused. The shared addon preference and failure handling are documented in
+[Import performance](../docs/IMPORT_PERFORMANCE.md).
+
 All development outputs belong under C:/dev/workspace/artifacts/progressive_import.
 
 Run tests/test_progressive_transport.py using ordinary Python (not Blender).

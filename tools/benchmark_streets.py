@@ -32,6 +32,7 @@ def summarize(output):
         raise RuntimeError('No completed runs in ' + str(output))
     assert len({r['input_sha256'] for r, _ in runs}) == 1
     assert len({r['revision'] for r, _ in runs}) == 1
+    assert len({m.get('affinity_cpu_requested') for _, m in runs}) == 1
     assert all(r['settings'] == runs[0][0]['settings'] for r, _ in runs)
     assert len({(r['meshes'], r['quads'], r['vertices']) for r, _ in runs}) == 1
     timing_keys = runs[0][0]['timings']
@@ -46,7 +47,12 @@ def summarize(output):
         peak_resident_bytes=max(r['peak_resident'] for _, r in runs),
         peak_sampled_private_bytes=max(r['peak_private'] for _, r in runs),
         exclusions=runs[0][0]['exclusions'],
-        conditions='Fresh Blender processes, OS file cache not flushed, no CPU affinity or working-set throttle; monitored local wall-clock baseline.')
+        affinity_cpu_requested=runs[0][1].get('affinity_cpu_requested'),
+        conditions=('Profiler-instrumented diagnostic; not an unprofiled timing baseline.'
+            if runs[0][0]['settings'].get('diagnostic_profile') else
+            'Coarse wrappers and calibration kernels; diagnostic timings include overhead.'
+            if runs[0][0]['settings'].get('execution_diagnostics') else
+            'Fresh Blender processes, OS file cache not flushed, no working-set throttle; CPU affinity, if requested, is reported separately.'))
     (output / 'summary.json').write_text(json.dumps(report, indent=2), encoding='utf8')
     print(json.dumps(report, indent=2), flush=True)
 
@@ -61,12 +67,31 @@ def main():
     parser.add_argument('--runs', type=int, default=3)
     parser.add_argument('--threads', type=int, default=min(64, os.cpu_count() or 1))
     parser.add_argument('--resolution', type=int, choices=(1, 2, 3, 4), default=1)
+    parser.add_argument('--scene', type=Path, help='Use effective saved street settings and terrain instead of benchmark defaults')
+    parser.add_argument('--without-terrain', action='store_true', help='Clear the saved terrain selection for a control run')
+    parser.add_argument('--numeric-threads', type=int, choices=range(1, 65), default=1)
+    parser.add_argument('--diagnostic-profile', action='store_true', help='Profile numerical calls; do not compare these timings with unprofiled runs')
+    parser.add_argument('--operator', action='store_true', help='Use the normal streets-only Import in 3D realistic mode')
+    parser.add_argument('--execution-diagnostics', action='store_true', help='Record coarse calls and CPU/calibration evidence')
+    parser.add_argument('--affinity-cpu', type=int, help='Diagnostic: bind only the test child to this CPU using the resource guard')
+    parser.add_argument('--qos', choices=('system', 'high', 'eco'), default='system', help='Explicit current-test-process scheduling policy; restored after timing')
+    parser.add_argument('--import-performance', action='store_true', help='Enable the production performance preference for normal Import')
     parser.add_argument('--memory-gib', type=float, default=3.)
     parser.add_argument('--reserve-mib', type=int, default=1024)
     parser.add_argument('--summarize-only', action='store_true')
     args = parser.parse_args()
     if args.summarize_only:
         return summarize(args.output)
+    if args.without_terrain and not args.scene:
+        parser.error('--without-terrain requires --scene')
+    if args.operator and not args.scene:
+        parser.error('--operator requires --scene')
+    if args.import_performance and (not args.operator or args.qos != 'system'):
+        parser.error('--import-performance requires --operator and no external --qos override')
+    if args.execution_diagnostics and args.diagnostic_profile:
+        parser.error('Keep coarse execution diagnostics separate from cProfile')
+    if args.affinity_cpu is not None and (args.threads != 1 or args.numeric_threads != 1):
+        parser.error('--affinity-cpu requires --threads 1 and --numeric-threads 1')
     if not 1 <= args.runs <= 9:
         parser.error('Run count must be between 1 and 9')
     env = os.environ.copy()
@@ -83,8 +108,25 @@ def main():
         command = [sys.executable, str(args.guard), '--blender', str(args.blender),
             '--script', str(ROOT / 'tests/benchmark_python_street_import.py'), '--output', str(output / 'process'),
             '--memory-gib', str(args.memory_gib), '--reserve-mib', str(args.reserve_mib),
-            '--threads', str(args.threads), '--numeric-threads', '1', '--', '--osm', str(args.osm.resolve()),
-            '--output', str(output), '--revision', revision, '--resolution', str(args.resolution)]
+            '--threads', str(args.threads), '--numeric-threads', str(args.numeric_threads)]
+        if args.affinity_cpu is not None:
+            command.extend(('--affinity-cpu', str(args.affinity_cpu)))
+        command.extend(('--', '--osm', str(args.osm.resolve()), '--output', str(output),
+                        '--revision', revision, '--resolution', str(args.resolution)))
+        if args.scene:
+            command.extend(('--scene', str(args.scene.resolve())))
+        if args.without_terrain:
+            command.append('--without-terrain')
+        if args.diagnostic_profile:
+            command.append('--diagnostic-profile')
+        if args.operator:
+            command.append('--operator')
+        if args.import_performance:
+            command.append('--import-performance')
+        if args.execution_diagnostics:
+            command.append('--execution-diagnostics')
+        if args.qos != 'system':
+            command.extend(('--qos', args.qos))
         if number == args.runs:
             command.append('--save-scene')
         subprocess.run(command, env=env, cwd=ROOT, check=True,

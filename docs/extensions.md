@@ -16,6 +16,10 @@ The branch includes PADL, Geometry Nodes building generation, Python streets,
 and the bundled ANTLR 4.13.1 runtime. Its internal imports use the extension's
 namespace; they do not rely on adding the checkout to `sys.path`.
 
+The Windows-only **Prefer performance during Import** addon preference is
+enabled by default. See [Import performance](IMPORT_PERFORMANCE.md) for its
+scope, power-policy handling and validation.
+
 `tests/check_development_extension.py` verifies repository discovery, isolated
 imports, registration, PML compilation, custom setup scripts, data storage,
 building/street controls, local 2D and both simple-3D backends, and unregistering.

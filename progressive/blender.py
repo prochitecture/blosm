@@ -10,6 +10,8 @@ import textwrap
 import bpy
 from bpy.app.handlers import persistent
 from ..downloads.transport import reap
+from ..app.blender import app
+from ..app.import_performance import import_performance
 
 active = None
 
@@ -117,8 +119,9 @@ class Controller:
             redraw()
             return
         revision = adapter.revision
-        with bpy.context.temp_override(window=self.window, scene=adapter.scene,
-                                       view_layer=adapter.view_layer):
+        with import_performance(bpy.context, app.addonName), \
+                bpy.context.temp_override(window=self.window, scene=adapter.scene,
+                                          view_layer=adapter.view_layer):
             adapter.job.step()
             if adapter.revision != revision:
                 self.checkpoint()
@@ -137,6 +140,10 @@ class Controller:
                 bpy.ops.blosm.progressive_checkpoint('EXEC_DEFAULT', True)
 
     def close(self, silent=False):
+        with import_performance(bpy.context, app.addonName):
+            self._close(silent)
+
+    def _close(self, silent):
         global active
         if active is not self:
             return

@@ -39,6 +39,7 @@ from . import gui, ape
 from .defs import Keys
 from .progressive import blender as progressiveImport
 from .downloads.access import OnlineAccessError
+from .app.import_performance import import_performance
 
 
 class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
@@ -98,6 +99,13 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
         description = "Enable export to the popular 3D formats. Experimental feature! Use it with caution!",
         default = False
     )
+
+    preferPerformanceDuringImport: bpy.props.BoolProperty(
+        name = "Prefer performance during Import",
+        description = "On Windows, request faster CPU execution while importing. "
+            "Respects an explicit power-saving policy and restores the previous policy afterwards",
+        default = True
+    )
     
     def draw(self, context):
         layout = self.layout
@@ -140,6 +148,8 @@ class BlosmPreferences(bpy.types.AddonPreferences, ape.AssetPackageEditor):
             # Extensions might come later
             #layout.operator("blosm.load_extensions", text="Load extensions")
             layout.prop(self, "osmServer")
+            if os.name == 'nt':
+                layout.prop(self, "preferPerformanceDuringImport")
             
             if blenderApp.app.isPro:
                 layout.prop(self, "enableExperimentalFeatures", text="Enable experimental features")
@@ -234,6 +244,10 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
         if progressiveImport.active is not None:
             self.report({'WARNING'}, 'A Blosm import is already running')
             return {'CANCELLED'}
+        with import_performance(context, blenderApp.app.addonName):
+            return self._execute(context)
+
+    def _execute(self, context):
         a = blenderApp.app
         dataType = context.scene.blosm.dataType
         
@@ -625,23 +639,28 @@ class BLOSM_OT_ControlOverlay(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
-            try:
-                hasTiles = blenderApp.app.overlay.importNextTile()
-            except OnlineAccessError as exc:
-                self.stop(context)
-                blenderApp.app.area = None
-                self.report({'ERROR'}, str(exc))
-                return {'CANCELLED'}
-            if not hasTiles:
-                self.stop(context)
-                if blenderApp.app.overlay.finalizeImport():
-                    self.report({'INFO'}, "Overlay import is finished!")
-                else:
-                    self.report({'ERROR'}, "Probably something is wrong with the tile server!")
-                # cleanup
-                blenderApp.app.area = None
-                return {'FINISHED'}
+            with import_performance(context, blenderApp.app.addonName):
+                return self.importNextTile(context)
 
+        return {'RUNNING_MODAL'}
+
+    def importNextTile(self, context):
+        try:
+            hasTiles = blenderApp.app.overlay.importNextTile()
+        except OnlineAccessError as exc:
+            self.stop(context)
+            blenderApp.app.area = None
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        if not hasTiles:
+            self.stop(context)
+            if blenderApp.app.overlay.finalizeImport():
+                self.report({'INFO'}, "Overlay import is finished!")
+            else:
+                self.report({'ERROR'}, "Probably something is wrong with the tile server!")
+            # cleanup
+            blenderApp.app.area = None
+            return {'FINISHED'}
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
