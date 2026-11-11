@@ -173,6 +173,7 @@ osm_file.write_text('''<osm version="0.6">
     <tag k="building" v="yes"/><tag k="height" v="10"/>
   </way></osm>''', encoding='utf-8')
 settings = bpy.context.scene.blosm
+prefs.dataDir = str(args.artifacts.resolve())
 settings.dataType, settings.osmSource, settings.mode = 'osm', 'file', '2D'
 settings.osmFilepath = str(osm_file)
 settings.loadMissingMembers = False

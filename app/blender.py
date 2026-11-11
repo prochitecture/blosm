@@ -172,6 +172,8 @@ class BlenderApp(BaseApp):
         addon = context.scene.blosm
         prefs = context.preferences.addons
         
+        self.setDataDir(context, self.basePath, addonName, required=True)
+
         if app.has(defs.Keys.mode3d) and self.mode != "2D":
             self.mode = BaseApp.realistic\
                 if app.has(defs.Keys.mode3dRealistic) and self.mode == "3Drealistic"\
@@ -185,7 +187,6 @@ class BlenderApp(BaseApp):
         basePath = self.basePath
         self.op = op
         self.assetPath = os.path.join(basePath, "assets")
-        self.setDataDir(context, basePath, addonName)
         # create a sub-directory under <self.dataDir> for OSM files
         osmDir = os.path.join(self.dataDir, self.osmDir)
         if not os.path.exists(osmDir):
@@ -382,11 +383,13 @@ class BlenderApp(BaseApp):
             if not (p.startswith("__") or p in ("bl_rna", "rna_type", "int", "string")):
                 setattr(self, p, getattr(addon, p))
     
-    def setDataDir(self, context, basePath, addonName):
+    def setDataDir(self, context, basePath, addonName, required=False):
         """
         Sets <self.dataDir>, i.e. path to data
         """
         prefs = context.preferences.addons
+        if required and (addonName not in prefs or not prefs[addonName].preferences.dataDir.strip()):
+            raise Exception("A valid directory for data in the addon preferences isn't set")
         j = os.path.join
         if addonName in prefs:
             dataDir = prefs[addonName].preferences.dataDir

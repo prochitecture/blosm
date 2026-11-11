@@ -48,7 +48,11 @@ exercise real datasets, UI and external Pro asset packs; see the
 - Downloads check `bpy.app.online_access`. Revoking access closes an active
   download transport when it is next polled or submitted to. Local input and
   cached imagery remain usable offline.
-- With no custom data directory, downloads go to
+- Every OSM import, including local files and every rendering mode, requires an
+  existing data directory in the add-on preferences. Validation happens before
+  asset checks, directory creation or downloading. OSM downloads go into its
+  `osm` subdirectory; an empty setting never falls back to the addon directory.
+- For other downloads with no custom data directory, downloads go to
   `bpy.utils.extension_path_user`, outside the installed extension. User-selected
   asset directories remain external to the extension.
 - 3D Tiles rebase private glTF node data before single-precision conversion;
