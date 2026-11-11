@@ -187,7 +187,13 @@ class PythonSectionTransitionIntegrationTests(unittest.TestCase):
         network = sources()
         result = PythonMeshBackend(network.settings).prepare(network)
         transition = result.products[Key('seam_surface', 6)]
-        self.assertIs(result.products[Key('seam_mesh', 6)], transition.pavement)
+        # Publication adds UVs through a new Part wrapper; the transition's
+        # source surface and the published mesh must have identical geometry.
+        published = result.products[Key('seam_mesh', 6)]
+        self.assertEqual(published.owner, transition.pavement.owner)
+        np.testing.assert_array_equal(published.mesh.xyz, transition.pavement.mesh.xyz)
+        np.testing.assert_array_equal(published.mesh.quads, transition.pavement.mesh.quads)
+        self.assertIn('UVMap', published.mesh.uv_layers)
         for i, approach in enumerate(transition.plan.approaches):
             road = result.products[Key('road', approach.source.id)]
             row = road.mesh.xyz[road.mesh.seams[approach.end]]

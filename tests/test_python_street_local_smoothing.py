@@ -22,6 +22,84 @@ def courtyard():
 
 
 class LocalSmoothingTests(unittest.TestCase):
+    def test_short_jog_does_not_bow_the_adjoining_long_straight(self):
+        source = np.array(((0., 0., 0.), (80., 0., 0.), (92., 10., 0.), (120., 10., 0.)))
+        for scale in (.5, 1., 10.):
+            for reverse in (False, True):
+                for angle in (0., .73):
+                    with self.subTest(scale=scale, reverse=reverse, angle=angle):
+                        rotation = np.array(((np.cos(angle), -np.sin(angle)), (np.sin(angle), np.cos(angle))))
+                        points = source.copy() * scale
+                        points[:, :2] = points[:, :2] @ rotation.T + (137., -29.)
+                        section = Section(1, 1, tuple(map(tuple, points[::-1] if reverse else points)), width=5.*scale)
+                        path = Path(section, tolerance=.005*scale)
+                        self.assertTrue(path.localized)
+                        query = path.point(np.linspace(0., path.length, 4001))
+                        unrotated = (query - (137., -29.)) @ rotation / scale
+                        straight = unrotated[(unrotated[:, 0] > 10.) & (unrotated[:, 0] < 65.)]
+                        self.assertGreater(len(straight), 20)
+                        np.testing.assert_allclose(straight[:, 1], 0., atol=1e-9)
+                        self.assertLess(path.curvature_bound * 2.5 * scale, .98)
+
+    def test_actual_offset_bow_is_replaced_by_local_rounds(self):
+        section = Section(259, 259, ((-188.8673858642578, 65.81572723388672, 0.),
+            (-112.03234100341797, 53.08955001831055, 0.),
+            (-99.72409057617188, 63.108036041259766, 0.),
+            (-72.02603912353516, 58.387603759765625, 0.)), width=5.)
+        path = Path(section)
+        self.assertTrue(path.localized)
+        query = path.point(np.linspace(0., path.length, 4001))
+        self.assertLess(float(distance_to_polyline(query, section.points).max()), 1.)
+        midpoint = np.mean(np.asarray(section.points[:2])[:, :2], axis=0)
+        self.assertLess(float(np.linalg.norm(query-midpoint, axis=1).min()), .05)
+
+    def test_sub_width_shared_corner_uses_one_round_on_both_sections(self):
+        from tested_python_streets.providers import PathProvider
+        from types import SimpleNamespace
+        source = Network('short-shared-corner', (
+            Section(1, 1, ((-12., 0., 0.), (0., 0., 0.)), width=2.),
+            Section(2, 1, ((0., 0., 0.), (0., 12., 0.)), width=2.)),
+            connections=(Connection(1, (End(1, 1), End(2, 0))),))
+        paths = [PathProvider.build(SimpleNamespace(network=source), s, source.connections) for s in source.sections]
+        whole = Path(Section(3, 1, ((-12., 0., 0.), (0., 0., 0.), (0., 12., 0.)), width=2.))
+        shift = 0.
+        for path in paths:
+            self.assertTrue(path.endpoint_bends)
+            stations = np.linspace(0., path.length, 501)
+            np.testing.assert_allclose(path.point(stations), whole.point(stations+shift), atol=1e-9)
+            shift += path.length
+
+    def test_bounded_gentle_interpolation_remains_unchanged(self):
+        section = Section(1, 1, ((0., 0., 0.), (10., 1., 0.), (20., 2.5, 0.), (30., 4.5, 0.)), width=5.)
+        path = Path(section)
+        self.assertFalse(path.localized)
+        np.testing.assert_allclose(path.point(path.station(path.knots)), np.asarray(section.points)[:, :2], atol=1e-10)
+
+    def test_unfittable_shared_round_preserves_only_the_endpoint_span_allowance(self):
+        from tested_python_streets.providers import PathProvider
+        from types import SimpleNamespace
+        angle = np.radians(150.)
+        source = Network('sharp-dimensional-allowance', (
+            Section(1, 1, ((-120., 0., 0.), (-60., 0., 0.), (0., 0., 0.)), width=6.),
+            Section(2, 1, ((0., 0., 0.), (60.*np.cos(angle), 60.*np.sin(angle), 0.)), width=10.)),
+            connections=(Connection(1, (End(1, 1), End(2, 0))),))
+        path = PathProvider.build(SimpleNamespace(network=source), source.sections[0], source.connections)
+        self.assertFalse(path.endpoint_bends)
+        np.testing.assert_allclose(path.alignment_limits, (2.5, 10.))
+        self.assertLess(path.curvature_bound * 3., .98)
+
+    def test_optional_alignment_cannot_replace_a_certified_path_with_a_fold(self):
+        section = Section(1, 1, ((0., 0., 0.), (15., 0., 0.)), width=6.)
+        endpoints = {1: np.array((.5, np.sqrt(.75)))}
+        path = Path(section, endpoint_directions=endpoints)
+        self.assertIsNotNone(path.alignment_fallback)
+        self.assertFalse(path.localized)
+        self.assertLess(path.curvature_bound * 3., .98)
+        query = path.point(np.linspace(0., path.length, 2001))
+        self.assertLess(float(distance_to_polyline(query, section.points).max()), path.deviation_limit)
+        with self.assertRaises(ValueError):
+            Path(replace(section, points=((0., 0., 0.), (10., 0., 0.))), endpoint_directions=endpoints)
+
     def test_sparse_courtyard_has_local_rounds_and_exact_straight_runs(self):
         section = courtyard()
         original = section.points

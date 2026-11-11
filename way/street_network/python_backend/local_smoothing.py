@@ -10,6 +10,9 @@ from dataclasses import dataclass
 import numpy as np
 
 
+RETAIN_ENDPOINT_INTERPOLATION = object()
+
+
 def segment_distance(points, first, last):
     delta = last - first
     t = np.clip((points - first) @ delta / (delta @ delta), 0., 1.)
@@ -35,8 +38,9 @@ def within_source_envelope(coefficients, points, limit):
     """Convex distance to a finite segment bounds its complete Bezier hull."""
     p, a, b, c = np.moveaxis(coefficients, 1, 0)
     controls = np.stack((p, p + a / 3., p + (2. * a + b) / 3., p + a + b + c), axis=1)
-    return all(bezier_segment_envelope(q, first, last, limit)
-               for q, first, last in zip(controls, points, points[1:]))
+    limits = np.broadcast_to(np.asarray(limit, dtype=float), (len(controls),))
+    return all(bezier_segment_envelope(q, first, last, bound)
+               for q, first, last, bound in zip(controls, points, points[1:], limits))
 
 
 @dataclass(frozen=True)
@@ -48,7 +52,7 @@ class SharedEndpointBend:
     radius: float
 
 
-def shared_endpoint_bends(first, first_end, second, second_end, limit):
+def shared_endpoint_bends(first, first_end, second, second_end, limit, *, alignment_limit=None):
     """Round a sparse compatible seam without interpolating its sharp vertex.
 
     Callers use a canonical incidence order, so both paths receive the exact
@@ -68,7 +72,9 @@ def shared_endpoint_bends(first, first_end, second, second_end, limit):
     turn = math.atan2(float(u[0] * v[1] - u[1] * v[0]), float(u @ v))
     # The old normalized endpoint handle's transverse bow is 4 L sin(a)/27.
     # Localize both sides together if either adjacent span exceeds its envelope.
-    if 4. / 27. * lengths.max() * math.sin(abs(turn) * .5) <= limit:
+    alignment_limit = .25 * limit if alignment_limit is None else alignment_limit
+    estimated_bow = 4. / 27. * lengths.max() * math.sin(abs(turn) * .5)
+    if estimated_bow <= alignment_limit:
         return None
     if abs(turn) >= math.radians(170.):
         raise ValueError('Shared Smooth bend has a near-reversal')
@@ -77,6 +83,11 @@ def shared_endpoint_bends(first, first_end, second, second_end, limit):
     radius = min(2. * reach, .99 * limit / (1. - math.cos(abs(turn) * .5)),
                  .4 * lengths.min() / factor)
     if radius < 1.5 * reach - 1e-10:
+        if estimated_bow <= limit:
+            # The tighter alignment target cannot require an unsafe radius.
+            # Both sides retain the previous common endpoint treatment and
+            # each still has to pass the original continuous safety guards.
+            return RETAIN_ENDPOINT_INTERPOLATION
         raise ValueError('Shared Smooth bend needs more source length for the carriageway width')
     setback = radius * factor
     start, finish = corner - setback * u, corner + setback * v

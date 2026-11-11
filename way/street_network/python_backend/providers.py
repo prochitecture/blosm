@@ -62,9 +62,10 @@ class PathProvider(FeatureProvider):
     def build(context, section, seams):
         endpoints = {}
         endpoint_bends = {}
+        endpoint_alignment_limits = {}
         envelope_width = section.width
         from .profiles import memberships
-        from .local_smoothing import shared_endpoint_bends
+        from .local_smoothing import shared_endpoint_bends, RETAIN_ENDPOINT_INTERPOLATION
         members = memberships(context.network)
         for seam in seams:
             own = next(e for e in seam.ends if e.section_id == section.id)
@@ -84,12 +85,16 @@ class PathProvider(FeatureProvider):
             if (section.interpolation == other.interpolation == 3
                     and section.id not in members and other.id not in members):
                 canonical = sorted(((section, own.end), (other, partner.end)), key=lambda pair: pair[0].id)
-                bends = shared_endpoint_bends(*canonical[0], *canonical[1],
-                    max(4. * context.network.settings.curve_tolerance, section.width, other.width))
-                if bends is not None:
+                envelope = max(4. * context.network.settings.curve_tolerance, section.width, other.width)
+                bends = shared_endpoint_bends(*canonical[0], *canonical[1], envelope,
+                    alignment_limit=max(4. * context.network.settings.curve_tolerance, .25 * envelope))
+                if bends is RETAIN_ENDPOINT_INTERPOLATION:
+                    endpoint_alignment_limits[own.end] = envelope
+                elif bends is not None:
                     endpoint_bends[own.end] = bends[0 if canonical[0][0].id == section.id else 1]
         return Path(section, context.network.settings.curve_tolerance, endpoints,
-                    deviation_limit=envelope_width, endpoint_bends=endpoint_bends)
+                    deviation_limit=envelope_width, endpoint_bends=endpoint_bends,
+                    endpoint_alignment_limits=endpoint_alignment_limits)
 
 
 class CarriagewayProvider(FeatureProvider):
@@ -232,7 +237,7 @@ class CarriagewayProvider(FeatureProvider):
             metadata['local_curvature_sampling'] = True
         if getattr(path, 'localized', False):
             metadata['centerline_smoothing'] = dict(method='local_tangent_cubics',
-                source_deviation_limit=path.deviation_limit, bends=path.local_bends,
+                source_deviation_limit=path.deviation_limit, alignment_limit=path.alignment_limit, bends=path.local_bends,
                 shared_ends={str(end): dict(radius=bend.radius, setback=bend.setback)
                              for end, bend in path.endpoint_bends.items()})
         return Part(section.key, mesh, metadata)

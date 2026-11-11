@@ -27,23 +27,32 @@ def unit(vector):
 
 class Path:
     def __init__(self, section, tolerance=.005, endpoint_directions=None, *, deviation_limit=None,
-                 endpoint_bends=None):
+                 endpoint_bends=None, endpoint_alignment_limits=None):
         self.section = section
         self.tolerance = tolerance
         self.points = np.asarray(section.points, dtype=float)[:, :2]
         self.source_points = self.points.copy()
         self.local_bends = ()
         self.localized = False
+        self.alignment_fallback = None
         self.endpoint_bends = endpoint_bends or {}
         if deviation_limit is not None and (not math.isfinite(deviation_limit) or deviation_limit <= 0.):
             raise ValueError('Source-deviation limit must be positive and finite')
         self.deviation_limit = max(4. * tolerance, section.width if deviation_limit is None else deviation_limit)
+        # Keep retained span-wide interpolation in the central half of the
+        # source corridor. Physical local rounds may need the larger envelope;
+        # using that envelope to accept an interpolating cubic allowed an
+        # entire long straight run to bow sideways by a road width.
+        self.alignment_limit = max(4. * tolerance, .25 * self.deviation_limit)
         if np.max(abs(np.asarray(section.points)[:, 2])) > 1e-7:
             raise ValueError('Source centerlines must remain in the construction XY plane; terrain placement derives elevation separately')
         if np.linalg.norm(self.points[0] - self.points[-1]) < 1e-7:
             raise ValueError('Closed Section requires a dedicated loop provider')
         delta = np.diff(self.points, axis=0)
         self.chords = np.linalg.norm(delta, axis=1)
+        self.alignment_limits = np.full(len(self.chords), self.alignment_limit)
+        for end, limit in (endpoint_alignment_limits or {}).items():
+            self.alignment_limits[0 if end == 0 else -1] = min(self.deviation_limit, max(self.alignment_limit, limit))
         if np.min(self.chords) < 1e-7:
             raise ValueError('A path has coincident XY controls')
         self.knots = np.r_[0., np.cumsum(self.chords)]
@@ -81,13 +90,30 @@ class Path:
             certified = self._certified()
         from .local_smoothing import LocalCubicSmoothing, within_source_envelope
         if endpoint_bends or not certified or not within_source_envelope(
-                self.coefficients, self.source_points, self.deviation_limit):
+                self.coefficients, self.source_points, self.alignment_limits):
             reach = abs(section.offset) + .5 * section.width
-            self.points, self.chords, self.coefficients, self.local_bends = LocalCubicSmoothing(
-                self.source_points, reach, self.deviation_limit, endpoint_directions, endpoint_bends).build()
-            self.knots = np.r_[0., np.cumsum(self.chords)]
-            self.localized = True
-            certified = self._certified()
+            original = self.points, self.chords, self.coefficients, self.knots
+            original_certified = certified
+            try:
+                self.points, self.chords, self.coefficients, self.local_bends = LocalCubicSmoothing(
+                    self.source_points, reach, self.deviation_limit, endpoint_directions, endpoint_bends).build()
+                self.knots = np.r_[0., np.cumsum(self.chords)]
+                self.localized = True
+                certified = self._certified()
+                if not certified:
+                    raise ValueError('Smooth offset curvature could fold this carriageway')
+            except ValueError as exc:
+                # Alignment is a preference; the original physical guards are
+                # mandatory. A sharp/dimensional transition may need a wider,
+                # continuously certified curve than a local circular-style bend.
+                # Fixed shared halves must never fall back independently.
+                if (endpoint_bends or not original_certified or not within_source_envelope(
+                        original[2], self.source_points, self.deviation_limit)):
+                    raise
+                self.points, self.chords, self.coefficients, self.knots = original
+                self.local_bends, self.localized = (), False
+                self.alignment_fallback = str(exc)
+                certified = self._certified()
         if not certified:
             raise ValueError('Smooth offset curvature could fold this carriageway')
         parameters = [0.]

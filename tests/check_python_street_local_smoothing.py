@@ -1,6 +1,7 @@
 """Native manual-Update and saved-mesh checks for localized centerline bends."""
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -9,7 +10,12 @@ import bmesh
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT.parent))
+spec = importlib.util.spec_from_file_location('blosm', ROOT / '__init__.py',
+                                            submodule_search_locations=[str(ROOT)])
+addon = importlib.util.module_from_spec(spec)
+sys.modules['blosm'] = addon
+spec.loader.exec_module(addon)
+addon.register()
 from blosm.way.street_network.python_backend.scene import NetworkScene, SourceObjects
 from blosm.way.street_network.python_backend import model, ui
 
@@ -35,14 +41,14 @@ def main():
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     args.output.mkdir(parents=True, exist_ok=True)
     if args.scene:
-        bpy.ops.wm.open_mainfile(filepath=str(args.scene.resolve()))
+        bpy.ops.wm.open_mainfile(filepath=str(args.scene.resolve()), load_ui=False, use_scripts=False)
         controller = next(o for o in bpy.data.objects if o.get('st_py_source_data')
             and args.section in model.Network.from_dict(json.loads(o['st_py_source_data'])).section_index)
     else:
         for obj in list(bpy.data.objects):
             bpy.data.objects.remove(obj, do_unlink=True)
-        source = model.Network('local-courtyard', (
-            model.Section(1, 1, ((0., 0., 0.), (0., -80., 0.), (120., -80., 0.), (120., 0., 0.)), width=5.),
+        source = model.Network('local-sparse-jog', (
+            model.Section(1, 1, ((0., 0., 0.), (80., 0., 0.), (92., 10., 0.), (120., 10., 0.)), width=5.),
             model.Section(99, 99, ((0., 80., 0.), (120., 80., 0.)))),
             settings=model.Settings(exaggeration=1.), furniture=(model.Placement(81, 1, 45.),))
         controller = NetworkScene.create(source)

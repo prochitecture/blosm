@@ -1,5 +1,87 @@
 # Local smoothing of sparse street centerlines
 
+## Alignment selection and physical clearance (dev78)
+
+The previous full-width envelope was suitable as a physical allowance for a
+rounded corner, but too loose as an acceptance test for span-wide interpolation.
+A short jog could bow a long straight span by almost a full carriageway width
+and still pass that test. The selection and safety limits are now separate.
+
+For a source-span envelope $e$ and approximation tolerance $\varepsilon$, the
+preferred alignment band for retained interpolating cubics is
+
+$$
+a=\max(4\varepsilon,\;e/4).
+$$
+
+The distance proof uses the complete cubic Bezier hull and its finite source
+segment. Passing the alignment check retains the original coefficients.
+Otherwise, local tangent cubics round the controls and leave straight source
+runs between them. The larger physical envelope, minimum bend radii, continuous
+offset-curvature certificate and mesh-quality limits remain mandatory.
+This rule uses source geometry and profile dimensions; it has no OSM filename,
+Street-ID or fixture-specific dispatch.
+
+Explicit two-Section continuations make the same symmetric selection on both
+sides. A feasible shared round is split into matching halves. If its required
+minimum radius cannot fit the neighboring finite spans, that endpoint span
+retains the previous interpolation allowance, and must still pass the original
+hard envelope and continuous curvature checks. Other spans keep the tighter
+alignment band. A valid sharp dimensional transition therefore retains the
+source curve its surface solver needs. Fixed shared halves never fall back
+independently.
+
+An optional local construction can also be rejected by its independent physical
+certificate. The original interpolation is retained only if it was already
+continuously certified and lies within the original hard envelope. An unsafe
+original curve or a failed mandatory shared-round construction still produces
+an error. Diagnostics expose this optional fallback through
+`Path.alignment_fallback` and the source-span bounds through
+`Path.alignment_limits`. Source vertices and IDs are not rewritten.
+
+The backend version is `0.1.0.dev78`, so saved dependency manifests invalidate
+the previous construction when Update is pressed. No new source attribute or
+saved-file schema is required. The Exact polyline mode retains its existing
+construction.
+
+Regression tests include synthetic short-jog/long-span layouts at different
+rotations, scales and storage directions; shared corners whose bow was below
+the old full-width limit; physically constrained sharp transitions; unchanged
+gentle interpolation; and the reported real OSM layout. The focused Blender
+test also exercises Edit Mode, width edits, manual Update, unchanged remote
+objects and exact restoration on a synthetic sparse jog.
+
+Development scenes, mesh inspections and reports are under
+`C:/dev/workspace/artifacts/streets/centerline_fit_20261111/`. The generic
+[`inspect_street_centerlines.py`](../tests/inspect_street_centerlines.py) reads
+saved source networks, calculates source-to-curve deviations and optionally
+exports selected saved pavement meshes for visual inspection. It does not
+regenerate the saved mesh or modify the input scene.
+
+Validation of dev78: 96 numerical checks pass across local smoothing, the
+extended fixtures, source support, core updates, dimensional Bundles, Smooth
+and mixed transitions, and boundary sampling. The normal full OSM Import has
+COMPLETE coverage with 328 meshes and 350,571 quads; a fresh isolated run took
+66.738 s. Source networks are unchanged apart from per-import UUIDs. The
+reported road's maximum sampled deviation decreases from 4.743 m to 0.439 m,
+with the remaining displacement confined to local corner rounds. Every source
+path in the saved networks prepares successfully. The native sparse-jog check
+passes Edit Mode movement, width Update, remote-object retention and exact
+restoration. A stale transition test was updated to compare published surface
+geometry and UV availability rather than Python wrapper identity: UV mapping
+already creates a new published Part wrapper.
+
+The corrected full scene is `final_import/run_01/street_benchmark.blend` under
+the artifact directory above. `comparison.png` plots actual saved pavement
+faces before and after the change, against the unchanged input controls;
+intersection-owned end pieces are outside this road-only plot. Recreate such
+a plot for any inspected Section with
+[`plot_street_centerline_fit.py`](../tools/plot_street_centerline_fit.py).
+
+![Actual saved carriageway before and after the general alignment repair](images/python_centerline_alignment_dev78.png)
+
+## Earlier construction history
+
 Implemented on `buildings_gn` in `C:/dev/workspace/blosm`, runtime
 `0.1.0.dev75`. This extends the qualified dev72 Python backend; its previous
 saved scenes and qualification records remain historical references.
