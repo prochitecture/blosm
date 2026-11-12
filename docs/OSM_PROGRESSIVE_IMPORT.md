@@ -138,10 +138,12 @@ actual progressive PADL and street qualification belongs to their integration
 after evaluation. A clean source merge is not that qualification.
 
 The separate `blosm_build` repository uses explicit runtime file inventories.
-Before producing official packages from this revision, its common inventory must
-include `app/osm_import.py` and `progressive/ownership.py`; the Pro inventory must
-also include `building2/bake_job.py` and `building2/bake_worker.py`. The builder
-checkout was inspected read-only. The Base qualification payload for this task
+Its common inventory includes `app/osm_import.py` and `progressive/ownership.py`;
+the Pro inventory also includes `building2/bake_job.py` and
+`building2/bake_worker.py`. These four entries were synchronized after the OSM
+implementation at the user's request. Build from an OSM-capable source revision
+such as `1af9075`; earlier revisions do not contain these required files.
+The Base qualification payload for the implementation task
 adds the two common files explicitly and is an evaluation artifact, not an
 official release package.
 
