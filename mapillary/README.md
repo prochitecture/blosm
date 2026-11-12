@@ -245,6 +245,8 @@ The launcher uses factory startup, disabled autoexec and this chat's five isolat
 resource paths. Online access is enabled only for the test process. It checks the
 UI JSON report status, not just Blender's GUI exit code. No preferences are saved.
 See `Validation.md` for results, measurements and remaining limits.
+See [worldwide altitude samples](AltitudeSampling.md) for measured distributions
+of provider `computed_altitude` across ten areas and the limits of interpreting it.
 
 ### Live development check
 
