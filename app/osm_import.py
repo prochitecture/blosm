@@ -29,6 +29,15 @@ from ..renderer import Renderer
 last_result = None
 
 
+def result_message(result):
+    """Keep original Blosm diagnostics visible in both import drivers."""
+    message = 'OSM import %s: %s completed, %s errors.' % (
+        result['outcome'], result['committed'], len(result['errors']))
+    if result['errors']:
+        message += '\n' + result['errors'][0]
+    return message
+
+
 def _linked(root, collection):
     return root == collection or any(_linked(child, collection) for child in root.children)
 
@@ -480,9 +489,9 @@ class OsmImport:
                            max_callback_seconds=self.max_callback, elapsed_seconds=time.monotonic()-self.started)
         for error in self.errors:
             print('OSM import:', error)
-        message = 'OSM import %s: %s completed, %s errors.' % (outcome, self.committed_units, len(self.errors))
+        last_result['message'] = result_message(last_result)
         if not silent:
-            driver.notify_result('ERROR' if outcome == 'failed' else 'INFO', message)
+            driver.notify_result('ERROR' if outcome == 'failed' else 'INFO', last_result['message'])
         return last_result
 
 
@@ -514,7 +523,5 @@ def import_osm(operator, context):
     finally:
         result = session.finish(silent=True)
     operator.report({'ERROR'} if result['outcome'] == 'failed' else {'INFO'},
-                    'OSM import %s: %s completed, %s errors.' % (
-                        result['outcome'], result['committed'], len(result['errors'])) +
-                    (' '+result['errors'][0] if result['errors'] else ''))
+                    result['message'])
     return {'CANCELLED'} if result['outcome'] == 'failed' else {'FINISHED'}

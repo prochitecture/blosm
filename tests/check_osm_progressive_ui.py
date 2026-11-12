@@ -85,6 +85,31 @@ def cancel():
 
 
 def scenario():
+    prefs = bpy.context.preferences.addons[PACKAGE].preferences
+    saved_directory = prefs.dataDir
+    try:
+        for failure in ('data_directory', 'osm_file', 'setup_script'):
+            settings = setup('rectangle')
+            if failure == 'data_directory':
+                prefs.dataDir = ''
+            elif failure == 'osm_file':
+                settings.osmFilepath = str(args.artifacts/'missing_original.osm')
+            else:
+                settings.setupScript = str(args.artifacts/'missing_original_setup.py')
+            before = len(popups)
+            start()
+            while driver.active:
+                yield
+            result = osm_runtime.last_result
+            assert result['outcome'] == 'failed' and result['errors']
+            assert len(popups) == before+1
+            assert popups[-1] == ('ERROR', result['message'])
+            assert result['errors'][0] in popups[-1][1]
+            prefs.dataDir = saved_directory
+        checks.append('original data-folder, OSM-file and setup errors appear in one progressive result popup')
+    finally:
+        prefs.dataDir = saved_directory
+
     setup()
     start()
     yield from wait_partial()

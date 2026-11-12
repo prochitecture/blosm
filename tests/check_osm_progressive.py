@@ -165,6 +165,37 @@ class OsmProgressiveChecks(unittest.TestCase):
         finally:
             prefs.dataDir = saved_directory
 
+    def test_original_errors_reach_both_import_reports(self):
+        prefs = bpy.context.preferences.addons[PACKAGE].preferences
+        saved_directory = prefs.dataDir
+        for failure in ('data_directory', 'osm_file', 'setup_script'):
+            with self.subTest(failure=failure):
+                settings = self.prepare()
+                if failure == 'data_directory':
+                    prefs.dataDir = ''
+                elif failure == 'osm_file':
+                    settings.osmFilepath = str(args.artifacts/'missing_original.osm')
+                else:
+                    settings.setupScript = str(args.artifacts/'missing_original_setup.py')
+                try:
+                    with self.assertRaises(RuntimeError) as blocking:
+                        bpy.ops.blosm.import_data()
+                    original = runtime.last_result['errors'][0]
+                    blocking_message = runtime.last_result['message']
+                    self.assertIn(original, str(blocking.exception))
+                    settings.progressiveImport = True
+                    session = self.session()
+                    while not session.job.done:
+                        session.job.step()
+                    with patch.object(runtime.driver, 'notify_result') as notify:
+                        result = session.finish()
+                    notify.assert_called_once_with('ERROR', blocking_message)
+                    self.assertEqual(result['message'], blocking_message)
+                    self.assertIn(original, result['message'])
+                    self.assertIsNone(session.finish())
+                finally:
+                    prefs.dataDir = saved_directory
+
     def test_missing_relation_members_post_and_companion_reuse(self):
         source = args.artifacts/'missing_members.osm'
         source.write_text('''<osm version="0.6"><bounds minlat="52" minlon="13" maxlat="52.001" maxlon="13.001"/>
@@ -304,6 +335,7 @@ class OsmProgressiveChecks(unittest.TestCase):
         result = session.finish(silent=True)
         self.assertEqual(result['outcome'], 'partial')
         self.assertEqual(result['committed'], 1)
+        self.assertIn('Injected pending failure', result['message'])
         self.assertIn('Bulk A', bpy.data.objects)
         self.assertIn('Bulk B', bpy.data.objects)
         self.assertIn('User sentinel', bpy.data.objects)
