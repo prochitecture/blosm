@@ -265,6 +265,9 @@ class BaseApp:
         layer = layerClass(layerId, self)
         for k in kwargs:
             setattr(layer, k, kwargs[k])
+        session = getattr(self, 'osm_session', None)
+        if session is not None and session.requested:
+            layer.singleObject = False
         self.layerIndices[layerId] = len(self.layers)
         self.layers.append(layer)
         return layer

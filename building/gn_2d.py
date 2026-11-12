@@ -73,8 +73,14 @@ class GnBldg2dRenderer(Renderer2d):
         if not defaultLevels:
             from ..gui import addDefaultLevels
             addDefaultLevels()
-        self.randomLevels = RandomWeighted(tuple((e.levels, e.weight) for e in defaultLevels))
+        values = getattr(app, 'osm_default_levels', None) if getattr(app, 'osm_session', None) else None
+        self.randomLevels = RandomWeighted(values or tuple((e.levels, e.weight) for e in defaultLevels))
     
+    def preRender(self, element):
+        if not element.l.singleObject:
+            element.l.attributeValues = []
+        super().preRender(element)
+
     def renderPolygon(self, element, data):
         super().renderPolygon(element, data)
         element.l.attributeValues.append( self.getNumLevels(element) )

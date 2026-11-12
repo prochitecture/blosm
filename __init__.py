@@ -228,10 +228,10 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return progressiveImport.active is None
+        return not progressiveImport.is_busy()
 
     def execute(self, context):
-        if progressiveImport.active is not None:
+        if progressiveImport.is_busy():
             self.report({'WARNING'}, 'A Blosm import is already running')
             return {'CANCELLED'}
         a = blenderApp.app
@@ -265,96 +265,9 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             setup_function(context, addonName)
     
     def importOsm(self, context):
-        a = blenderApp.app
-        addon = context.scene.blosm
-        
-        try:
-            a.initOsm(self, context)
-        except Exception as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-        
-        createFlatTerrain = a.mode is a.realistic and a.forests
-        forceExtentCalculation = createFlatTerrain and a.osmSource == "file"
-        
-        setupScript = addon.setupScript
-        if setupScript:
-            setup_function = self.loadSetupScript(setupScript, reportError=True)
-            if not setup_function:
-                return {'CANCELLED'}
-        else:
-            if a.mode is a.realistic:
-                if a.enableExperimentalFeatures:
-                    from .setup.realistic_dev import setup as setup_function
-                else:
-                    from .setup.premium_default import setup as setup_function
-            else:
-                from .setup.base import setup as setup_function
-        
-        scene = context.scene
-        
-        self.setObjectMode(context)
-        bpy.ops.object.select_all(action='DESELECT')
-        
-        osm = Osm(a)
-        setup_function(a, osm)
-        a.createLayers(osm)
-        
-        setLatLon = False
-        if "lat" in scene and "lon" in scene and a.relativeToInitialImport:
-            osm.setProjection(scene["lat"], scene["lon"])
-        elif a.osmSource == "server":
-            osm.setProjection( (a.minLat+a.maxLat)/2., (a.minLon+a.maxLon)/2. )
-            setLatLon = True
-        else:
-            # This is the case if <a.osmSource == "file"> and if the first condition is not true
-            setLatLon = True
-        
-        osm.parse(a.osmFilepath, forceExtentCalculation=forceExtentCalculation)
-        if a.loadMissingMembers and a.incompleteRelations:
-            try:
-                a.loadMissingWays(osm)
-            except Exception as e:
-                self.report({'ERROR'}, str(e))
-                a.loadMissingMembers = False
-            a.processIncompleteRelations(osm)
-            if not osm.projection:
-                # <osm.projection> wasn't set so far if there were only incomplete relations that
-                # satisfy <osm.conditions>.
-                # See also the comments in <parse.osm.__init__.py>
-                # at the end of the method <osm.parse(..)>
-                osm.setProjection( (osm.minLat+osm.maxLat)/2., (osm.minLon+osm.maxLon)/2. )
-        
-        if forceExtentCalculation:
-            a.minLat = osm.minLat
-            a.maxLat = osm.maxLat
-            a.minLon = osm.minLon
-            a.maxLon = osm.maxLon
-        
-        # Check if have a terrain Blender object set
-        # At this point <a.projection> is set, so we can set the terrain
-        a.setTerrain(
-            context,
-            createFlatTerrain = createFlatTerrain,
-            createBvhTree = True
-        )
-        
-        a.initLayers()
-        
-        a.process()
-        a.render()
-        
-        # Set <lon> and <lat> attributes for <scene> if necessary.
-        # <osm.projection> is set in <osm.setProjection(..)> along with <osm.lat> and <osm.lon>
-        # So we test if <osm.projection> is set, that also means that <osm.lat> and <osm.lon> are also set.
-        if setLatLon and osm.projection:
-            # <osm.lat> and <osm.lon> have been set in osm.parse(..)
-            self.setCenterLatLon(context, osm.lat, osm.lon)
-        
-        a.clean()
-        
-        return {'FINISHED'}
-    
+        from .app.osm_import import import_osm
+        return import_osm(self, context)
+
     def getCenterLatLon(self, context):
         a = blenderApp.app
         scene = context.scene
@@ -645,6 +558,9 @@ class BLOSM_OT_ControlOverlay(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
+        if progressiveImport.is_busy():
+            self.report({'WARNING'}, 'A Blosm import is already running')
+            return {'CANCELLED'}
         wm = context.window_manager
         
         self._drawHandle = bpy.types.SpaceView3D.draw_handler_add(
@@ -656,10 +572,12 @@ class BLOSM_OT_ControlOverlay(bpy.types.Operator):
         
         self._timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
+        blenderApp.app.overlay_running = True
         
         return {'RUNNING_MODAL'}
 
     def stop(self, context):
+        blenderApp.app.overlay_running = False
         context.window_manager.event_timer_remove(self._timer)
         bpy.types.SpaceView3D.draw_handler_remove(self._drawHandle, 'WINDOW')
         blenderApp.app.stateMessage = None

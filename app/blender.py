@@ -144,11 +144,11 @@ class BlenderApp(BaseApp):
         self.nodeLayer = NodeLayer
         self.wayLayer = CurveLayer
     
-    def getAssetsDir(self, context):
+    def getAssetsDir(self, context, settings=None, preferences=None):
         addonName = self.addonName
-        prefs = context.preferences.addons
+        prefs = preferences if preferences is not None else context.preferences.addons
         # first try the <assetsDir> from the addon GUI
-        assetsDir = context.scene.blosm.assetsDir
+        assetsDir = (settings if settings is not None else context.scene.blosm).assetsDir
         if not assetsDir:
             # second try the <assetsDir> from the addon preferences
             assetsDir = prefs[addonName].preferences.assetsDir if addonName in prefs else None
@@ -165,14 +165,14 @@ class BlenderApp(BaseApp):
                 _setAssetsDirStr
             )
     
-    def initOsm(self, op, context):
+    def initOsm(self, op, context, defer_download=False, settings=None, preferences=None):
         super().initOsm()
         
         addonName = self.addonName
-        addon = context.scene.blosm
-        prefs = context.preferences.addons
+        addon = settings if settings is not None else context.scene.blosm
+        prefs = preferences if preferences is not None else context.preferences.addons
         
-        self.setDataDir(context, self.basePath, addonName, required=True)
+        self.setDataDir(context, self.basePath, addonName, required=True, preferences=prefs)
 
         if app.has(defs.Keys.mode3d) and self.mode != "2D":
             self.mode = BaseApp.realistic\
@@ -182,7 +182,7 @@ class BlenderApp(BaseApp):
             self.mode = BaseApp.twoD
         
         if self.mode is BaseApp.realistic:
-            assetsDir = self.validateAssetsDirContent(context)
+            assetsDir = self.validateAssetsDirContent(context, settings=settings, preferences=prefs)
         
         basePath = self.basePath
         self.op = op
@@ -202,9 +202,9 @@ class BlenderApp(BaseApp):
             prefs[addonName].preferences.osmServer if addonName in prefs else self.devOsmServer
         ]
         
-        if addon.osmSource == "server":
+        if addon.osmSource == "server" and not defer_download:
             self.downloadOsmFile(osmDir, self.minLon, self.minLat, self.maxLon, self.maxLat)
-        else:
+        elif addon.osmSource != "server":
             self.osmFilepath = os.path.realpath(bpy.path.abspath(self.osmFilepath))
 
         # dealing with export to the popular 3D formats
@@ -245,8 +245,8 @@ class BlenderApp(BaseApp):
             # That's why following line
             self.gnSetup2d = data_to.node_groups[0].name 
     
-    def validateAssetsDirContent(self, context):
-        assetsDir = self.getAssetsDir(context)
+    def validateAssetsDirContent(self, context, settings=None, preferences=None):
+        assetsDir = self.getAssetsDir(context, settings=settings, preferences=preferences)
         self.validateAssetsDir(assetsDir)
         self.assetsDir = assetsDir
         # Additional validation. The execution couldn't come here
@@ -268,8 +268,8 @@ class BlenderApp(BaseApp):
             self.vegetationFilepath = vegetationFilepath
         return assetsDir
     
-    def setTerrain(self, context, createFlatTerrain=True, createBvhTree=False):
-        addon = context.scene.blosm
+    def setTerrain(self, context, createFlatTerrain=True, createBvhTree=False, settings=None):
+        addon = settings if settings is not None else context.scene.blosm
         
         terrainObjectName =\
             addon.terrainObject\
@@ -383,11 +383,11 @@ class BlenderApp(BaseApp):
             if not (p.startswith("__") or p in ("bl_rna", "rna_type", "int", "string")):
                 setattr(self, p, getattr(addon, p))
     
-    def setDataDir(self, context, basePath, addonName, required=False):
+    def setDataDir(self, context, basePath, addonName, required=False, preferences=None):
         """
         Sets <self.dataDir>, i.e. path to data
         """
-        prefs = context.preferences.addons
+        prefs = preferences if preferences is not None else context.preferences.addons
         if required and (addonName not in prefs or not prefs[addonName].preferences.dataDir.strip()):
             raise Exception("A valid directory for data in the addon preferences isn't set")
         j = os.path.join

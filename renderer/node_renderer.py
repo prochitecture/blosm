@@ -54,7 +54,7 @@ class BaseNodeRenderer(Renderer):
         
         self.init()
         
-        collection = bpy.data.collections[self.collectionName]
+        collection = self.assetCollection
         
         # calculate z-coordinate of the object
         z = parseNumber(tags["min_height"], 0.) if "min_height" in tags else 0.
@@ -90,6 +90,7 @@ class BaseNodeRenderer(Renderer):
         if self._initialized:
             return
         collection = loadCollectionFromFile(self.filepath, self.collectionName)
+        self.assetCollection = collection
         self.numObjects = len(collection.objects)
         self._initialized = True
     

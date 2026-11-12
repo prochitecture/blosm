@@ -88,9 +88,38 @@ class Osm:
         )
     
     def parse(self, filepath, **kwargs):
+        for _ in self.parse_steps(filepath, **kwargs):
+            pass
+
+    @staticmethod
+    def _elements(filepath):
+        # Clear only after the consumer has decoded the entire top-level record.
+        # Removing it from the root also bounds the XML tree for large files.
+        parser = etree.XMLPullParser(events=('start', 'end'))
+        depth = 0
+        root = None
+        with open(filepath, 'rb') as stream:
+            while True:
+                chunk = stream.read(16384)
+                if not chunk:
+                    parser.close()
+                    break
+                parser.feed(chunk)
+                for event, element in parser.read_events():
+                    if event == 'start':
+                        depth += 1
+                        if depth == 1:
+                            root = element
+                    else:
+                        if depth == 2:
+                            yield element
+                            root.remove(element)
+                            element.clear()
+                        depth -= 1
+                yield None
+
+    def parse_steps(self, filepath, **kwargs):
         forceExtentCalculation = kwargs.get("forceExtentCalculation")
-        
-        osm = etree.parse(filepath).getroot()
         
         # <self.projection> could be set during a previous call of <self.parse(..)>
         if not self.projection:
@@ -98,7 +127,10 @@ class Osm:
         
         relations = self.relations
         
-        for e in osm: # e stands for element
+        for e in self._elements(filepath): # e stands for element
+            if e is None:
+                yield None
+                continue
             attrs = e.attrib
             if "action" in attrs and attrs["action"] == "delete": continue
             if e.tag == "node":
@@ -116,6 +148,8 @@ class Osm:
                         self.processCondition(condition, node, _id, self.parseNode)
                         # set <node> for rendering by appending it to <self.rNodes>
                         self.rNodes.append(node)
+                        if not self.projection or forceExtentCalculation:
+                            self.updateNodeBounds(node)
                 self.nodes[_id] = node
             elif e.tag == "way":
                 _id = attrs["id"]
@@ -197,7 +231,6 @@ class Osm:
                     lon = ( self.minLon + self.maxLon )/2.
                     self.setProjection(lat, lon)
                     forceExtentCalculation = False
-        
         # The condition <self.firstPoint> means that the method <updateBounds(..)> was never called
         # and there was no OSM way with tags that satisfy <self.conditions>. There were
         # only incomplete relations available that satisfy <self.conditions>.
@@ -274,6 +307,17 @@ class Osm:
                     self.maxLon = lon
         # mark <way> as used for bounds calculation
         way.used = True
+
+    def updateNodeBounds(self, node):
+        # Tagged point-only extracts need a projection/extent too; no way may
+        # exist from which updateBounds can infer it.
+        if self.firstPoint:
+            self.minLat = self.maxLat = node.lat
+            self.minLon = self.maxLon = node.lon
+            self.firstPoint = False
+        else:
+            self.minLat, self.maxLat = min(self.minLat, node.lat), max(self.maxLat, node.lat)
+            self.minLon, self.maxLon = min(self.minLon, node.lon), max(self.maxLon, node.lon)
 
     def getRelation(self, _id, relationClass):
         """

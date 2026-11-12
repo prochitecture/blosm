@@ -79,7 +79,8 @@ class BuildingRenderer(Renderer2d):
         if not defaultLevels:
             from ..gui import addDefaultLevels
             addDefaultLevels()
-        self.randomLevels = RandomWeighted(tuple((e.levels, e.weight) for e in defaultLevels))
+        values = getattr(app, 'osm_default_levels', None) if getattr(app, 'osm_session', None) else None
+        self.randomLevels = RandomWeighted(values or tuple((e.levels, e.weight) for e in defaultLevels))
         self.randomLevelsHouse = RandomWeighted(self.defaultLevelsHouse)
     
     def initRoofs(self):
