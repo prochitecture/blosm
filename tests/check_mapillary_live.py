@@ -71,6 +71,8 @@ def summarize(task,elapsed):
     objects=list(task.collection.objects) if task.collection else []
     fields=Counter()
     heading_errors=[]
+    heights=[]
+    negative_provider_altitudes=0
     for obj in objects:
         # Check every persisted property against the exact secret, without ever
         # emitting it or writing request URLs/raw HTTP bodies into a report.
@@ -78,6 +80,8 @@ def summarize(task,elapsed):
             assert token not in json.dumps(dict(block.items()),default=str),'Credential found in scene metadata'
         fields.update([obj['mapillary_orientation_source'],obj['mapillary_altitude_source'],obj['mapillary_camera_model']])
         metadata=json.loads(obj['mapillary_metadata'])
+        heights.append(obj.location.z)
+        negative_provider_altitudes+=int(obj.get('mapillary_source_altitude',0.)<0)
         expected=metadata.get('computed_compass_angle')
         if isinstance(expected,(int,float)) and obj['mapillary_orientation_source']=='computed_rotation':
             forward=obj.rotation_quaternion.to_matrix()@__import__('mathutils').Vector((0,0,-1))
@@ -93,6 +97,9 @@ def summarize(task,elapsed):
             'fatal_error':sanitize(task.job.error,headers=redaction_headers) if task.job.error else None,
             'elapsed':elapsed,'metrics':task.metrics,'sources_and_models':dict(fields),
             'with_metadata':sum(bool(o['mapillary_metadata_available']) for o in objects),
+            'vertical_placement':{'minimum_z':min(heights,default=None),'maximum_z':max(heights,default=None),
+                                  'negative_provider_altitudes':negative_provider_altitudes,
+                                  'estimated_height_above_ground':2.},
             'heading_comparison':{'count':len(heading_errors),'median_degrees':heading_errors[len(heading_errors)//2] if heading_errors else None,
                                   'maximum_degrees':max(heading_errors,default=None)}}
 
@@ -126,6 +133,7 @@ def blocking():
     assert task.job.error is None,'Live blocking import stopped'
     assert task.count>0,'No cameras found in selected live area'
     assert report['modes']['blocking']['with_metadata']>0,'No live camera metadata was retrieved'
+    assert all(abs(o.location.z-2.)<1e-5 for o in task.collection.objects),'Flat scene cameras must be above Z=0'
     assert tuple(bpy.context.selected_objects)==selected and bpy.context.view_layer.objects.active==active
     assert scene.camera==camera
     report['checks'].append('Real vector coverage, exact IDs and Graph metadata imported as cameras')

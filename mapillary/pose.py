@@ -2,6 +2,22 @@
 from dataclasses import dataclass
 import math
 
+CAMERA_HEIGHT = 2.  # Explicit visualization estimate above terrain / scene plane.
+
+
+def place_on_ground(camera_pose, ground_height=0., source='scene_plane'):
+    """Anchor a camera without interpreting provider altitude as ground height."""
+    ground_height = number(ground_height)
+    if ground_height is None:
+        raise ValueError('Invalid ground elevation')
+    x, y, _ = camera_pose.position
+    camera_pose.position = (x, y, ground_height + CAMERA_HEIGHT)
+    camera_pose.properties.update(
+        vertical_position_source=source, ground_elevation=ground_height,
+        camera_height=CAMERA_HEIGHT, camera_height_source='assumed',
+        height_offset_applied=False, pose_complete=False, pose_approximate=True)
+    return camera_pose
+
 
 def number(value):
     return (float(value) if isinstance(value, (int, float)) and not isinstance(value, bool)
@@ -82,11 +98,11 @@ def interpret(metadata, coverage, projection, height_offset=0.):
         if altitude is not None:
             props['altitude_source'] = key
             break
-    z = altitude-height_offset if altitude is not None else 0.
     if altitude is None:
-        props['altitude_source'] = 'missing_scene_plane'
+        props['altitude_source'] = 'missing'
     else:
         props['source_altitude'] = altitude
+        props['provider_altitude_scene_z'] = altitude-height_offset
     props.update(source_longitude=lon, source_latitude=lat, height_offset=height_offset,
                  vertical_datum='provider_unspecified; no geoid conversion')
 
@@ -127,9 +143,10 @@ def interpret(metadata, coverage, projection, height_offset=0.):
         r = ((c, 0., -s), (-s, 0., -c), (0., 1., 0.))
         props['source_heading'] = heading
     r = matrix_product(projected_basis(projection, lon, lat), r)
+    orientation_complete = bool(full_rotation and not mirrored and not props.get('exif_assumed'))
     props.update(exif_orientation=orientation, exif_mirrored=mirrored,
-                 pose_complete=bool(full_rotation and altitude is not None and not mirrored and not props.get('exif_assumed')),
-                 pose_approximate=bool(not full_rotation or altitude is None or mirrored or props.get('exif_assumed')))
+                 orientation_complete=orientation_complete,
+                 provider_pose_complete=bool(orientation_complete and altitude is not None))
 
     kind = metadata.get('camera_type') or ('spherical' if coverage.get('is_pano') else 'unknown')
     params = metadata.get('camera_parameters')
@@ -157,4 +174,4 @@ def interpret(metadata, coverage, projection, height_offset=0.):
         projection_status = 'proxy_mirrored_exif'
     props.update(camera_model=str(kind), camera_parameters=list(params), width=width, height=height,
                  upright_width=uw, upright_height=uh, projection_status=projection_status)
-    return Pose((x, y, z), r, props, lens, sensor_height, camera_type)
+    return place_on_ground(Pose((x, y, 0.), r, props, lens, sensor_height, camera_type))

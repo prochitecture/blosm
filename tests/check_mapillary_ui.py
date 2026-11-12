@@ -175,6 +175,35 @@ def scenario():
     checks.append('progressive completion: grouped Undo/Redo; no download restart')
 
     clear()
+    terrain_mesh=bpy.data.meshes.new('UI terrain surface')
+    terrain_mesh.from_pydata([(-100,-100,0),(100,-100,0),(100,100,0),(-100,100,0)],[],[(0,1,2,3)])
+    terrain=bpy.data.objects.new('UI terrain surface',terrain_mesh)
+    bpy.context.scene.collection.objects.link(terrain)
+    terrain.location.z=7.
+    settings().blosm.terrainObject=terrain.name
+    bpy.context.view_layer.update()
+    bpy.ops.ed.undo_push(message='Terrain fixture setup')
+    for progressive in (False,True):
+        begin(port,progressive=progressive)
+        if progressive: yield from wait_done()
+        else: yield
+        assert count()==96 and all(abs(o.location.z-9.)<1e-5
+            for o in bpy.context.scene.objects if 'mapillary_image_id' in o)
+        yield from history('undo')
+        assert count()==0 and bpy.context.scene.objects.get('UI terrain surface') is not None
+        yield from history('redo')
+        assert count()==96 and all(abs(o.location.z-9.)<1e-5
+            for o in bpy.context.scene.objects if 'mapillary_image_id' in o)
+        terrain=bpy.context.scene.objects['UI terrain surface']
+        assert terrain.location.z==7. and all(v.co.z==0 for v in terrain.data.vertices)
+        clear()
+    terrain_mesh=terrain.data
+    bpy.data.objects.remove(terrain,do_unlink=True)
+    bpy.data.meshes.remove(terrain_mesh)
+    settings().blosm.terrainObject=''
+    checks.append('terrain-relative blocking/progressive placement and Undo/Redo preserve terrain')
+
+    clear()
     gate.unlink(missing_ok=True)
     begin(port)
     while not count(): yield

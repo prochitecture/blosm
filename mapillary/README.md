@@ -28,6 +28,7 @@ destination collection stops with an error; renaming it preserves its identity.
 - `tiles.py`: zoom-14 tile enumeration, cooperative protobuf/MVT point decoding,
   exact IDs and conversion of tile-local geometry to geographic coordinates.
 - `pose.py`: pure-Python pose, projection-basis and camera-intrinsics conversion.
+- `placement.py`: non-destructive evaluated-terrain sampling on Blender's main thread.
 - `progressive.py`: discovery producer, metadata batches and cooperative camera
   consumer using production `Job`, `Download`, `Drain`, `Controller` and
   `DownloadTransport`. Both modes share this processing path.
@@ -120,18 +121,37 @@ Prefer valid `computed_geometry`, then original `geometry`, then coverage
 position. Source selection is recorded independently for position, altitude and
 orientation. Latitude/longitude use WGS84 degrees and Blosm's chosen projection.
 
-Prefer finite `computed_altitude`, then original `altitude`; zero/negative values
-are valid. Subtract a finite scene `height_offset` if present, otherwise the
-selected terrain object's `height_offset`, otherwise zero. Record offset/source;
-do not introduce another scene height datum or change an existing offset.
+Camera elevation follows the local scene ground, using an **estimated 2 m camera
+height**. Select the mesh with Blosm's existing **Terrain** object selector. Cast
+a vertical ray onto its evaluated world-space surface, including modifiers and
+object transforms, and place the camera 2 m above the uppermost intersection.
+Without a selected terrain, place cameras at **scene Z = 2 m**. If a ray misses
+the selected terrain, also use Z=2 m, record `scene_plane_outside_terrain`, and
+include the number of these fallbacks in the aggregate result.
 
-When altitude is absent, place the camera at **scene Z = 0** and mark
-`altitude_source=missing_scene_plane`, incomplete and approximate. This is a
-visualization fallback, not sea level or height above terrain. No terrain raycast,
-fixed eye height, geoid adjustment or assumed ellipsoid/MSL conversion is used.
-Original EXIF altitude is documented as above sea level, but datum compatibility
-with a terrain provider is not established. Every camera records
-`vertical_datum=provider_unspecified; no geoid conversion`.
+This policy does not convert provider altitude into height above terrain.
+Preserve finite `computed_altitude`, otherwise original `altitude`, as
+`source_altitude` with `altitude_source`; both original values also remain in the
+requested metadata JSON. Zero and negative source altitudes are valid data and
+are never changed to their absolute value. A scene/terrain `height_offset` is
+recorded for diagnostics, together with `provider_altitude_scene_z` when possible,
+but is **not subtracted from terrain surface coordinates** or the assumed height.
+`height_offset_applied=false` makes this explicit.
+
+Every camera records `vertical_position_source` (`terrain_surface`, `scene_plane`
+or `scene_plane_outside_terrain`), `ground_elevation`, `camera_height=2` and
+`camera_height_source=assumed`. This estimated height makes the resulting pose
+approximate, even when full computed orientation is available. A terrain below
+world Z=0 can legitimately produce a negative camera Z: the camera remains 2 m
+above that terrain. The scene's datum, terrain geometry/transforms and rendering
+camera are not changed. The selected terrain is captured by object identity;
+renaming it is supported, while deleting/unlinking it stops remaining import work.
+
+Original EXIF altitude is documented as above sea level; the primary API's
+computed-altitude description does not establish a compatible terrain datum.
+Every camera retains `vertical_datum=provider_unspecified; no geoid conversion`.
+This ground placement is a visualization estimate, unsuitable for recovering
+actual capture heights on bridges, elevated platforms or aerial images.
 
 ### Rotation and EXIF
 
@@ -167,9 +187,11 @@ upright camera is assumed; pitch and roll are unknown. Missing heading assumes
 north and records that assumption. These fallbacks are always approximate and
 already upright, so no second portrait correction is applied.
 
-`pose_complete` means full rotation, altitude and valid EXIF orientation are
-present without unsupported mirroring. It is not an accuracy or vertical-datum assertion. Optical projection
-limitations are recorded separately.
+`orientation_complete` means full rotation and valid, non-mirrored EXIF orientation
+are available. `provider_pose_complete` additionally requires provider altitude;
+it is not an accuracy or vertical-datum assertion. Ground-anchored cameras have
+`pose_complete=false` and `pose_approximate=true` because their height is estimated.
+Optical projection limitations are recorded separately.
 
 ### Intrinsics and projection limits
 
@@ -237,6 +259,26 @@ blocking/progressive ID and pose parity; changing provider data can affect parit
 The token filename is excluded by `mapillary/.gitignore`; the shared local Git
 info/exclude also protects it across local branches. Never stage or commit a
 token, even when collecting development fixtures or publishing a test scene.
+
+### Orientation diagnostics
+
+`tests/check_mapillary_upright.py --scene <blend> --artifacts <directory>` inspects
+actual saved camera world transforms against Mapillary's up/viewing conventions.
+It reports downward local +Y axes; it does not assume every source pose is upright.
+
+For a dense area, `tests/check_mapillary_area_pose.py --osm <fixture.osm>
+--token-file <local-token-file> --artifacts <directory>` checks the OSM file's
+bounds through the production discovery/metadata/pose pipeline without allocating
+thousands of camera objects. It uses the production request and ID limits,
+a ten-minute test deadline, and retains at most 32 downward metadata samples plus
+four upright references. This measures metadata processing rather than viewport,
+camera-object or undo overhead. Its `area_pose.json` can be replayed offline with
+`check_mapillary_upright.py --pose-report <area_pose.json> --artifacts <directory>`
+to create `sample_cameras.blend` through the real camera-creation path.
+
+Run these Blender scripts only in a separate factory-startup process, with
+autoexec disabled and all five isolated resource paths described above. Keep
+all generated reports/scenes under `artifacts/mapillary_import/`.
 
 ## Primary sources inspected
 

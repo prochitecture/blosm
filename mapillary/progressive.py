@@ -15,6 +15,7 @@ from ..downloads.transport import DownloadTransport
 from ..progressive.core import Job, Download, Drain
 from ..progressive.blender import notify_result, preserve_context
 from . import pose
+from .placement import GroundSurface
 from .tiles import MAX_TILE_BYTES, contains, identifier, image_points, tile_coordinates, validate_bounds
 
 TILE_URL = 'https://tiles.mapillary.com/maps/vtp/mly1_computed_public/2/{z}/{x}/{y}'
@@ -44,6 +45,8 @@ class MapillaryImport:
         self.tile_url, self.graph_url = tile_url, graph_url
         self.max_images = max_images
         self.collection = None
+        self.ground = GroundSurface(context)
+        self.terrain_misses = 0
         self.count = self.revision = self.approximate = 0
         self.errors = Counter()
         self.details = []
@@ -68,6 +71,7 @@ class MapillaryImport:
         self.job = Job(self.steps(), self.transport, validate=self.validate)
 
     def validate(self):
+        self.ground.validate()
         if self.collection is not None:
             try:
                 if self.collection in self.scene.collection.children_recursive:
@@ -218,6 +222,8 @@ class MapillaryImport:
     def commit(self, record, metadata, camera_pose):
         self.validate()
         started = time.monotonic()
+        ground_height, ground_source = self.ground.height(*camera_pose.position[:2])
+        pose.place_on_ground(camera_pose, ground_height, ground_source)
         camera = obj = None
         with preserve_context():
             try:
@@ -259,6 +265,7 @@ class MapillaryImport:
                     self.scene['lat'], self.scene['lon'] = self.origin
                 self.count += 1
                 self.approximate += int(camera_pose.properties['pose_approximate'])
+                self.terrain_misses += int(ground_source == 'scene_plane_outside_terrain')
                 self.revision += 1
             except Exception:
                 if obj is not None:
@@ -286,6 +293,8 @@ class MapillaryImport:
             return
         summary = '%s cameras imported (%s approximate); %s errors.' % (
             self.count, self.approximate, sum(self.errors.values()))
+        if self.terrain_misses:
+            summary += ' %s cameras outside terrain coverage placed above Z=0.' % self.terrain_misses
         if self.job.error:
             notify_result('ERROR', 'Mapillary import stopped: %s. %s' % (
                 redact_text(self.job.error, headers=self.headers), summary))

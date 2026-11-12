@@ -9,7 +9,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mapillary_test_support import fixture, mvt, field, BOUNDS, BASE_ID
 from mapillary.tiles import image_points, identifier, tile_coordinates, fields, MAX_TILE_BYTES
-from mapillary.pose import interpret, rotation_vector, matrix_product, transpose
+from mapillary.pose import interpret, place_on_ground, rotation_vector, matrix_product, transpose
 import importlib.util
 spec = importlib.util.spec_from_file_location('blosm_projection', Path(__file__).resolve().parents[1] / 'util/transverse_mercator.py')
 projection_module = importlib.util.module_from_spec(spec)
@@ -86,8 +86,12 @@ class PoseChecks(unittest.TestCase):
             inverse = rotation_vector(tuple(-v for v in vector))
             self.assertVector(self.vector(p.rotation, (0,0,-1)), self.vector(inverse,(0,0,1)))
             self.assertVector(self.vector(p.rotation, (0,1,0)), self.vector(inverse,(0,-1,0)))
-            self.assertEqual(p.position, (0.,0.,12.))
-            self.assertTrue(p.properties['pose_complete'])
+            self.assertEqual(p.position, (0.,0.,2.))
+            self.assertTrue(p.properties['provider_pose_complete'])
+            self.assertTrue(p.properties['orientation_complete'])
+            self.assertFalse(p.properties['pose_complete'])
+            self.assertTrue(p.properties['pose_approximate'])
+            self.assertEqual(p.properties['provider_altitude_scene_z'],12.)
 
     def test_exif_applied_once(self):
         # Transform.upVector() gives these explicit raw-camera up directions.
@@ -103,9 +107,9 @@ class PoseChecks(unittest.TestCase):
         p = self.pose(camera_type='perspective', camera_parameters=[.85,0,0], width=4000,height=3000,exif_orientation=6)
         self.assertAlmostEqual(p.lens, 40.8)
         self.assertAlmostEqual(p.sensor_height, 48.)
-        self.assertEqual(p.position[2], 0.)
-        self.assertEqual(p.properties['altitude_source'], 'missing_scene_plane')
-        self.assertEqual(self.pose(altitude=0).position[2], -20.)
+        self.assertEqual(p.position[2], 2.)
+        self.assertEqual(p.properties['altitude_source'], 'missing')
+        self.assertEqual(self.pose(altitude=0).position[2], 2.)
         self.assertEqual(self.pose(camera_type='spherical').camera_type,'PANO')
         self.assertIn('proxy', self.pose(camera_type='fisheye',camera_parameters=[1,0,0],width=10,height=10).properties['projection_status'])
         self.assertTrue(self.pose(computed_rotation=[0,0,0],exif_orientation=2).properties['exif_mirrored'])
@@ -114,8 +118,26 @@ class PoseChecks(unittest.TestCase):
     def test_projection_and_position_preference(self):
         p = self.pose(geometry={'coordinates':[24.9401,60.1701]}, computed_geometry={'coordinates':[24.9402,60.1702]}, altitude=30)
         expected = self.projection.fromGeographic(60.1702,24.9402)
-        self.assertVector(p.position,(expected[0],expected[1],10.))
+        self.assertVector(p.position,(expected[0],expected[1],2.))
         self.assertEqual(p.properties['position_source'],'computed')
+
+    def test_ground_placement_preserves_provider_altitude(self):
+        for altitude in (-100., 0., 300.):
+            p=self.pose(computed_altitude=altitude,altitude=80.)
+            self.assertEqual(p.position[2],2.)
+            self.assertEqual(p.properties['source_altitude'],altitude)
+            self.assertEqual(p.properties['provider_altitude_scene_z'],altitude-20.)
+            self.assertEqual(p.properties['camera_height_source'],'assumed')
+            rotation=p.rotation
+            place_on_ground(p,35.,'terrain_surface')
+            self.assertEqual(p.position[2],37.)
+            self.assertEqual(p.rotation,rotation)
+            self.assertEqual(p.properties['ground_elevation'],35.)
+            self.assertEqual(p.properties['vertical_position_source'],'terrain_surface')
+            self.assertFalse(p.properties['height_offset_applied'])
+        # Terrain itself may legitimately lie below the scene plane.
+        self.assertEqual(place_on_ground(self.pose(),-10.,'terrain_surface').position[2],-8.)
+        with self.assertRaises(ValueError): place_on_ground(self.pose(),float('nan'))
 
 
 class TileChecks(unittest.TestCase):

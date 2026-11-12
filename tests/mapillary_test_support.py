@@ -79,6 +79,7 @@ def fixture(count=96):
             entry['camera_parameters'] = []
         if i % 7 == 5:
             entry['computed_rotation'] = [0., 0., 0.]
+            entry['computed_altitude'] = -3.
         entries[identity] = entry
     return tile, mvt(points, tile, duplicate=True), entries
 

@@ -201,6 +201,76 @@ report/log are in `artifacts/mapillary_import/credentials/`; the token was not
 printed, persisted or committed. Existing live HTTP results above remain valid;
 this change selects the credential and does not alter the transport or poses.
 
+## Reported upside-down cameras, 2026-11-12
+
+Rechecked the saved real-data scene `live_ui/live_cameras.blend` in an isolated
+Blender 5.2 background process using `tests/check_mapillary_upright.py`. All 546
+cameras had positive world-Z components for their local +Y (up) axes: 526 had
+EXIF orientation 1 and 20 had orientation 3. The smallest up-Z component was
+0.877569. None was upside down in this dataset.
+
+The saved Blender world transforms, including the matrix-to-quaternion
+conversion, were compared with MapillaryJS `Transform.upVector()` and the
+inverse rotation's viewing direction. Maximum vertical-component differences
+were 1.20e-7 (up) and 3.33e-7 (forward). Comparing vertical components avoids
+using the adapter's grid-convergence calculation as its own reference. All 13
+standalone tests also passed, including portrait EXIF 6/8 and zero rotation.
+
+Evidence is in `artifacts/mapillary_import/upright/upright.json` and
+`upright/blender.log`. The pose implementation was not changed: this check
+does not reproduce the reported problem and does not establish correctness
+for an unidentified affected image or scene. It does not test alignment with
+terrain elevation. An affected image ID or scene is needed to investigate
+that specific import.
+
+## Ground-relative camera placement, 2026-11-12
+
+The user clarified that cameras below Z=0 were the reported problem, and requires
+terrain-relative placement when terrain is present, otherwise placement above
+Z=0. This supersedes the original absolute-altitude and missing-altitude policy.
+The old implementation used provider altitude minus the scene/terrain offset;
+live Karl Marx Allee metadata includes near-zero and negative computed altitudes.
+
+New imports use the evaluated terrain surface plus an explicitly estimated 2 m
+camera height, or Z=2 m without terrain. Original/computed altitude values remain
+metadata; they are not interpreted as above-ground heights. All resulting camera
+poses are marked approximate. Source rotations and geographic X/Y are unchanged.
+Out-of-coverage terrain rays fall back to the scene plane with explicit provenance
+and one aggregate count. Renaming the terrain is supported; deleting/unlinking it
+stops work and retains completed cameras. Terrain data/transforms are not mutated.
+
+The 14 standalone tests and 31 background Blender checks passed. The latter
+include 5,000 synthetic cameras, negative provider altitudes, transformed/sloping
+terrain, evaluated Solidify geometry, terrain below Z=0, missed rays, terrain
+renaming/deletion, cancellation, destination deletion and blocking/stepped parity.
+The final 5,000-camera no-terrain run took 9.25 s with a maximum job turn of
+13.36 ms. A second 5,000-camera import over a 10,000-quad terrain took 17.76 s,
+with a maximum job turn of 61.09 ms. Terrain ray misses were zero and geometry
+was unchanged. These background fixtures have no GUI undo overhead; elapsed
+times vary with other local work and are not controlled speed benchmarks.
+
+All ten real-timer UI scenarios passed, including terrain-relative blocking and
+progressive imports with grouped Undo/Redo, terrain preservation, user edits,
+cancellation, destination deletion, pause/resume, simulated HTTP failure and
+addon disable. The 1,000-camera scale phase took 4.66 s, with Global Undo enabled,
+123 heartbeats, maximum active-import heartbeat gap 53.68 ms and maximum job
+turn 9.27 ms. Evidence is in `ground_placement_ui/ui.json` and its logs. This is
+not a qualification of importing the full dense area with tens of thousands of
+cameras and undo history.
+
+A fresh live Karl Marx Allee subarea test imported 750 cameras in each mode,
+including 46 with negative provider altitudes. All camera Z values were exactly
+2 m, with matching blocking/stepped IDs and poses, no import errors, and no
+credential present in persisted metadata. Reports and the corrected scene are
+in `artifacts/mapillary_import/live_ground_placement/`; background synthetic
+evidence is in `ground_placement/`.
+
+The earlier full-OSM-bounds metadata-only investigation reached 39,483 entries
+before its explicit ten-minute diagnostic deadline. It was cancelled and is
+not a complete-area count or a camera/undo scale test. Its retained bounded
+samples and sanitized report are in `karl_marx_allee_full/`. The user's issue is
+negative vertical placement, so no blanket camera rotation correction was made.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client
@@ -208,11 +278,14 @@ this change selects the credential and does not alter the transport or poses.
   current API documentation was login-gated during initial implementation.
 - Camera frames/poses and metadata are imported; photos, image viewers, accurate
   fisheye projection and radial-distortion rendering are subsequent work.
-- EXIF mirrors are approximate. Missing altitude uses the explicitly marked
-  scene-plane fallback. Cross-provider vertical-datum alignment is not solved.
+- EXIF mirrors are approximate. Camera heights are estimated at 2 m above terrain
+  or the scene plane; actual capture heights and cross-provider vertical-datum
+  alignment are not recovered from provider altitude.
 - Main-thread work is cooperative and size-bounded, not hard-real-time. An
   individual Blender call, small JSON parse or undo checkpoint can exceed the
-  nominal eight-millisecond job budget.
+  nominal eight-millisecond job budget. The first terrain ray may build Blender's
+  cached mesh acceleration structure; very large evaluated terrain meshes can
+  cause a longer initial camera turn.
 - Decoder support intentionally targets documented single-point image features;
   malformed/oversized resources produce aggregate errors/incomplete coverage.
   Dateline-crossing or polar extents and datasets beyond stated bounds are not

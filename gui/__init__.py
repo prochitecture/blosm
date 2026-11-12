@@ -474,7 +474,8 @@ class BLOSM_PT_Settings(bpy.types.Panel):
         elif dataType == "mapillary":
             self.layout.label(text="Import cameras and metadata from Mapillary")
             self.layout.label(text="Set your client access token in Blosm preferences")
-            self.layout.label(text="Missing altitude: scene Z = 0 (marked approximate)")
+            self.layout.box().prop_search(addon, "terrainObject", context.scene, "objects")
+            self.layout.label(text="Camera height: 2 m above terrain or Z=0 (estimated)")
     
     def drawOsm(self, context):
         layout = self.layout
