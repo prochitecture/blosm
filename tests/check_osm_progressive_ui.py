@@ -88,14 +88,18 @@ def scenario():
     prefs = bpy.context.preferences.addons[PACKAGE].preferences
     saved_directory = prefs.dataDir
     try:
-        for failure in ('data_directory', 'osm_file', 'setup_script'):
+        for failure in ('data_directory', 'osm_file', 'setup_script', 'corrupt_osm'):
             settings = setup('rectangle')
             if failure == 'data_directory':
                 prefs.dataDir = ''
             elif failure == 'osm_file':
                 settings.osmFilepath = str(args.artifacts/'missing_original.osm')
-            else:
+            elif failure == 'setup_script':
                 settings.setupScript = str(args.artifacts/'missing_original_setup.py')
+            else:
+                corrupt = args.artifacts/'corrupt_original.osm'
+                corrupt.write_text('<osm><node')
+                settings.osmFilepath = str(corrupt)
             before = len(popups)
             start()
             while driver.active:
@@ -105,8 +109,14 @@ def scenario():
             assert len(popups) == before+1
             assert popups[-1] == ('ERROR', result['message'])
             assert result['errors'][0] in popups[-1][1]
+            if failure == 'corrupt_osm':
+                assert not result['preliminary_failure']
+                assert 'OSM import failed: 0 completed,' in popups[-1][1]
+            else:
+                assert result['preliminary_failure']
+                assert popups[-1][1] == result['errors'][0]
             prefs.dataDir = saved_directory
-        checks.append('original data-folder, OSM-file and setup errors appear in one progressive result popup')
+        checks.append('preflight errors show only the original message; parsing failures retain the import summary')
     finally:
         prefs.dataDir = saved_directory
 

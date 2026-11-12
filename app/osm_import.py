@@ -31,6 +31,8 @@ last_result = None
 
 def result_message(result):
     """Keep original Blosm diagnostics visible in both import drivers."""
+    if result.get('preliminary_failure') and result['errors']:
+        return result['errors'][0]
     message = 'OSM import %s: %s completed, %s errors.' % (
         result['outcome'], result['committed'], len(result['errors']))
     if result['errors']:
@@ -104,6 +106,7 @@ class OsmImport:
         self.destination = None
         self.osm = None
         self.initialized = self.finished = self.in_step = False
+        self.preflight_complete = False
         self.owns_app = False
         self.started = time.monotonic()
         self.max_callback = 0.
@@ -284,6 +287,17 @@ class OsmImport:
         self.initialized = True
         if app.mode is app.twoD and app.gnSetup2d != '-':
             self.gn_group = bpy.data.node_groups[app.gnSetup2d]
+        # Reject missing configuration/input before acquisition and parsing.
+        # These failures retain the original standalone Blosm message.
+        setup_path = self.settings['setupScript']
+        if setup_path:
+            setup_path = os.path.realpath(bpy.path.abspath(setup_path))
+            if not os.path.isfile(setup_path):
+                raise RuntimeError('The setup script does not exist: '+setup_path)
+        if app.osmSource != 'server':
+            with open(app.osmFilepath, 'rb'):
+                pass
+        self.preflight_complete = True
         yield YieldToUI()
         if app.osmSource == 'server':
             self.phase = 'Downloading OSM'
@@ -298,12 +312,8 @@ class OsmImport:
             yield from self._download(Request(app.osmServer + app.osmUrlPath % (
                 app.minLon, app.minLat, app.maxLon, app.maxLat)), path)
         self.osm = osm = Osm(app)
-        setup_path = self.settings['setupScript']
         if setup_path:
             from ..util.setup_script import load_setup_script
-            setup_path = os.path.realpath(bpy.path.abspath(setup_path))
-            if not os.path.isfile(setup_path):
-                raise RuntimeError('The setup script does not exist: '+setup_path)
             setup = load_setup_script(setup_path)
         elif app.mode is app.realistic:
             if app.enableExperimentalFeatures:
@@ -485,6 +495,7 @@ class OsmImport:
                    'partial' if self.errors and self.committed_units else
                    'failed' if self.errors else 'success')
         last_result = dict(outcome=outcome, committed=self.committed_units, errors=list(self.errors),
+                           preliminary_failure=outcome == 'failed' and not self.preflight_complete,
                            warnings=list(self.warnings), first_result_seconds=self.first_result,
                            max_callback_seconds=self.max_callback, elapsed_seconds=time.monotonic()-self.started)
         for error in self.errors:

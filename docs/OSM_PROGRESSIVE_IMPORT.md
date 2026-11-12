@@ -52,7 +52,10 @@ Edit Mode and scene/view-layer switching pause commits. File loading, disabling
 the addon and closing the owning window stop the job. There is one terminal
 result report, including cancellation and retained partial results. Failure
 messages include the original Blosm error explanation in both the progressive
-popup/operator report and the blocking report. Another
+popup/operator report and the blocking report. Missing required folders, input
+files or setup scripts show only the original message, without an import-results
+summary. Failures after preflight (including parsing failures before the first
+object) retain the summary and original explanation. Another
 Blosm import or legacy modal imagery import cannot replace the active app state.
 
 ## Acquisition and settings

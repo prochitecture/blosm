@@ -168,15 +168,19 @@ class OsmProgressiveChecks(unittest.TestCase):
     def test_original_errors_reach_both_import_reports(self):
         prefs = bpy.context.preferences.addons[PACKAGE].preferences
         saved_directory = prefs.dataDir
-        for failure in ('data_directory', 'osm_file', 'setup_script'):
+        for failure in ('data_directory', 'osm_file', 'setup_script', 'corrupt_osm'):
             with self.subTest(failure=failure):
                 settings = self.prepare()
                 if failure == 'data_directory':
                     prefs.dataDir = ''
                 elif failure == 'osm_file':
                     settings.osmFilepath = str(args.artifacts/'missing_original.osm')
-                else:
+                elif failure == 'setup_script':
                     settings.setupScript = str(args.artifacts/'missing_original_setup.py')
+                else:
+                    corrupt = args.artifacts/'corrupt_original.osm'
+                    corrupt.write_text('<osm><node')
+                    settings.osmFilepath = str(corrupt)
                 try:
                     with self.assertRaises(RuntimeError) as blocking:
                         bpy.ops.blosm.import_data()
@@ -192,6 +196,13 @@ class OsmProgressiveChecks(unittest.TestCase):
                     notify.assert_called_once_with('ERROR', blocking_message)
                     self.assertEqual(result['message'], blocking_message)
                     self.assertIn(original, result['message'])
+                    if failure == 'corrupt_osm':
+                        self.assertFalse(result['preliminary_failure'])
+                        self.assertIn('OSM import failed: 0 completed, 1 errors.', result['message'])
+                    else:
+                        self.assertTrue(result['preliminary_failure'])
+                        self.assertEqual(result['message'], original)
+                        self.assertNotIn('OSM import failed:', result['message'])
                     self.assertIsNone(session.finish())
                 finally:
                     prefs.dataDir = saved_directory
