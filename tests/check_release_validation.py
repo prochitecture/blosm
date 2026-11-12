@@ -51,16 +51,19 @@ class ValidationChecks(unittest.TestCase):
         fixture = Path(settings.osmFilepath).read_bytes()
         settings.osmSource = 'server'
         destinations = []
-        def download(directory, *bounds):
-            destination = Path(directory) / 'download.osm'
+        def download(session, request, destination):
+            destination = Path(destination)
             destinations.append(destination)
             destination.write_bytes(fixture)
-            addon.blenderApp.app.osmFilepath = str(destination)
+            yield None
         try:
             prefs.dataDir = str(folder.resolve())
-            with patch.object(addon.blenderApp.app, 'downloadOsmFile', side_effect=download):
+            session_module = importlib.import_module(PACKAGE + '.app.osm_import')
+            with patch.object(session_module.OsmImport, '_download', download):
                 self.assertEqual(bpy.ops.blosm.import_data(), {'FINISHED'})
-            self.assertEqual(destinations, [folder / 'osm' / 'download.osm'])
+            self.assertEqual(len(destinations), 1)
+            self.assertEqual(destinations[0].parent, folder / 'osm')
+            self.assertTrue(destinations[0].is_file())
         finally:
             prefs.dataDir = old
 

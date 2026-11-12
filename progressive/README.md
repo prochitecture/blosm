@@ -1,5 +1,9 @@
 # Progressive importing
 
+OpenStreetMap now uses the same controller and scheduler. See
+[OSM progressive import](../docs/OSM_PROGRESSIVE_IMPORT.md) for supported modes,
+separate-object behavior, provider hooks, tests and the `buildings_gn` handoff.
+
 **Progressive import** is enabled by default for 3D Tiles. Its checkbox appears
 in the import box directly above the data-type selector. Disable it to use
 blocking mode. Progressive mode keeps the viewport responsive between tile imports.
@@ -105,12 +109,21 @@ unused mesh/material/image data are removed. Failures remain console details;
 completion emits one aggregate UI report, rather than an error popup per tile.
 
 The [Mapillary camera adapter](../mapillary/README.md) uses cooperative consumers
-for bounded decoding and camera creation. Future OSM and bitmap imagery adapters
-can supply their own generators,
+for bounded decoding and camera creation. OSM and future bitmap imagery adapters can supply their own generators,
 transports and scene-commit steps. They do not need tile URLs, bounding volumes or
 glTF concepts in the shared scheduler. Large OSM parsing should use a dedicated
 helper task protocol; it is not automatically made non-blocking by this scheduler.
-The concurrent downloader is shared; additional data-type integrations are future work.
+The concurrent downloader is shared. OSM uses lazy GET/read-only POST transport
+and incremental XML parsing; local imports with cached relation members do not
+launch a network helper. Bitmap imagery integration remains separate work.
+
+`YieldToUI` explicitly ends a callback, unlike the soft `None` checkpoint.
+`LazyTransport` avoids starting a downloader for CPU-only producers.
+`progressive.ownership.Ownership` records owned IDs across turns. Its legacy
+allocation `capture()` context must contain only synchronous work; never put a
+generator yield inside that context. Pending ID tags prevent user undo/save
+snapshots from restoring an incomplete publication after cancellation.
+
 
 ## Validation
 

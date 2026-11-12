@@ -90,6 +90,8 @@ their original JSON reports. Both exit code and report status are checked.
 | `progressive` | Stepped import, lifecycle/cancellation and error handling |
 | `concurrent` | Blocking/progressive and serial/concurrent parity, **joining on/off**, retries and partial failures |
 | `osm` | All 12 core extracts, 2D/simple 3D, **Single object on/off**, world geometry, road/rail curves, disabled layers, repeated import and save/reopen |
+| `osm_progressive` | Cooperative OSM sessions, real building/road parity, separate objects, per-object GN attributes, cancellation, owned bulk commits, RNG isolation; realistic forests and uncached asynchronous export with `--assets` |
+| `osm_progressive_ui` | Explicit GUI suite: actual OSM operator/timers, incremental visibility, grouped Undo/Redo, user edits, pause, cancellation, target deletion, staged bake history and disable |
 | `roofs` | Independent rectangular controls for 12 supported roof shapes plus unknown-shape fallback, both grouping states, explicit height and valid faces |
 | `gpx` | Real track, curve/mesh, segments/edges, elevations, geographic control points, existing origin, terrain offsets/projection and curve width |
 | `geometry_nodes` | Socket types, zero/false/empty values, instance isolation, attributes, discovery/errors and evaluated geometry |

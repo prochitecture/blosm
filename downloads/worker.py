@@ -284,19 +284,22 @@ def perform(job, max_bytes, gate, deadline, attempts):
     origin = (parsed.scheme.lower(), parsed.hostname.lower(), parsed.port or (443 if parsed.scheme == 'https' else 80))
     headers = {'User-Agent': 'Blosm', **job['headers']}
     opener = make_opener(deadline, job['verify_tls'])
-    for attempt in range(3):
+    max_attempts = 3 if job.get('method', 'GET') == 'GET' or job.get('retry_safe', False) else 1
+    for attempt in range(max_attempts):
         gate.acquire(origin, job.get('auth_scope', ''), deadline)
         delay, shared = 0., False
         try:
             attempts[0] = attempt + 1
             try:
-                with opener.open(request.Request(url, headers=headers), timeout=min(30., deadline.check())) as response:
+                with opener.open(request.Request(url, headers=headers,
+                        data=job.get('body', '').encode('utf-8') if job.get('method') == 'POST' else None,
+                        method=job.get('method', 'GET')), timeout=min(30., deadline.check())) as response:
                     content = read_body(response, max_bytes, deadline)
                 break
             except Failure as exc:
                 # Restart the complete GET; never append a new attempt to partial
                 # bytes. The same deadline and three-attempt budget still apply.
-                if exc.detail['code'] != 'incomplete_response' or attempt == 2:
+                if exc.detail['code'] != 'incomplete_response' or attempt == max_attempts - 1:
                     raise
                 delay = retry_delay(exc, attempt)
             except error.HTTPError as exc:
@@ -315,7 +318,7 @@ def perform(job, max_bytes, gate, deadline, attempts):
                 denied = auth_failure(job, status, body)
                 if denied:
                     gate.deny(origin, job['auth_scope'])
-                if status not in (429, 500, 502, 503, 504) or attempt == 2 or denied:
+                if status not in (429, 500, 502, 503, 504) or attempt == max_attempts - 1 or denied:
                     raise Failure('http_error', 'HTTP %s%s' % (status, body_error), status=status,
                                   headers={'Retry-After': exc.headers.get('Retry-After', '')},
                                   body=body, auth_failed=denied)
@@ -324,7 +327,7 @@ def perform(job, max_bytes, gate, deadline, attempts):
                 reason = exc.reason if isinstance(exc, error.URLError) else exc
                 if isinstance(reason, ssl.SSLCertVerificationError):
                     raise Failure('tls_error', 'TLS certificate verification failed') from None
-                if attempt == 2:
+                if attempt == max_attempts - 1:
                     code = 'timeout' if isinstance(reason, TimeoutError) else 'connection_error'
                     raise Failure(code, 'Network operation timed out' if code == 'timeout' else 'Connection failed') from None
                 delay = retry_delay(exc, attempt)

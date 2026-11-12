@@ -97,6 +97,8 @@ class DownloadTransport:
             raise RuntimeError('Download capacity exhausted')
         if isinstance(request, str):
             request = Request(request)
+        if request.method not in ('GET', 'POST') or not isinstance(request.body, str):
+            raise ValueError('Downloads support GET or POST with a text body')
         if not math.isfinite(request.timeout) or not 0 < request.timeout <= 3600:
             raise ValueError('Download timeout must be between 0 and 3600 seconds')
         identity = self.next_id

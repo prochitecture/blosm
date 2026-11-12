@@ -412,7 +412,7 @@ class BLOSM_PT_Extent(bpy.types.Panel):
             split.split(factor=0.67).prop(addon, "minLat")
         
         box = layout.box()
-        if addon.dataType in ('3d-tiles', 'mapillary'):
+        if addon.dataType in ('3d-tiles', 'osm', 'mapillary'):
             box.prop(addon, 'progressiveImport')
         row = box.row(align=True)
         row.prop(addon, "dataType", text="")
@@ -512,7 +512,8 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             if addon.forests:
                 box.prop(addon, "treeDensity")
             
-            layout.box().prop(addon, "singleObject")
+            if not addon.progressiveImport:
+                layout.box().prop(addon, "singleObject")
             
             layout.box().prop(addon, "relativeToInitialImport")
             
@@ -550,9 +551,10 @@ class BLOSM_PT_Settings(bpy.types.Panel):
             
             #box.prop(addon, "straightAngleThreshold")
             
-            layout.box().prop(addon, "singleObject")
+            if not addon.progressiveImport:
+                layout.box().prop(addon, "singleObject")
             
-            if addon.mode == "2D" and addon.singleObject:
+            if addon.mode == "2D" and (addon.singleObject or addon.progressiveImport):
                 box = layout.box()
                 row = box.row()
                 row.label(text="[Geometry Nodes]:")
@@ -1082,7 +1084,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
     progressiveImport: bpy.props.BoolProperty(
         name = "Progressive import",
-        description = "Show imported data progressively and keep the viewport interactive between scene updates",
+        description = "Show imported content progressively and allow viewport navigation between work steps. Individual generation and evaluation calls may briefly pause the viewport",
         default = True
     )
 

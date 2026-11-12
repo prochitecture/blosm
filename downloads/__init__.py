@@ -15,6 +15,9 @@ class Request:
     timeout: float = 90.
     auth_scope: str = ''
     auth_error_reasons: tuple = ()
+    method: str = 'GET'
+    body: str = ''
+    retry_safe: bool = False
 
 
 class DownloadError(RuntimeError):

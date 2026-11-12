@@ -19,6 +19,11 @@ Python use remains independent of Blender.
   an HGT gzip file, can be passed unchanged to its consumer.
   `timeout` is the helper-side resource deadline in seconds (up to 3600).
   The optional authentication policy is explained below.
+- `method='GET', body='', retry_safe=False` are optional request fields. `POST`
+  accepts a UTF-8 text body, within the existing 64 KiB IPC request-frame limit.
+  GET retains its retry behavior. POST uses one attempt unless the caller
+  explicitly identifies it as retry-safe; OSM missing-member Overpass queries
+  are read-only and opt in. Arbitrary non-idempotent POST operations must not.
 - `DownloadTransport(max_requests=4, max_bytes=256 MiB, max_buffer_bytes=None)`
   starts the helper. `submit(request)` returns a monotonically increasing identity.
   `poll()` returns `None` or `(identity, content, exception)` in completion order.

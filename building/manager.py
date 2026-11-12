@@ -77,8 +77,16 @@ class BaseBuildingManager:
             action.do(self)
     
     def render(self):
+        for _ in self.render_steps():
+            pass
+
+    def render_steps(self, session=None):
         for building in self.buildings:
-            self.renderer.render(building, self.data)
+            if session:
+                yield from session.unit(lambda building=building: self.renderer.render(building, self.data))
+            else:
+                self.renderer.render(building, self.data)
+                yield None
     
     def addAction(self, action):
         action.app = self.app
@@ -93,7 +101,12 @@ class BuildingManager(BaseBuildingManager, Manager):
         BaseBuildingManager.__init__(self, osm, app, buildingParts, layerClass)
     
     def process(self):
+        for _ in self.process_steps():
+            pass
+
+    def process_steps(self, session=None):
         BaseBuildingManager.process(self)
+        yield None
         # create a Python set for each OSM node to store indices of the entries from <self.buildings>,
         # where instances of the wrapper class <building.manager.Building> are stored
         buildings = self.buildings
@@ -107,6 +120,7 @@ class BuildingManager(BaseBuildingManager, Manager):
         # create a BHV tree on demand only
         bvhTree = None
         for part in self.parts:
+            yield None
             if part.o:
                 # the outline for <part> is set in an OSM relation of the type 'building'
                 osmId, osmType = part.o

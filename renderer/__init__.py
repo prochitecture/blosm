@@ -145,6 +145,11 @@ class Renderer:
         if not target.name in join:
             join[target.name] = []
         join[target.name].append(o)
+
+    @classmethod
+    def finishUnit(self):
+        """Finish local auxiliary roof joins before exposing a building."""
+        self.join()
     
     @classmethod
     def createBlenderObject(self, name, location, collection=None, parent=None):
