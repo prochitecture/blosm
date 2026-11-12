@@ -165,24 +165,31 @@ class BlenderApp(BaseApp):
                 _setAssetsDirStr
             )
     
-    def initOsm(self, op, context, defer_download=False, settings=None, preferences=None):
-        super().initOsm()
-        
+    def validateOsmDirectories(self, context, settings=None, preferences=None):
+        """Check required directories without allocating Blender data."""
         addonName = self.addonName
         addon = settings if settings is not None else context.scene.blosm
         prefs = preferences if preferences is not None else context.preferences.addons
         
         self.setDataDir(context, self.basePath, addonName, required=True, preferences=prefs)
 
-        if app.has(defs.Keys.mode3d) and self.mode != "2D":
+        if app.has(defs.Keys.mode3d) and addon.mode != "2D":
             self.mode = BaseApp.realistic\
-                if app.has(defs.Keys.mode3dRealistic) and self.mode == "3Drealistic"\
+                if app.has(defs.Keys.mode3dRealistic) and addon.mode == "3Drealistic"\
                 else BaseApp.simple
         else:
             self.mode = BaseApp.twoD
         
         if self.mode is BaseApp.realistic:
-            assetsDir = self.validateAssetsDirContent(context, settings=settings, preferences=prefs)
+            return self.validateAssetsDirContent(context, settings=settings, preferences=prefs)
+
+    def initOsm(self, op, context, defer_download=False, settings=None, preferences=None):
+        super().initOsm()
+
+        addonName = self.addonName
+        addon = settings if settings is not None else context.scene.blosm
+        prefs = preferences if preferences is not None else context.preferences.addons
+        assetsDir = self.validateOsmDirectories(context, settings=settings, preferences=prefs)
         
         basePath = self.basePath
         self.op = op
@@ -258,7 +265,7 @@ class BlenderApp(BaseApp):
                 _setAssetsDirStr
             )
         self.bldgMaterialsFilepath = bldgMaterialsFilepath
-        if self.forests:
+        if (settings if settings is not None else self).forests:
             vegetationFilepath = os.path.join(assetsDir, self.vegetationFileName)
             if not os.path.isfile(vegetationFilepath):
                 raise Exception(

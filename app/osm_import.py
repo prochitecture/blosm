@@ -274,7 +274,25 @@ class OsmImport:
             if partial and os.path.isfile(partial):
                 os.unlink(partial)
 
+    def check_prerequisites(self):
+        app.validateOsmDirectories(bpy.context, settings=SimpleNamespace(**self.settings),
+                                   preferences=self.preferences)
+        setup_path = self.settings['setupScript']
+        if setup_path:
+            setup_path = os.path.realpath(bpy.path.abspath(setup_path))
+            if not os.path.isfile(setup_path):
+                raise RuntimeError('The setup script does not exist: '+setup_path)
+        if self.settings['osmSource'] != 'server':
+            path = os.path.realpath(bpy.path.abspath(self.settings['osmFilepath']))
+            with open(path, 'rb'):
+                pass
+        return setup_path
+
     def steps(self):
+        # The operator runs this first turn before activating the progress UI.
+        # Keep Blender allocation, downloading and parsing after this boundary.
+        setup_path = self.check_prerequisites()
+        yield YieldToUI()
         app.osm_session = self
         self.owns_app = True
         app.projection = None
@@ -287,16 +305,6 @@ class OsmImport:
         self.initialized = True
         if app.mode is app.twoD and app.gnSetup2d != '-':
             self.gn_group = bpy.data.node_groups[app.gnSetup2d]
-        # Reject missing configuration/input before acquisition and parsing.
-        # These failures retain the original standalone Blosm message.
-        setup_path = self.settings['setupScript']
-        if setup_path:
-            setup_path = os.path.realpath(bpy.path.abspath(setup_path))
-            if not os.path.isfile(setup_path):
-                raise RuntimeError('The setup script does not exist: '+setup_path)
-        if app.osmSource != 'server':
-            with open(app.osmFilepath, 'rb'):
-                pass
         self.preflight_complete = True
         yield YieldToUI()
         if app.osmSource == 'server':
@@ -518,6 +526,11 @@ def import_osm(operator, context):
         operator.setObjectMode(context)
     session = OsmImport(context)
     if requested:
+        session.job.step(max_steps=1)
+        if session.job.done:
+            result = session.finish(silent=True)
+            operator.report({'ERROR'}, result['message'])
+            return {'CANCELLED'}
         try:
             driver.start(session, context)
         except Exception as exc:
