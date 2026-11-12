@@ -182,6 +182,25 @@ Evidence under `artifacts/mapillary_import`:
 All live JSON/log outputs were scanned for the exact token without printing it;
 the scan passed. Persisted scene properties were checked before scene saving.
 
+## Session credential fallback, 2026-11-12
+
+The import operator now prefers the current preferences token and otherwise uses
+`mapillary/mapillary_token.txt` alongside the adapter. The fallback is read lazily
+at most once per Blender session, including missing/empty/unreadable outcomes.
+Later preference changes override it immediately. File changes after the first
+lookup require restarting Blender. No credential is copied into preferences,
+scene data or reports.
+
+All 13 standalone tests passed, including preference priority, lazy read counts,
+cached missing/empty files, cached unreadable-file diagnostics and overrides.
+`tests/check_mapillary_credentials.py` also passed in factory-startup isolated
+Blender 5.2 with the real local token file and HTTP disabled. It exercised the
+actual import operator with a capture-only adapter, checking that five imports
+across preference/fallback changes accessed the file exactly once. Its sanitized
+report/log are in `artifacts/mapillary_import/credentials/`; the token was not
+printed, persisted or committed. Existing live HTTP results above remain valid;
+this change selects the credential and does not alter the transport or poses.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client

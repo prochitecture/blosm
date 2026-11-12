@@ -469,6 +469,7 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
     
     def importMapillary(self, context):
         from .mapillary.progressive import MapillaryImport
+        from .mapillary.credentials import get_token
         from .downloads.diagnostics import redact_text
         settings = context.scene.blosm
         progressive = settings.progressiveImport and not settings.commandLineMode
@@ -476,8 +477,9 @@ class BLOSM_OT_ImportData(bpy.types.Operator):
             self.report({'ERROR'}, 'Mapillary import requires Object Mode. Disable Progressive import for background jobs.')
             return {'CANCELLED'}
         prefs = context.preferences.addons.get(blenderApp.app.addonName)
-        token = prefs.preferences.mapillaryAccessToken if prefs else ''
+        token = ''
         try:
+            token = get_token(prefs.preferences.mapillaryAccessToken if prefs else '')
             lat, lon, set_origin = self.getCenterLatLon(context)
             blenderApp.app.setProjection(lat, lon)
             task = MapillaryImport(context,

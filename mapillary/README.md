@@ -6,6 +6,16 @@ client access token** in Blosm preferences, then import. Use the existing
 synchronous result. Command-line mode blocks. Progressive mode requires an
 interactive window and Object Mode. No photograph or thumbnail is downloaded.
 
+If the preference token is empty, the importer falls back to
+`mapillary/mapillary_token.txt` next to the installed adapter. In the main
+development checkout this is
+`C:/dev/workspace/blosm/mapillary/mapillary_token.txt`. The file is read lazily,
+at most once per Blender session, and its trimmed contents are cached in memory.
+Missing, empty and unreadable outcomes are cached too. Restart Blender to use an
+edited/new file after its first lookup. A nonempty preference token takes priority
+immediately and does not read the file; clearing preferences reuses the cached
+fallback. File credentials are never copied into preferences or scene data.
+
 Each image is represented by an actual Blender camera in a dedicated collection.
 The scene's rendering camera is not changed. Selection, active object, active
 layer collection and cursor are preserved. The shared controller provides pause,

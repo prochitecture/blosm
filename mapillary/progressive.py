@@ -34,7 +34,7 @@ class MapillaryImport:
                  tile_url=TILE_URL, graph_url=GRAPH_URL, max_images=MAX_IMAGES):
         validate_bounds(bounds)
         if not token or any(c.isspace() for c in token):
-            raise ValueError('Set a valid Mapillary client access token in Blosm preferences')
+            raise ValueError('Set a valid Mapillary client access token in Blosm preferences or mapillary/mapillary_token.txt')
         self.scene, self.view_layer = context.scene, context.view_layer
         self.bounds, self.projection, self.origin = tuple(bounds), projection, tuple(origin)
         self.set_origin = set_origin

@@ -16,6 +16,44 @@ projection_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(projection_module)
 TransverseMercator = projection_module.TransverseMercator
 from progressive.core import Job, Download, Drain
+from unittest.mock import patch
+from mapillary import credentials
+
+
+class CredentialChecks(unittest.TestCase):
+    def setUp(self):
+        cache = patch.multiple(credentials, _file_loaded=False, _file_token='', _file_error=None)
+        cache.start()
+        self.addCleanup(cache.stop)
+
+    def test_preference_priority_and_lazy_read_once(self):
+        with patch.object(Path, 'read_text', return_value='  fixture-file-token\n') as read:
+            self.assertEqual(credentials.get_token(' preference-token '), 'preference-token')
+            read.assert_not_called()
+            self.assertEqual(credentials.get_token(''), 'fixture-file-token')
+            self.assertEqual(credentials.get_token('  '), 'fixture-file-token')
+            self.assertEqual(credentials.get_token('changed-preference'), 'changed-preference')
+            self.assertEqual(credentials.get_token(''), 'fixture-file-token')
+            read.assert_called_once_with(encoding='utf-8-sig')
+
+    def test_missing_or_empty_file_is_cached(self):
+        for outcome in (FileNotFoundError(), ''):
+            with patch.multiple(credentials, _file_loaded=False, _file_token='', _file_error=None):
+                with patch.object(Path, 'read_text', side_effect=outcome if isinstance(outcome, Exception) else None,
+                                  return_value='') as read:
+                    self.assertEqual(credentials.get_token(''), '')
+                    self.assertEqual(credentials.get_token(''), '')
+                    self.assertEqual(read.call_count, 1)
+
+    def test_unreadable_file_is_cached_and_sanitized(self):
+        error = UnicodeDecodeError('utf-8', b'fixture-private-bytes', 0, 1, 'example')
+        with patch.object(Path, 'read_text', side_effect=error) as read:
+            for _ in range(2):
+                with self.assertRaisesRegex(RuntimeError, 'Unable to read') as caught:
+                    credentials.get_token('')
+                self.assertNotIn('fixture-private-bytes', str(caught.exception))
+            self.assertEqual(read.call_count, 1)
+            self.assertEqual(credentials.get_token('override-token'), 'override-token')
 
 
 class PoseChecks(unittest.TestCase):
