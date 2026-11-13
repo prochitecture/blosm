@@ -18,6 +18,44 @@ TransverseMercator = projection_module.TransverseMercator
 from progressive.core import Job, Download, Drain
 from unittest.mock import patch
 from mapillary import credentials
+from mapillary.progress import ImageProgress, area, overlap_area
+
+
+class ProgressChecks(unittest.TestCase):
+    def setUp(self):
+        self.bounds=(.001,.001,.04,.02)
+        self.tiles=list(tile_coordinates(self.bounds))
+        self.assertEqual(len(self.tiles),2)
+
+    def test_overlap_density_and_revised_estimates(self):
+        p=ImageProgress(self.bounds,2)
+        self.assertIsNone(p.percent())
+        self.assertAlmostEqual(sum(overlap_area(self.bounds,t) for t in self.tiles),area(self.bounds))
+        p.counted(self.tiles[0],100)
+        expected=math.ceil(100*area(self.bounds)/overlap_area(self.bounds,self.tiles[0]))
+        self.assertEqual(p.estimated_total,expected)
+        self.assertNotEqual(expected,200) # Edge tiles contribute unequal areas.
+        p.processed=50
+        first=p.percent()
+        p.counted(self.tiles[1],1000)
+        self.assertEqual(p.estimated_total,1000)
+        self.assertLess(p.percent(),first)
+        p.processed=1000 # Includes rejected entries, not only created cameras.
+        self.assertEqual(p.percent(),99)
+        self.assertEqual(p.percent(complete=True),100)
+
+    def test_empty_samples_and_single_tile(self):
+        p=ImageProgress(self.bounds,2)
+        p.counted(self.tiles[0],0)
+        self.assertIsNone(p.percent())
+        p.counted(self.tiles[1],0)
+        self.assertEqual(p.estimated_total,0)
+        self.assertEqual(p.percent(complete=True),100)
+        one=ImageProgress(BOUNDS,1)
+        one.counted(next(tile_coordinates(BOUNDS)),96)
+        one.processed=48
+        self.assertEqual(one.estimated_total,96)
+        self.assertEqual(one.percent(),50)
 
 
 class CredentialChecks(unittest.TestCase):

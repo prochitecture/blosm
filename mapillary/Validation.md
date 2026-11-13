@@ -271,6 +271,46 @@ not a complete-area count or a camera/undo scale test. Its retained bounded
 samples and sanitized report are in `karl_marx_allee_full/`. The user's issue is
 negative vertical placement, so no blanket camera rotation correction was made.
 
+## Per-tile progress estimates, 2026-11-13
+
+Reference `release` was synchronized at `e5fe4ac8b0e3a66e56ac9019dd90f99a8b434702`
+before this change. Per-tile cooperative counting precedes each tile's existing
+streaming import pass. The same bounded coverage/metadata request windows remain;
+no whole-area prefetch, full decoded tile list or shared-core change was added.
+Status uses "Estimating…" before a usable count, estimated percentages during
+processing, and an exact cumulative "cameras created" counter. Finished candidates
+include filtered/rejected entries; only normal job completion displays 100%.
+
+Sixteen standalone tests passed. The background suite passed its original 43
+checks, including 5,000 cameras without terrain and 5,000 over terrain, plus the
+subsequently added valid-empty-tile case in a final 96-camera regression run.
+Progress checks cover single-tile totals, cross-tile deduplication, clipping,
+partial-tile area weighting, downward revisions, rejected metadata, malformed
+tiles, early bounded fetching, and cancellation while counting. ID sets are
+released on completion/cancellation. Existing parity and lifecycle checks pass.
+
+The hidden, isolated Blender 5.2 UI suite passed ten scenarios, including grouped
+undo/redo, terrain, cancellation, user edits, pause/resume, HTTP failure and addon
+disable. Recorded examples were `Mapillary: Estimating… · 0 cameras created`,
+`Mapillary: ~11% · 11 cameras created`, and `Mapillary: 100% · 96 cameras created`.
+The 1,000-camera timer phase had 189 heartbeats, a maximum active heartbeat gap
+of 92.29 ms, and a maximum job turn of 9.51 ms. Counting itself accumulated
+0.038 s of decoder work in this synthetic fixture.
+
+A fresh live Karl Marx Allee check passed with 750 candidates processed and 750
+cameras created in each mode. Both reported one counted tile, an exact candidate
+total of 750 and `Mapillary: 100% · 750 cameras created`. IDs and poses matched,
+with no import errors or persisted credential. The dense 12,015,618-byte tile
+required about 13 s of additional counting decoder work per run; maximum single
+count-decoder calls were 5.76 ms (blocking) and 4.89 ms (stepped). This live test
+used background stepping, not the UI timer; UI timing above uses HTTP fixtures.
+Counting is real extra work and delays the first camera until its tile is counted.
+
+Evidence is under `artifacts/mapillary_import/progress_messaging/`: `background/`,
+`background_final/`, `ui/` and `live/`. Timings are individual runs, not controlled
+performance comparisons. Estimated percentages describe candidate work, not
+time remaining; spatially uneven density can still give poor early estimates.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client

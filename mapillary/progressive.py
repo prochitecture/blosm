@@ -16,6 +16,7 @@ from ..progressive.core import Job, Download, Drain
 from ..progressive.blender import notify_result, preserve_context
 from . import pose
 from .placement import GroundSurface
+from .progress import ImageProgress
 from .tiles import MAX_TILE_BYTES, contains, identifier, image_points, tile_coordinates, validate_bounds
 
 TILE_URL = 'https://tiles.mapillary.com/maps/vtp/mly1_computed_public/2/{z}/{x}/{y}'
@@ -51,10 +52,13 @@ class MapillaryImport:
         self.errors = Counter()
         self.details = []
         self.seen = set()
+        self.counted_ids = set()
+        self.progress = ImageProgress(self.bounds, sum(1 for _ in tile_coordinates(self.bounds)))
         self.metrics = {'decode_seconds': 0., 'metadata_seconds': 0., 'camera_seconds': 0.,
                         'max_decode_turn': 0., 'max_metadata_parse': 0., 'max_camera_commit': 0.,
                         'peak_tile_bytes': 0, 'peak_metadata_records': 0}
         self.metrics['peak_dedup_ids'] = 0
+        self.metrics.update(count_seconds=0., max_count_turn=0., peak_counted_ids=0)
         offset = pose.number(self.scene.get('height_offset'))
         self.height_source = 'scene' if offset is not None else 'absolute_provider_altitude'
         if offset is None:
@@ -119,6 +123,14 @@ class MapillaryImport:
                 self.metrics['peak_tile_bytes'] = max(self.metrics['peak_tile_bytes'], sum(len(b) for _, b in raw))
                 while raw:
                     tile, content = raw.pop()
+                    # Count only this tile, then replay it for bounded metadata
+                    # batches. Keep the existing worker-sized download windows.
+                    try:
+                        yield from self.count_tile(content,tile)
+                    except ValueError as error:
+                        self.failure('coverage_decode', error)
+                        del content
+                        continue
                     records = []
                     iterator = image_points(content, tile)
                     processed = 0
@@ -164,10 +176,51 @@ class MapillaryImport:
         finally:
             raw.clear()
             self.seen.clear()
+            self.counted_ids.clear()
             # No credentials belong to the persisted Blender scene or reports.
             # Retain credentials only in memory through finish(), so even an
             # unexpected fatal exception can be redacted before reporting it.
             self.token = ''
+
+    def count_tile(self, content, tile):
+        # Only IDs are retained, never a full decoded tile/metadata record list.
+        # Publish a sample only after a complete successful scan, so a corrupt
+        # tile cannot masquerade as empty or distort the extrapolated density.
+        new_ids = set()
+        iterator = image_points(content,tile)
+        processed = 0
+        checkpoint = time.monotonic()
+        try:
+            while True:
+                started = time.monotonic()
+                try:
+                    record = next(iterator)
+                except StopIteration:
+                    break
+                elapsed = time.monotonic()-started
+                self.metrics['count_seconds'] += elapsed
+                self.metrics['max_count_turn'] = max(self.metrics['max_count_turn'],elapsed)
+                if record is not None and contains(self.bounds,*record['coverage_geometry']):
+                    identity = record['id']
+                    if identity not in self.counted_ids and identity not in new_ids:
+                        if len(self.counted_ids)+len(new_ids) >= self.max_images:
+                            raise RuntimeError('Mapillary image limit reached; select a smaller area')
+                        new_ids.add(identity)
+                processed += 1
+                if record is None or processed % 16 == 0 or time.monotonic()-checkpoint >= .002:
+                    yield None
+                    checkpoint = time.monotonic()
+            # Incremental transfer keeps cancellation responsive at the ID cap.
+            while new_ids:
+                for _ in range(min(128,len(new_ids))):
+                    self.counted_ids.add(new_ids.pop())
+                yield None
+            self.metrics['peak_counted_ids'] = max(self.metrics['peak_counted_ids'],len(self.counted_ids))
+            self.progress.counted(tile,len(self.counted_ids))
+            yield None
+        finally:
+            iterator.close()
+            new_ids.clear()
 
     def metadata_download(self, records):
         url = self.graph_url + '?' + urlencode({'image_ids': ','.join(r['id'] for r in records),
@@ -217,6 +270,10 @@ class MapillaryImport:
                     self.commit(record, entry, camera_pose)
             except (ValueError, TypeError, OverflowError) as failure:
                 self.failure('camera_metadata', failure)
+            finally:
+                # A rejected entry is finished work too; cameras created remain
+                # a separate exact counter, independent of filters and errors.
+                self.progress.processed += 1
             yield None
 
     def commit(self, record, metadata, camera_pose):
@@ -279,8 +336,12 @@ class MapillaryImport:
 
     @property
     def status(self):
-        return '%s Mapillary cameras, %s approximate, %s errors%s' % (
-            self.count, self.approximate, sum(self.errors.values()), ' — downloading' if self.job.waiting else '')
+        complete = self.job.done and not self.job.cancelled and self.job.error is None
+        percent = self.progress.percent(complete)
+        label = '100%' if complete else ('~%s%%' % percent if percent is not None else 'Estimating…')
+        message = 'Mapillary: %s · %s cameras created' % (label,format(self.count,','))
+        errors = sum(self.errors.values())
+        return message + (' · %s errors' % errors if errors else '')
 
     def cancel(self):
         self.job.cancel()
@@ -291,7 +352,7 @@ class MapillaryImport:
         if silent:
             self.headers.clear()
             return
-        summary = '%s cameras imported (%s approximate); %s errors.' % (
+        summary = '%s camera objects created (%s approximate); %s errors.' % (
             self.count, self.approximate, sum(self.errors.values()))
         if self.terrain_misses:
             summary += ' %s cameras outside terrain coverage placed above Z=0.' % self.terrain_misses

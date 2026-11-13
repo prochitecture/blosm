@@ -23,12 +23,45 @@ grouped undo, cancellation and lifecycle cleanup. Cancellation retains completed
 cameras. Deleting/renaming a camera does not stop remaining work. Removing the
 destination collection stops with an error; renaming it preserves its identity.
 
+### Progress messages
+
+The status starts as `Mapillary: Estimating… · 0 cameras created`, then displays
+an estimated percentage, for example `Mapillary: ~37% · 1,850 cameras created`.
+The creation counter is exact and cumulative, including cameras the user later
+deletes. Error counts appear when nonzero. The final successful job state shows
+100%; cancellation and fatal errors never promote a partial estimate to 100%.
+The aggregate completion message uses "camera objects created".
+
+Tile fetching keeps the same bounded worker-sized windows; there is no initial
+download of all tiles. Before importing a downloaded tile, a cooperative first
+pass counts its unique, in-bounds image IDs. A second pass streams its records
+into the existing 32-entry metadata/camera batches. Only bounded ID sets are
+retained for counting, not whole-tile decoded records or camera metadata.
+
+The estimated total is the unique candidate count multiplied by the ratio of
+selected area to successfully counted area. Each tile contributes only its
+intersection with the selected bounds, using geographic rectangle area. Empty
+valid tiles contribute area; failed/malformed tiles do not become empty samples.
+Before a positive usable sample, the message remains "Estimating…". Once every
+tile is counted successfully, the candidate total needs no extrapolation.
+
+Percentage tracks finished candidate processing, including rejected entries;
+it is distinct from the number of cameras created and from elapsed-time progress.
+Density varies across the area, so subsequent samples may revise the percentage
+downward. Running percentages are capped at 99 until the job finishes. Normal
+completion can still report per-resource errors or incomplete coverage.
+
+Counting adds a tile scan before that tile's first cameras appear and roughly
+doubles vector decoding work. Its checkpoints keep this scan cooperative, but
+an individual parsing/Blender call can exceed the scheduler's soft budget.
+
 ## Adapter structure
 
 - `tiles.py`: zoom-14 tile enumeration, cooperative protobuf/MVT point decoding,
   exact IDs and conversion of tile-local geometry to geographic coordinates.
 - `pose.py`: pure-Python pose, projection-basis and camera-intrinsics conversion.
 - `placement.py`: non-destructive evaluated-terrain sampling on Blender's main thread.
+- `progress.py`: pure-Python overlap-area density estimates and image-work progress.
 - `progressive.py`: discovery producer, metadata batches and cooperative camera
   consumer using production `Job`, `Download`, `Drain`, `Controller` and
   `DownloadTransport`. Both modes share this processing path.
@@ -98,7 +131,7 @@ including during pauses. Deduplication state is capped and released on cleanup.
 | JSON metadata parsing | 256 KiB and 32 entities per batch |
 | MVT dictionaries | 1,048,576 keys and values each; unused layers skipped before dictionary allocation |
 | MVT feature or dictionary string | 64 KiB |
-| Global image ID set | 100,000 IDs; stop with a smaller-area error at the limit |
+| Counted/imported image ID sets | Each capped at 100,000 IDs; per-tile temporary IDs share the counted-ID ceiling |
 
 The ID limit is a bookkeeping ceiling, not a recommendation to create 100,000
 cameras with undo enabled. Four workers reserve at most 128 MiB of raw tile bytes

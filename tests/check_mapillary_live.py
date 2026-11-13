@@ -94,6 +94,9 @@ def summarize(task,elapsed):
                 heading_errors.append(abs((angle-expected+180)%360-180))
     heading_errors.sort()
     return {'cameras':task.count,'approximate':task.approximate,'errors':dict(task.errors),
+            'progress':{'counted_tiles':task.progress.counted_tiles,'total_tiles':task.progress.tile_count,
+                        'candidates':task.progress.candidates,'processed':task.progress.processed,
+                        'estimated_total':task.progress.estimated_total,'status':task.status},
             'fatal_error':sanitize(task.job.error,headers=redaction_headers) if task.job.error else None,
             'elapsed':elapsed,'metrics':task.metrics,'sources_and_models':dict(fields),
             'with_metadata':sum(bool(o['mapillary_metadata_available']) for o in objects),
@@ -132,6 +135,8 @@ def blocking():
     report['modes']['blocking']=summarize(task,time.monotonic()-started)
     assert task.job.error is None,'Live blocking import stopped'
     assert task.count>0,'No cameras found in selected live area'
+    assert task.progress.processed==task.progress.candidates,'Candidate processing count mismatch'
+    assert '100%' in task.status and 'cameras created' in task.status,'Incorrect completion progress'
     assert report['modes']['blocking']['with_metadata']>0,'No live camera metadata was retrieved'
     assert all(abs(o.location.z-2.)<1e-5 for o in task.collection.objects),'Flat scene cameras must be above Z=0'
     assert tuple(bpy.context.selected_objects)==selected and bpy.context.view_layer.objects.active==active

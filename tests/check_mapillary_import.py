@@ -11,7 +11,8 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT.parent), str(ROOT / 'tests')]
 import bpy
-from mapillary_test_support import MemoryTransport, BOUNDS, BASE_ID
+from mapillary_test_support import MemoryTransport, BOUNDS, BASE_ID, mvt
+from mapillary.tiles import tile_coordinates
 addon = importlib.import_module(ROOT.name)
 addon.register()
 adapter = importlib.import_module(ROOT.name + '.mapillary.progressive')
@@ -67,9 +68,13 @@ render_camera=scene.camera
 messages=[]
 adapter.notify_result=lambda *args: messages.append(args)
 t=task()
+check('initial progress is estimating with exact zero camera count','Estimating…' in t.status and '0 cameras created' in t.status)
 turns=drive(t)
 baseline=cameras(t)
 check('96 cameras, duplicate removed, exact IDs',t.count==96 and str(BASE_ID)==baseline[0][0])
+check('single tile has exact deduplicated candidate total and completed work',
+      t.progress.candidates==96 and t.progress.processed==96 and t.progress.estimated_total==96)
+check('success shows 100 percent and cameras created','100%' in t.status and '96 cameras created' in t.status)
 check('selection preserved',tuple(bpy.context.selected_objects)==selected)
 check('active object / collection / cursor / render camera preserved',
       bpy.context.view_layer.objects.active==active and bpy.context.view_layer.active_layer_collection==layer
@@ -93,6 +98,80 @@ check('one aggregate message',len(messages)==1)
 t2=task(reverse=False)
 t2.run_blocking()
 check('blocking/progressive and out-of-order parity',cameras(t2)==baseline)
+check('blocking/progressive progress parity',t2.progress.processed==t.progress.processed
+      and t2.progress.candidates==t.progress.candidates and t2.status==t.status)
+
+class TrackingTransport(MemoryTransport):
+    def __init__(self):
+        super().__init__(8)
+        self.coverage_requests=0
+        self.first_metadata=None
+    def submit(self,request):
+        from urllib.parse import urlparse,parse_qs
+        query=parse_qs(urlparse(request.url).query)
+        if 'image_ids' in query:
+            if self.first_metadata is None:
+                owner=self.owner
+                self.first_metadata=(self.coverage_requests,owner.progress.candidates,owner.count,owner.status)
+            assert set(query['image_ids'][0].split(',')) <= self.owner.counted_ids
+        else:
+            self.coverage_requests+=1
+        return super().submit(request)
+tracking=TrackingTransport()
+tracking_bounds=(24.90,60.169,25.06,60.171)
+tracked=adapter.MapillaryImport(bpy.context,tracking_bounds,Projection(lat=origin[0],lon=origin[1]),
+                              origin,False,'fixture-client-token',transport=tracking)
+tracking.owner=tracked
+drive(tracked)
+requested,candidates,created,label=tracking.first_metadata
+check('first tile counted before cameras or metadata; no whole-area prefetch',
+      0<requested<=4 and requested<len(list(tile_coordinates(tracking_bounds)))
+      and candidates==8 and created==0 and 'Estimating' not in label)
+check('cross-tile counts deduplicate IDs and retain bounded download window',
+      tracked.progress.candidates==tracked.progress.processed==tracked.count==8
+      and tracked.progress.counted_tiles==len(list(tile_coordinates(tracking_bounds))) and tracking.peak<=4)
+check('counting IDs released on completion',not tracked.counted_ids and not tracked.seen)
+
+cancel_count=task(5000)
+while not cancel_count.metrics['count_seconds'] and not cancel_count.job.done:
+    cancel_count.job.step(max_steps=1)
+check('counting checkpoints precede metadata and camera creation',cancel_count.count==0
+      and cancel_count.progress.counted_tiles==0 and cancel_count.collection is None)
+cancel_count.cancel()
+check('cancellation during counting releases IDs and never displays 100 percent',
+      cancel_count.job.cancelled and cancel_count.transport.closed and not cancel_count.counted_ids
+      and not cancel_count.seen and '100%' not in cancel_count.status)
+
+filtered_transport=MemoryTransport(8)
+filtered_transport.entries[str(BASE_ID)]['computed_geometry']['coordinates']=[25.,61.]
+filtered=adapter.MapillaryImport(bpy.context,BOUNDS,Projection(lat=origin[0],lon=origin[1]),
+                               origin,False,'fixture-client-token',transport=filtered_transport)
+drive(filtered)
+check('rejected metadata entries advance progress without incrementing cameras',
+      filtered.progress.candidates==filtered.progress.processed==8 and filtered.count==7 and '100%' in filtered.status)
+
+bad_transport=MemoryTransport(8)
+bad_transport.content=b'\x1a\xff'
+bad=adapter.MapillaryImport(bpy.context,BOUNDS,Projection(lat=origin[0],lon=origin[1]),
+                          origin,False,'fixture-client-token',transport=bad_transport)
+drive(bad)
+check('malformed tile is not a valid empty density sample',bad.errors['coverage_decode']==1
+      and bad.progress.counted_tiles==0 and bad.progress.candidates==0 and bad.count==0)
+empty_transport=MemoryTransport(8)
+empty_transport.content=mvt([],empty_transport.tile)
+empty=adapter.MapillaryImport(bpy.context,BOUNDS,Projection(lat=origin[0],lon=origin[1]),
+                            origin,False,'fixture-client-token',transport=empty_transport)
+drive(empty)
+check('empty valid tile counts as a sample and completes with zero cameras',empty.progress.counted_tiles==1
+      and empty.progress.candidates==0 and empty.count==0 and '100%' in empty.status)
+
+outside_transport=MemoryTransport(8)
+points=[(int(i),*entry['geometry']['coordinates']) for i,entry in outside_transport.entries.items()]
+outside_transport.content=mvt(points+[(42,BOUNDS[0]-.001,60.17)],outside_transport.tile,duplicate=True)
+clipped=adapter.MapillaryImport(bpy.context,BOUNDS,Projection(lat=origin[0],lon=origin[1]),
+                              origin,False,'fixture-client-token',transport=outside_transport)
+drive(clipped)
+check('count pass clips outside entries before deduplication',clipped.progress.candidates==clipped.count==8)
 
 t3=task()
 while t3.count<4: t3.job.step()

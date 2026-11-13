@@ -35,6 +35,7 @@ messages=[]
 processes=[]
 servers=[]
 tasks=[]
+progress_examples={}
 heartbeat=[]
 import_gaps=[]
 step_times=[]
@@ -125,6 +126,8 @@ def begin(port, *, progressive=True):
         a=list(a)
         a[5]='fixture-client-token'
         adapter=factory(*a,**kw)
+        assert 'Estimating…' in adapter.status and '0 cameras created' in adapter.status
+        progress_examples.setdefault('initial',adapter.status)
         original_step=adapter.job.step
         def timed_step(*a,**kw):
             start=time.monotonic()
@@ -159,6 +162,8 @@ def scenario():
     begin(port,progressive=False)
     yield
     assert count()==96
+    assert '100%' in adapter.status and '96 cameras created' in adapter.status
+    progress_examples['complete']=adapter.status
     yield from history('undo')
     assert count()==0
     yield from history('redo')
@@ -325,6 +330,7 @@ def finish(status, error=None, scale=None):
     for process in processes:
         process.wait(timeout=5)
     report={'status':status,'checks':checks,'error':error,'scale':scale,
+            'progress_examples':progress_examples,
             'blender':bpy.app.version_string,'elapsed':time.monotonic()-started,
             'max_heartbeat_gap':max(heartbeat,default=0),'messages':messages}
     (args.artifacts/'ui.json').write_text(json.dumps(report,indent=2))
@@ -342,6 +348,10 @@ def tick():
     last=now
     try:
         assert now-started<550,'UI check deadline'
+        if adapter is not None and not adapter.job.done:
+            assert '100%' not in adapter.status and 'cameras created' in adapter.status
+            if adapter.count and adapter.progress.percent() is not None:
+                progress_examples.setdefault('during_import',adapter.status)
         for area in bpy.context.screen.areas:
             if area.type=='VIEW_3D':
                 area.spaces.active.region_3d.view_distance+=.001
