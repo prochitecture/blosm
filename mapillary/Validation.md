@@ -490,13 +490,88 @@ Large native terrain snapshot construction and network/rate-limit delays remain
 outside these decoder improvements. The existing bounded coverage window still
 finishes downloading before its first tile is counted.
 
+## On-demand photos and opacity, 2026-11-13
+
+Reference `release` was checked at `e5fe4ac8b0e3a66e56ac9019dd90f99a8b434702`,
+with zero missing commits and clean development HEAD `f89c911` before changes.
+The Blosm panel now shows **View Mapillary photo** only for an active camera in
+the current scene with imported Mapillary identity/provenance. The action selects
+it as the scene camera, enters camera view, and fits the photo to the entire
+frame using the photo aspect. A **Photo opacity** slider exposes the native
+background alpha; new backgrounds start opaque, while subsequent activation and
+save/reopen retain the per-camera setting. This changes the scene camera and
+render aspect intentionally; camera pose/lens are not changed.
+
+`photo.py` uses the existing Job, HTTP helper and Controller for Graph metadata
+and photo bytes, with one request slot and 32 MiB response limit. Existing Blosm
+work retains the shared slot budget: the latest uncached photo waits until the
+current job ends, with explicit queue cancellation. Cache hits work immediately.
+A finishing old photo is cached without reactivating its camera after selection
+has changed. Ready queued cache hits execute through the undo-enabled operator.
+Window/scene guards, pauses, cancellation, Undo/Redo, file loading and addon
+disable use the established controller and cleanup handlers.
+
+Image datablocks carry the exact image ID, source, contributor and license, and
+are packed with a fake user. The transient decode file is removed; no signed CDN
+URL or OAuth credential is stored. CDN requests never receive the Graph OAuth
+header. Shared camera datablocks are copied before attaching a photo so another
+camera is not modified. Existing user backgrounds are retained. Cached image and
+camera renames are supported. Attribution remains visible for a displayed photo
+even when selecting another object hides the action button.
+
+The pure `photo_data.py` reader checks the selected Graph entity, HTTPS CDN
+hostname, image framing/headers, embedded EXIF, 32 MiB encoded limit, 8 MiPixel
+decoded bound and 8192-pixel side bound before Blender decoding. Only the file's
+embedded orientation is normalized, not the original capture's Graph EXIF tag.
+The native JPEG orientation regression uses distinct color quadrants to verify
+clockwise rotation and packed portrait pixels after reopening.
+
+Validation passed:
+
+- 38 standalone Mapillary tests, including eight bounded metadata/image-header
+  cases with both TIFF byte orders, all EXIF orientation values, malformed data,
+  oversized dimensions and sanitized failures.
+- 38 native background photo checks: actual panel conditions, packed cache and
+  file reopen, opacity retention, no duplicate images/backgrounds/camera data,
+  preserved user backgrounds, shared camera-data isolation, EXIF pixel rotation,
+  cancellation/errors/deletion, late results and queued-request behavior.
+- 14 native UI checks through the real photo operator and shared Controller:
+  camera view, full frame, cache hits, opacity, Undo/Redo without downloads,
+  actual scene-switch pauses with a received reply held, cancellation, a second
+  camera request while the first downloads, and addon-disable cleanup.
+- All 51 existing camera-import background checks in a 96-camera regression run.
+
+Real API checks downloaded and packed three Berlin photos: perspective and
+fisheye at 2048×1536, and spherical at 2048×1024. All three had attribution and
+activated the expected camera without errors. Persisted properties were checked
+against the development token. Reports/scenes/logs are under
+`artifacts/mapillary_import/photo_viewer/`, with final photo background evidence
+in `background_opacity/`, UI evidence in `ui_opacity/`, camera regressions in
+`camera_regression/`, and real API evidence in `live_final/`. UI screenshots
+confirm the opaque photo fills the camera frame and reduced alpha reveals scene
+geometry. Tests use isolated factory-startup processes, artifact-local temporary
+directories and disabled save previews; no normal user profile is modified.
+
+Photo previews use `thumb_2048_url`, verified against the public
+[GraphQueryCreator](https://raw.githubusercontent.com/mapillary/mapillary-js/main/src/api/provider/GraphQueryCreator.ts)
+and the credentialed API checks. Attribution follows
+[Mapillary's image licensing guidance](https://help.mapillary.com/hc/en-us/articles/115001770409-CC-BY-SA-license-for-open-data).
+
+Remaining photo limitations: backgrounds are viewport references, not rendered
+backgrounds, accurate fisheye projection or an interactive 360-degree viewer.
+Panoramas display their complete flat image. Downloaded previews are retained
+until the image datablock is removed; many photos can increase memory and saved
+file size. Native decode, pixel normalization, packing and Undo calls are
+synchronous despite asynchronous network IO, so short UI pauses remain possible.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client
   token and area, not every account/provider state or an API maximum. The main
   current API documentation was login-gated during initial implementation.
-- Camera frames/poses and metadata are imported; photos, image viewers, accurate
-  fisheye projection and radial-distortion rendering are subsequent work.
+- Camera frames/poses, metadata and on-demand photo previews are supported;
+  interactive 360-degree viewing, accurate fisheye projection and radial-
+  distortion rendering are subsequent work.
 - EXIF mirrors are approximate. Camera heights are estimated at 2 m above terrain
   or the scene plane; actual capture heights and cross-provider vertical-datum
   alignment are not recovered from provider altitude.

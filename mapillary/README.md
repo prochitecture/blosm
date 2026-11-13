@@ -4,7 +4,51 @@ Choose **Mapillary cameras**, set the geographic bounds and your **Mapillary
 client access token** in Blosm preferences, then import. Use the existing
 **Progressive import** checkbox for interactive loading; disable it for a
 synchronous result. Command-line mode blocks. Progressive mode requires an
-interactive window and Object Mode. No photograph or thumbnail is downloaded.
+interactive window and Object Mode. Camera import itself downloads no photographs
+or thumbnails.
+
+### View a camera's photo
+
+Select an imported Mapillary camera and click **View Mapillary photo** in the
+Blosm panel. The button appears only for the active Mapillary camera in the
+current scene, regardless of the panel's selected import type. It sets the
+scene's rendering camera and switches the 3D View into that camera. The photo
+fills the camera frame as an opaque front background; the scene's render
+resolution/aspect is set to the photo dimensions with square pixels. Camera
+position, rotation and lens remain unchanged. Background photos are viewport
+references, not rendered geometry or a compositor background.
+Use **Photo opacity** below the button to see the scene through the photo:
+1 is opaque and 0 is fully transparent. Each camera retains its opacity when
+its photo is reopened, including after saving the `.blend` file.
+
+The first click downloads a preview of up to 2048 pixels from Mapillary. Later
+clicks reuse the image in Blender's image data, identified by the Mapillary image
+ID even if its camera or image is renamed. Images are packed into the `.blend`
+and kept as cache data, so saving/reopening works without another download or a
+token. Delete an image datablock to discard its cache. Many viewed photos increase
+scene memory and saved-file size; there is no automatic cache eviction.
+
+Photos download using the shared HTTP helper and import controller, including
+pause, cancellation, grouped undo and lifecycle cleanup. Cached photos can be
+viewed during an import. An uncached request waits until the current Blosm job
+finishes or is cancelled; only the latest queued request is retained. Changing
+the selected camera cancels a stale queued request. A finished download is cached
+without changing the view if the user has selected another object meanwhile.
+Undo, file loading and disabling the addon clear pending work. The panel offers
+**Cancel queued photo** while a request is waiting.
+
+The image's contributor (when available), Mapillary/CC-BY-SA attribution and a
+source link appear below the button. OAuth credentials are sent only to the
+Graph API, never to the photo CDN. Signed photo URLs and credentials are not
+stored in scene/image metadata. Temporary download files are packed and removed.
+
+The downloaded file's embedded EXIF orientation is applied once; the original
+capture's Graph EXIF tag is not reapplied to an already upright preview. Flat
+panorama previews show the complete equirectangular image. They are not an
+interactive 360-degree view or an accurate perspective/fisheye projection.
+Downloads are capped at 32 MiB, decoded images at 8 MiPixels and each side at
+8192 pixels. Native image decoding/packing and optional pixel rotation run on
+Blender's main thread and can cause a short pause despite asynchronous HTTP.
 
 If the preference token is empty, the importer falls back to
 `mapillary/mapillary_token.txt` next to the installed adapter. In the main
@@ -78,6 +122,8 @@ scheduler's soft budget. See `Validation.md` for measured count-phase timings.
   exact IDs and conversion of tile-local geometry to geographic coordinates.
 - `pose.py`: pure-Python pose, projection-basis and camera-intrinsics conversion.
 - `placement.py`: non-destructive evaluated-terrain sampling on Blender's main thread.
+- `photo.py`: conditional photo action, packed-image cache and shared-controller download adapter.
+- `photo_data.py`: bounded Graph/CDN URL, image-header and embedded EXIF validation.
 - `progress.py`: pure-Python overlap-area density estimates and image-work progress.
 - `progressive.py`: discovery producer, metadata batches and cooperative camera
   consumer using production `Job`, `Download`, `Drain`, `Controller` and

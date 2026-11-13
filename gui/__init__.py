@@ -420,6 +420,30 @@ class BLOSM_PT_Extent(bpy.types.Panel):
         if progressiveImport.active is not None:
             box.label(text=progressiveImport.active.status)
             box.operator('blosm.cancel_progressive', text='Cancel import', icon='CANCEL')
+        from ..mapillary import photo
+        if photo.pending is not None:
+            layout.label(text='Mapillary photo queued until the current import finishes')
+            layout.operator('blosm.cancel_mapillary_photo')
+        camera = photo.imported_camera(context)
+        if camera is not None:
+            photo_box = layout.box()
+            photo_box.operator('blosm.view_mapillary_photo', icon='CAMERA_DATA')
+        # Credit the displayed photo even when selecting another object hides
+        # the action button. This is the scene camera selected by the viewer.
+        viewed = context.scene.camera
+        if viewed is not None and viewed.data.show_background_images:
+            background = next((bg for bg in viewed.data.background_images
+                          if bg.show_background_image and bg.image
+                          and bg.image.get('mapillary_photo_source') == 'Mapillary'),None)
+            if background is not None:
+                image = background.image
+                photo_box = layout.box()
+                photo_box.prop(background,'alpha',text='Photo opacity',slider=True)
+                creator = image.get('mapillary_creator','')
+                if creator:
+                    photo_box.label(text='Photo by '+creator)
+                source = photo_box.operator('wm.url_open', text='Mapillary · CC-BY-SA', icon='URL')
+                source.url = 'https://www.mapillary.com/app/?pKey='+str(image['mapillary_image_id'])
 
 
 class PanelRealisticTools():#(bpy.types.Panel):

@@ -661,6 +661,8 @@ _classes = (
 
 def register():
     progressiveImport.register()
+    from .mapillary import photo
+    photo.register()
     for c in _classes:
         bpy.utils.register_class(c)
     gui.register()
@@ -680,6 +682,8 @@ def register():
 
 def unregister():
     progressiveImport.unregister()
+    from .mapillary import photo
+    photo.unregister()
     for c in _classes:
         bpy.utils.unregister_class(c)
     gui.unregister()
