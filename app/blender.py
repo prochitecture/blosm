@@ -155,11 +155,11 @@ class BlenderApp(BaseApp):
         self.preferableResult = defs.Result.FootprintWithGn
         self.preferMesh = True
     
-    def getAssetsDir(self, context):
+    def getAssetsDir(self, context, settings=None, preferences=None):
         addonName = self.addonName
-        prefs = context.preferences.addons
+        prefs = preferences if preferences is not None else context.preferences.addons
         # first try the <assetsDir> from the addon GUI
-        assetsDir = context.scene.blosm.assetsDir
+        assetsDir = (settings if settings is not None else context.scene.blosm).assetsDir
         if not assetsDir:
             # second try the <assetsDir> from the addon preferences
             assetsDir = prefs[addonName].preferences.assetsDir if addonName in prefs else None
@@ -176,46 +176,53 @@ class BlenderApp(BaseApp):
                 _setAssetsDirStr
             )
     
-    def initOsm(self, op, context):
-        super().initOsm()
-
-        # tangent to check if an angle of the polygon is straight
-        PolygonOLD.straightAngleTan = math.tan(math.radians( abs(180.-self.straightAngleThreshold) ))
-        
+    def validateOsmDirectories(self, context, settings=None, preferences=None):
+        """Check required directories without allocating Blender data."""
         addonName = self.addonName
-        addon = context.scene.blosm
-        prefs = context.preferences.addons
+        addon = settings if settings is not None else context.scene.blosm
+        prefs = preferences if preferences is not None else context.preferences.addons
         
-        if app.has(defs.Keys.mode3d) and self.mode != "2D":
+        self.setDataDir(context, self.basePath, addonName, required=True, preferences=prefs)
+
+        if app.has(defs.Keys.mode3d) and addon.mode != "2D":
             self.mode = BaseApp.realistic\
-                if app.has(defs.Keys.mode3dRealistic) and self.mode == "3Drealistic"\
+                if app.has(defs.Keys.mode3dRealistic) and addon.mode == "3Drealistic"\
                 else BaseApp.simple
         else:
             self.mode = BaseApp.twoD
 
+        experimental = prefs[addonName].preferences.enableExperimentalFeatures if addonName in prefs else True
+        self.bundledStreetsOnly = (experimental and self.mode is BaseApp.realistic
+                                  and addon.highways and not addon.buildings
+                                  and not addon.forests and not addon.aviation)
+        if self.mode is BaseApp.realistic and not self.bundledStreetsOnly:
+            return self.validateAssetsDirContent(context, settings=settings, preferences=prefs)
+
+    def initOsm(self, op, context, defer_download=False, settings=None, preferences=None):
+        super().initOsm()
+
+        addonName = self.addonName
+        addon = settings if settings is not None else context.scene.blosm
+        prefs = preferences if preferences is not None else context.preferences.addons
+        assetsDir = self.validateOsmDirectories(context, settings=settings, preferences=prefs)
+        bundled_streets_only = self.bundledStreetsOnly
+
+        PolygonOLD.straightAngleTan = math.tan(math.radians(abs(180.-self.straightAngleThreshold)))
         if self.mode is BaseApp.simple and self.buildings:
             if getattr(self, 'buildingBackend', 'geometry_nodes') == 'geometry_nodes' and bpy.app.version < (5, 2, 0):
                 raise Exception('Geometry Nodes buildings require Blender 5.2 or later')
             from ..building.padl_integration.assets import BuildingProgramLibrary
             BuildingProgramLibrary(os.path.join(self.basePath, 'assets'), app=self).program('simple_3d')
-        
+        # Native streets use bundled numeric styles, not a stale legacy PML.
         experimental = prefs[addonName].preferences.enableExperimentalFeatures if addonName in prefs else True
-        prepared_streets = experimental and self.mode is BaseApp.realistic
-        bundled_streets_only = (prepared_streets and self.highways and not self.buildings
-                                and not self.forests and not self.aviation)
-        # Native street preparation has numeric built-in styles. This also
-        # clears paths left over from a previous legacy import in the session.
-        if prepared_streets:
+        if experimental and self.mode is BaseApp.realistic:
             self.pmlFilepathStreet = None
-        if self.mode is BaseApp.realistic and not bundled_streets_only:
-            assetsDir = self.validateAssetsDirContent(context)
-        elif bundled_streets_only:
+        if bundled_streets_only:
             self.assetsDir = ''
         
         basePath = self.basePath
         self.op = op
         self.assetPath = os.path.join(basePath, "assets")
-        self.setDataDir(context, basePath, addonName)
         # create a sub-directory under <self.dataDir> for OSM files
         osmDir = os.path.join(self.dataDir, self.osmDir)
         if not os.path.exists(osmDir):
@@ -231,9 +238,9 @@ class BlenderApp(BaseApp):
             prefs[addonName].preferences.osmServer if addonName in prefs else self.devOsmServer
         ]
         
-        if addon.osmSource == "server":
+        if addon.osmSource == "server" and not defer_download:
             self.downloadOsmFile(osmDir, self.minLon, self.minLat, self.maxLon, self.maxLat)
-        else:
+        elif addon.osmSource != "server":
             self.osmFilepath = os.path.realpath(bpy.path.abspath(self.osmFilepath))
 
         # dealing with export to the popular 3D formats
@@ -280,8 +287,8 @@ class BlenderApp(BaseApp):
             # That's why following line
             self.gnSetup2d = data_to.node_groups[0].name 
     
-    def validateAssetsDirContent(self, context):
-        assetsDir = self.getAssetsDir(context)
+    def validateAssetsDirContent(self, context, settings=None, preferences=None):
+        assetsDir = self.getAssetsDir(context, settings=settings, preferences=preferences)
         self.validateAssetsDir(assetsDir)
         self.assetsDir = assetsDir
         # Additional validation. The execution couldn't come here
@@ -293,7 +300,7 @@ class BlenderApp(BaseApp):
                 _setAssetsDirStr
             )
         self.bldgMaterialsFilepath = bldgMaterialsFilepath
-        if self.forests:
+        if (settings if settings is not None else self).forests:
             vegetationFilepath = os.path.join(assetsDir, self.vegetationFileName)
             if not os.path.isfile(vegetationFilepath):
                 raise Exception(
@@ -303,8 +310,8 @@ class BlenderApp(BaseApp):
             self.vegetationFilepath = vegetationFilepath
         return assetsDir
     
-    def setTerrain(self, context, createFlatTerrain=True, createBvhTree=False):
-        addon = context.scene.blosm
+    def setTerrain(self, context, createFlatTerrain=True, createBvhTree=False, settings=None):
+        addon = settings if settings is not None else context.scene.blosm
         
         terrainObjectName =\
             addon.terrainObject\
@@ -418,11 +425,13 @@ class BlenderApp(BaseApp):
             if not (p.startswith("__") or p in ("bl_rna", "rna_type", "int", "string")):
                 setattr(self, p, getattr(addon, p))
     
-    def setDataDir(self, context, basePath, addonName):
+    def setDataDir(self, context, basePath, addonName, required=False, preferences=None):
         """
         Sets <self.dataDir>, i.e. path to data
         """
-        prefs = context.preferences.addons
+        prefs = preferences if preferences is not None else context.preferences.addons
+        if required and (addonName not in prefs or not prefs[addonName].preferences.dataDir.strip()):
+            raise Exception("A valid directory for data in the addon preferences isn't set")
         if addonName in prefs:
             dataDir = prefs[addonName].preferences.dataDir
             if not dataDir:

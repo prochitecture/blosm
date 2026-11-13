@@ -6,6 +6,7 @@ consumer, None to yield UI time, or Drain before finalizing deferred work.
 from collections import deque
 from dataclasses import dataclass
 from time import monotonic
+from ..downloads import Request
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,33 @@ class Download:
 
 class Drain:
     """Wait for all deferred consumers before resuming the generator."""
+
+
+class YieldToUI:
+    """End this turn immediately, including after a local multi-object commit."""
+
+
+class LazyTransport:
+    """Local work needs no process; allocate a transport on the first request."""
+    def __init__(self, factory):
+        self.factory = factory
+        self.instance = None
+
+    @property
+    def max_requests(self):
+        return self.instance.max_requests if self.instance else 1
+
+    def submit(self, request):
+        if self.instance is None:
+            self.instance = self.factory()
+        return self.instance.submit(request)
+
+    def poll(self):
+        return self.instance.poll() if self.instance else None
+
+    def close(self):
+        if self.instance:
+            self.instance.close()
 
 
 class Job:
@@ -105,9 +133,13 @@ class Job:
                     self.exhausted = True
                     request = None
                 del value, failure
+                if isinstance(request, YieldToUI):
+                    return
                 if isinstance(request, Drain):
                     self.draining = True
                 elif request is not None:
+                    if not isinstance(request, (str, Request, Download)):
+                        raise TypeError('Unsupported progressive command: %s' % type(request).__name__)
                     self.request = request
                 if monotonic() >= deadline:
                     return

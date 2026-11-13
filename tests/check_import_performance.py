@@ -92,6 +92,7 @@ def main():
         checks.append('existing explicit EcoQoS and HighQoS are respected')
 
         props = bpy.context.scene.blosm
+        props.progressiveImport = False
         missing = args.output / 'intentionally_missing.osm'
         assert not missing.exists()
         for key, value in dict(mode='3Drealistic', dataType='osm', osmSource='file',
@@ -100,19 +101,20 @@ def main():
                 loadMissingMembers=False, setupScript='', streetBackend='python').items():
             setattr(props, key, value)
         observed = []
-        parse = addon.Osm.parse
-        def parse_failure(self, *a, **kw):
+        osm_runtime = importlib.import_module(PACKAGE + '.app.osm_import')
+        preflight = osm_runtime.OsmImport.check_prerequisites
+        def preflight_failure(self, *a, **kw):
             observed.append(api.read())
-            return parse(self, *a, **kw)
-        with patch.object(addon.Osm, 'parse', parse_failure):
+            return preflight(self, *a, **kw)
+        with patch.object(osm_runtime.OsmImport, 'check_prerequisites', preflight_failure):
             try:
                 bpy.ops.blosm.import_data()
             except RuntimeError as exc:
-                assert 'FileNotFoundError' in str(exc)
+                assert 'No such file' in str(exc)
             else:
                 raise AssertionError('Missing OSM did not fail')
         assert observed == [requested] and api.read() == original
-        checks.append('real missing-file OSM Import restores policy after parser failure')
+        checks.append('real missing-file OSM Import restores policy after preflight failure')
 
         observed = []
         def overlay_step(context):

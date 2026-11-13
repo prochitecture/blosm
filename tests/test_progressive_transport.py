@@ -15,9 +15,9 @@ from urllib.error import HTTPError
 sys.dont_write_bytecode = True
 from release_target import ADDON_ROOT
 sys.path.insert(0, str(ADDON_ROOT))
-from progressive.core import Job, Download, Drain
-from downloads import Request
-from downloads.transport import DownloadTransport, reap
+from _scheduler_package import core, downloads, transport
+Job, Download, Drain = core.Job, core.Download, core.Drain
+Request, DownloadTransport, reap = downloads.Request, transport.DownloadTransport, transport.reap
 
 PAYLOAD = bytes(range(256)) * 16384
 

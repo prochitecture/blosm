@@ -92,16 +92,30 @@ class BaseBuildingManager:
         self.buildingCounter += 1
     
     def process(self):
+        for _ in self.process_steps():
+            pass
+
+    def process_steps(self, session=None):
         for building in self.buildings:
             # create <building.polygon>
             building.init(self)
+            yield None
             
         for action in self.actions:
             action.do(self)
+            yield None
     
     def render(self):
+        for _ in self.render_steps():
+            pass
+
+    def render_steps(self, session=None):
         for building in self.buildings:
-            self.renderer.render(building, self.data)
+            if session:
+                yield from session.unit(lambda building=building: self.renderer.render(building, self.data))
+            else:
+                self.renderer.render(building, self.data)
+                yield None
     
     def addAction(self, action):
         action.app = self.app
@@ -157,11 +171,16 @@ class BuildingManager(BaseBuildingManager, Manager):
         self.partPolygonsSharingBldgEdge = []
     
     def process(self):
+        for _ in self.process_steps():
+            pass
+
+    def process_steps(self, session=None):
         buildings = self.buildings
         
         for building in buildings:
             # create <building.polygon>
             building.init(self)
+            yield None
         
         # Iterate through building parts (building:part=*)
         # to find a building from <self.buildings> to which
@@ -170,6 +189,7 @@ class BuildingManager(BaseBuildingManager, Manager):
         for part in self.parts:
             
             part.init(self)
+            yield None
             
             if part.element.o:
                 # the outline for <part> is set in an OSM relation of the type 'building'
@@ -182,11 +202,13 @@ class BuildingManager(BaseBuildingManager, Manager):
 
         for partPolygon in self.partPolygonsSharingBldgEdge:
             self.processBldgPartEdges(partPolygon.building, partPolygon, True)
+            yield None
             
         if sum(1 for part in self.parts if not part.polygon.building):
             bvhTree = self.createBvhTree()
             
             for part in self.parts:
+                yield None
                 if not part.polygon.building:
                     # <part> doesn't have a vector sharing an edge with a building footprint
                     # Take <vector> and calculated if it is located inside any building from <self.buildings>
@@ -201,6 +223,7 @@ class BuildingManager(BaseBuildingManager, Manager):
                         self.processBldgPartEdges(buildings[buildingIndex], part.polygon, False)
         
         for part in self.parts:
+            yield None
             for edge in part.polygon.getEdges():
                 if edge.vectors:  # shared with footprint
                     continue
@@ -214,6 +237,7 @@ class BuildingManager(BaseBuildingManager, Manager):
         
         for action in self.actions:
             action.do(self)
+            yield None
     
     def createBvhTree(self):
         from mathutils.bvhtree import BVHTree

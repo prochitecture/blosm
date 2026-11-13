@@ -1,8 +1,10 @@
 import os
-from time import time
+import tempfile
+import shutil
 import bpy
 from ..util.blender import loadSceneFromFile
 from ..util.blender_extra.material import setImage
+from ..progressive.ownership import Ownership, TRANSIENT
 
 
 _exportTemplateFilename = "building_material_templates.blend"
@@ -23,14 +25,21 @@ class TextureExporter:
         self.tmpTextureDir = None
         # Linked template scenes from <_exportTemplateFilename>. They will be unlinked in <self.cleanup(..)>
         self.linkedScenes = []
+        self.bakeQueue = None
+        self.templateScenes = {}
+        self.transient = Ownership()
     
     def cleanup(self):
+        if self.bakeQueue:
+            self.bakeQueue.close()
+            self.bakeQueue = None
         tmpTextureDir = self.tmpTextureDir
         if tmpTextureDir:
-            os.removedirs(tmpTextureDir)
+            if os.path.basename(tmpTextureDir).startswith('.blosm-textures-'):
+                shutil.rmtree(tmpTextureDir)
             self.tmpTextureDir = None
-        for sceneName in self.linkedScenes:
-            bpy.data.scenes.remove(bpy.data.scenes[sceneName])
+        self.transient.rollback()
+        self.templateScenes.clear()
     
     def verifyPath(self, textureDir):
         if not os.path.exists(textureDir):
@@ -38,16 +47,7 @@ class TextureExporter:
     
     def setTmpTextureDir(self, textureDir):
         if not self.tmpTextureDir:
-            # use the number of seconds as the name of the subdirectory
-            numSeconds = round(time())
-            while True:
-                tmpTextureDir = os.path.join(textureDir, str(numSeconds))
-                if os.path.exists(tmpTextureDir):
-                    numSeconds += 1
-                else:
-                    os.makedirs(tmpTextureDir)
-                    self.tmpTextureDir = tmpTextureDir
-                    break
+            self.tmpTextureDir = tempfile.mkdtemp(prefix='.blosm-textures-', dir=textureDir)
 
     def makeCommonPreparations(self, scene, textureFilename, textureDir):
         self.verifyPath(textureDir)
@@ -69,6 +69,14 @@ class TextureExporter:
         return nodes
     
     def renderTexture(self, scene, textureFilepath):
+        from ..app.blender import app
+        session = getattr(app, 'osm_session', None)
+        if session and session.progressive:
+            from .bake_job import BakeQueue
+            if self.bakeQueue is None:
+                self.bakeQueue = BakeQueue(os.path.dirname(textureFilepath))
+            self.bakeQueue.submit(scene, textureFilepath)
+            return
         tmpTextureDir = self.tmpTextureDir
         bpy.ops.render.render(scene=scene.name)
         os.replace(
@@ -76,16 +84,20 @@ class TextureExporter:
             os.path.join(tmpTextureDir, os.listdir(tmpTextureDir)[0]),
             textureFilepath
         )
+
+    def finish_steps(self):
+        if self.bakeQueue:
+            yield from self.bakeQueue.steps()
     
     def getTemplateScene(self, sceneName):
-        scene = bpy.data.scenes.get(sceneName)
-        if scene:
-            # perform a quick sanity check here
-            if not scene.use_nodes:
-                scene = None
+        scene = self.templateScenes.get(sceneName)
         if not scene:
-            scene = loadSceneFromFile(self.exportTemplateFilename, sceneName)
+            with self.transient.capture() as allocated:
+                scene = loadSceneFromFile(self.exportTemplateFilename, sceneName)
+            for _, item in allocated:
+                item[TRANSIENT] = True
             self.linkedScenes.append(scene.name)
+            self.templateScenes[sceneName] = scene
         return scene
     
     def setScaleNode(self, nodes, nodeName, scaleX, scaleY):

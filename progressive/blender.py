@@ -16,6 +16,19 @@ from ..app.import_performance import import_performance
 active = None
 
 
+def _revision(adapter):
+    try:
+        return adapter.revision
+    except (ReferenceError, RuntimeError):
+        # Undo/file/window teardown may already have invalidated scene IDs.
+        return None
+
+
+def is_busy():
+    from ..app.blender import app
+    return active is not None or getattr(app, 'overlay_running', False)
+
+
 @contextmanager
 def preserve_context():
     context = bpy.context
@@ -148,6 +161,7 @@ class Controller:
         if active is not self:
             return
         active = None
+        revision = _revision(self.adapter)
         try:
             if not self.adapter.job.done:
                 self.adapter.cancel()
@@ -156,6 +170,15 @@ class Controller:
                     self.adapter.finish(silent=silent)
             else:
                 self.adapter.finish(silent=True)
+            if not silent and _revision(self.adapter) != revision and self.window in list(bpy.context.window_manager.windows):
+                # Cleanup/finalization can mutate visible state too. Keep it in
+                # the same consecutive undo group, after preserving user edits.
+                active = self
+                try:
+                    with bpy.context.temp_override(window=self.window):
+                        self.checkpoint()
+                finally:
+                    active = None
         finally:
             if bpy.app.timers.is_registered(_tick):
                 bpy.app.timers.unregister(_tick)
@@ -190,7 +213,7 @@ def stop_for_scene_change(*_):
 class BLOSM_OT_CancelProgressive(bpy.types.Operator):
     bl_idname = 'blosm.cancel_progressive'
     bl_label = 'Cancel import'
-    bl_description = 'Stop loading and keep the tiles already imported'
+    bl_description = 'Stop importing and keep completed results'
 
     def execute(self, context):
         if active is not None:
@@ -226,18 +249,25 @@ class BLOSM_OT_ProgressiveReport(bpy.types.Operator):
 
 
 def register():
+    from .ownership import discard_pending_history
     bpy.utils.register_class(BLOSM_OT_CancelProgressive)
     bpy.utils.register_class(BLOSM_OT_ProgressiveCheckpoint)
     bpy.utils.register_class(BLOSM_OT_ProgressiveReport)
     for handlers in (bpy.app.handlers.load_pre, bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
         handlers.append(stop_for_scene_change)
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        handlers.append(discard_pending_history)
 
 
 def unregister():
+    from .ownership import discard_pending_history
     stop_for_scene_change()
     for handlers in (bpy.app.handlers.load_pre, bpy.app.handlers.undo_pre, bpy.app.handlers.redo_pre):
         if stop_for_scene_change in handlers:
             handlers.remove(stop_for_scene_change)
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if discard_pending_history in handlers:
+            handlers.remove(discard_pending_history)
     bpy.utils.unregister_class(BLOSM_OT_ProgressiveReport)
     bpy.utils.unregister_class(BLOSM_OT_ProgressiveCheckpoint)
     bpy.utils.unregister_class(BLOSM_OT_CancelProgressive)

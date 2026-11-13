@@ -201,36 +201,45 @@ class BaseManager(Manager):
         super().__init__(data)
     
     def render(self):
+        for _ in self.render_steps():
+            pass
+
+    def render_steps(self, session=None):
         osm = self.osm
         
         for rel in osm.relations:
             rel = osm.relations[rel]
             if rel.valid and rel.r:
-                renderer = rel.rr or self.renderer
-                renderer.preRender(rel)
-                if rel.t is parse.polygon:
-                    renderer.renderPolygon(rel, osm)
-                elif rel.t is parse.multipolygon:
-                    renderer.renderMultiPolygon(rel, osm)
-                elif rel.t is parse.linestring:
-                    renderer.renderLineString(rel, osm)
-                else:
-                    renderer.renderMultiLineString(rel, osm)
-                renderer.postRender(rel)
-        
-        for way in osm.ways:
-            way = osm.ways[way]
+                yield from self._render_unit(rel, osm, session)
+
+        for way in osm.ways.values():
             if way.valid and way.r:
-                renderer = way.rr or self.renderer
-                renderer.preRender(way)
-                if way.t is parse.polygon:
-                    renderer.renderPolygon(way, osm)
-                else:
-                    renderer.renderLineString(way, osm)
-                renderer.postRender(way)
-        
+                yield from self._render_unit(way, osm, session)
+
         for node in osm.rNodes:
-            renderer = node.rr or self.nodeRenderer
-            #renderer.preRender(node)
-            renderer.renderNode(node, osm)
-            #renderer.postRender(node)
+            render = lambda node=node: (node.rr or self.nodeRenderer).renderNode(node, osm)
+            if session:
+                yield from session.node_unit(node, render)
+            else:
+                render()
+                yield None
+
+    def _render_unit(self, rel, osm, session):
+        def render():
+            renderer = rel.rr or self.renderer
+            renderer.preRender(rel)
+            if rel.t is parse.polygon:
+                renderer.renderPolygon(rel, osm)
+            elif rel.t is parse.multipolygon:
+                renderer.renderMultiPolygon(rel, osm)
+            elif rel.t is parse.linestring:
+                renderer.renderLineString(rel, osm)
+            else:
+                renderer.renderMultiLineString(rel, osm)
+            renderer.postRender(rel)
+
+        if session:
+            yield from session.unit(render)
+        else:
+            render()
+            yield None

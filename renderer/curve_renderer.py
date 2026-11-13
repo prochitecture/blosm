@@ -89,7 +89,7 @@ class CurveRenderer(Renderer):
                 )
             self.obj = layer.obj
         else:
-            self.obj = self.createBlenderObject(
+            self.obj = layer.obj = self.createBlenderObject(
                 self.getName(element),
                 self.offsetZ or self.offset or layer.location,
                 collection = layer.getCollection(self.collection),

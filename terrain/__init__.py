@@ -57,9 +57,13 @@ class Terrain:
                 raise Exception("Blender object %s for the terrain doesn't exist. " % terrainObjectName)
         self.terrain = terrain
         self.envelope = None
+        self.location = None
     
     def init(self, createBvhTree):
         terrain = self.terrain
+        # Bounds and matrix_world are geometry inputs, including for freshly
+        # created flat terrain or a transform assigned immediately before import.
+        bpy.context.view_layer.update()
         
         # transform <terrain.bound_box> to the world system of coordinates
         bound_box = tuple(terrain.matrix_world @ Vector(v) for v in terrain.bound_box)
@@ -77,12 +81,10 @@ class Terrain:
             # An attribute to store the original location of the terrain Blender object,
             # if the terrain isn't located at the origin of the world system of coordinates
             self.location = None
-            if terrain.location.length_squared:
-                self.location = terrain.location.copy()
-                # set origin of the terrain Blender object to zero
-                self.setOrigin(zeroVector())
             bm = bmesh.new()
             bm.from_mesh(terrain.data)
+            # Project in world coordinates without temporarily editing user data.
+            bm.transform(terrain.matrix_world)
             self.bvhTree = BVHTree.FromBMesh(bm)
             # <bm> is no longer needed
             bm.free()
@@ -139,12 +141,12 @@ class Terrain:
     def createEnvelope(self):
         terrain = self.terrain
         name = "%s_envelope" % terrain.name
-        if name in bpy.data.objects:
-            # use existing Blender object
-            envelope = bpy.data.objects[name]
+        if self.envelope is not None:
+            envelope = self.envelope
         else:
             # create new envelope for the terrain
             envelope = createMeshObject(name, (0., 0., self.minZ), terrain.data.copy())
+            envelope.data.transform(terrain.matrix_world)
             # materials aren't needed for the envelope
             envelope.data.materials.clear()
             envelope.data.name = name
@@ -228,8 +230,12 @@ class Terrain:
         indices = []
         vertsCounter = 0
         
-        xMin, yMin, _ = projection.fromGeographic(minLat, minLon)
-        xMax, yMax, _ = projection.fromGeographic(maxLat, maxLon)
+        xMin, yMin = projection.fromGeographic(minLat, minLon)[:2]
+        xMax, yMax = projection.fromGeographic(maxLat, maxLon)[:2]
+        if xMax == xMin:
+            xMin, xMax = xMin-Terrain.flatTerrainStepX/2, xMax+Terrain.flatTerrainStepX/2
+        if yMax == yMin:
+            yMin, yMax = yMin-Terrain.flatTerrainStepY/2, yMax+Terrain.flatTerrainStepY/2
         
         # the number of quads along x-axis
         xSize = math.ceil((xMax-xMin)/Terrain.flatTerrainStepX)

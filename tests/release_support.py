@@ -101,6 +101,9 @@ def reset(args):
             del scene[key]
     scene.property_unset('blosm')
     settings = scene.blosm
+    # Existing release suites require an immediately completed import. The OSM
+    # progressive suite explicitly exercises the enabled/default path.
+    settings.progressiveImport = False
     settings.gnBlendFile2d = ''
     settings.gnSetup2d = '-'
     settings.setupScript = ''

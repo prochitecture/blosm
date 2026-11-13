@@ -306,8 +306,9 @@ class BuildingRendererNew(Renderer):
     def postRender(self, building):
         # assign OSM tags to the blender object
         assignTags(building.renderInfo.gen.obj, building.element.tags)
-        building.element.l.finalize()
-        building.renderInfo.gen.finalize()
+        building.element.l.finalize(self)
+        if self.app.preferableResult != defs.Result.FootprintWithGn:
+            building.renderInfo.gen.finalize()
     
     def setUvs(self, face, uvs, layer, uvLayerName):
         # assign uv coordinates
