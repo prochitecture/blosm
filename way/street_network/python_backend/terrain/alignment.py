@@ -156,6 +156,15 @@ class PlacementResult:
 
 
 def fit(references, components, terrain, settings=PlacementSettings(), *, cache=None, terrain_token=None):
+    producer = fit_steps(references, components, terrain, settings, cache=cache, terrain_token=terrain_token)
+    while True:
+        try:
+            next(producer)
+        except StopIteration as done:
+            return done.value
+
+
+def fit_steps(references, components, terrain, settings=PlacementSettings(), *, cache=None, terrain_token=None):
     """terrain(xy[N,2]) returns original-terrain Z[N], or raises on any miss."""
     settings.validate()
     refs = {r.identity: r for r in references}
@@ -208,6 +217,7 @@ def fit(references, components, terrain, settings=PlacementSettings(), *, cache=
                 for nodes in (lo, hi):
                     np.maximum.at(local_floors, nodes[c.quads[ids]].ravel(), np.repeat(required, 4))
                 samples_count += height.size
+                yield None
             constraints[c.identity] = (token, local_floors, samples_count, None)
         else:
             local_floors, samples_count = saved.floors, saved.samples
@@ -215,6 +225,7 @@ def fit(references, components, terrain, settings=PlacementSettings(), *, cache=
         ns = node_ids[c.reference]
         floors[ns] = np.maximum(floors[ns], local_floors)
         sample_count += samples_count
+        yield None
     roots = np.array([root(i) for i in range(len(parent))])
     merged = np.full(len(parent), -np.inf)
     np.maximum.at(merged, roots, floors)
@@ -229,7 +240,11 @@ def fit(references, components, terrain, settings=PlacementSettings(), *, cache=
                 edges[a].append((b,cost)); edges[b].append((a,cost))
     queue = [(-h,i) for i,h in enumerate(merged) if np.isfinite(h)]
     heapq.heapify(queue)
+    processed = 0
     while queue:
+        processed += 1
+        if processed % 512 == 0:
+            yield None
         negative, a = heapq.heappop(queue)
         if -negative < merged[a]-1e-12:
             continue
@@ -260,6 +275,7 @@ def fit(references, components, terrain, settings=PlacementSettings(), *, cache=
         if lift > settings.maximum_lift + settings.clearance+c.clearance:
             raise ValueError(f'{c.identity}: terrain fit lifts the surface {lift:.2f} m above ground; limit is {settings.maximum_lift:.2f} m. Reduce the protected region or revise the alignment/terrain settings')
         coordinates[c.identity] = xyz
+        yield None
     return PlacementResult(curves, coordinates, dict(references=len(refs), samples=sample_count,
         maximum_reference_grade=grade, maximum_surface_lift=maximum_lift,
         sample_spacing=settings.sample_spacing, clearance=settings.clearance,

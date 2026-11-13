@@ -12,7 +12,7 @@ from .patterns import PatternLibrary
 from .providers import PathProvider
 from .profiles import ProfileProvider
 from .routes import Route, RouteTopology, route_key
-from .updates import UpdateCoordinator, BuildContext
+from .updates import UpdateCoordinator, BuildContext, drain_steps, _PreparationProgress
 
 
 @dataclass
@@ -219,16 +219,29 @@ class ClippedApproachSupport:
             output_end_kind='SOURCE_ENDPOINT' if true_endpoint else 'SELECTION_CUT')
 
     def prepare(self, network):
+        return drain_steps(self.prepare_steps(network))
+
+    def prepare_steps(self, network, *, on_progress=None):
+        """Checkpoint original-source recovery without changing its policy.
+
+        Pending networks, dependency products and provenance belong only to
+        this iterator. Closing it discards the attempt; the input network and
+        retained original-source context remain unchanged. One contact fit or
+        source-extension calculation still runs as an indivisible operation.
+        """
         from .intersections import IntersectionProvider, CornerConstructionError, ApproachExtentError
+        progress = _PreparationProgress(on_progress)
         report = dict(policy=self.policy, status='NO_EXTENSION_NEEDED', selection_cuts=[],
                       context_trims=[], extensions=[], provenance_phase='INITIAL_IMPORT',
                       style_support='FIT_WITHIN_ALLOWED_RADIUS_RANGE',
                       scope='Original source/contact preparation; meshes unqualified')
+        yield from progress.checkpoint('Preparing clipped street approaches')
         try:
             cuts = self._cuts(network)
             sections = tuple(replace(s, selection_ends=tuple(sorted(set(s.selection_ends) |
                              {end.end for end in cuts if end.section_id == s.id}))) for s in network.sections)
             network = replace(network, sections=sections)
+            yield from progress.checkpoint('Trimming original street context')
             network = self._trim_context_legs(network, report)
         except ValueError as exc:
             return self._error(network, report, exc)
@@ -239,7 +252,7 @@ class ClippedApproachSupport:
         coordinator = UpdateCoordinator((PathProvider(), ProfileProvider()), patterns)
         attempted = set()
         try:
-            update = coordinator.prepare(network)
+            update = yield from coordinator.prepare_steps(network, on_progress=on_progress)
             coordinator.commit(update)
             while True:
                 context = BuildContext(network, dict(update.products), patterns)
@@ -247,7 +260,9 @@ class ClippedApproachSupport:
                 for junction in network.intersections:
                     if len(junction.ends) < 3:
                         continue
+                    yield from progress.checkpoint(f'Checking clipped approaches for {junction.key.text()}')
                     approaches = self._approaches(context, junction)
+                    yield from progress.checkpoint(f'Fitting clipped footprint for {junction.key.text()}')
                     try:
                         IntersectionProvider.footprint(context, junction)
                     except (CornerConstructionError, ApproachExtentError) as exc:
@@ -257,6 +272,7 @@ class ClippedApproachSupport:
                     report['status'] = 'CONTACTS_READY'
                     return SourcePreparation(network, report)
                 junction, approaches, error = failed
+                yield from progress.checkpoint(f'Recovering clipped support for {junction.key.text()}')
                 required = self._lengths(junction, approaches)
                 replacements, additions, prepends = {}, [], {}
                 bundled = {sid for bundle in network.bundles for sid in bundle.sections}
@@ -275,6 +291,7 @@ class ClippedApproachSupport:
                     extra = target - approach.length
                     if extra <= 1e-6:
                         continue
+                    yield from progress.checkpoint(f'Extending original street source {last.section.key.text()}')
                     replacement, provenance = self._extension(last.section, end.end, cuts[end], extra)
                     if last.section.id in replacements:
                         raise SourceSupportError('A shared terminal Section needs coordinated support ownership')
@@ -285,9 +302,9 @@ class ClippedApproachSupport:
                 if not replacements:
                     return self._error(network, report, error)
                 candidate = replace(network, sections=tuple(replacements.get(s.id, s) for s in network.sections))
-                prepared = coordinator.prepare(candidate)
+                prepared = yield from coordinator.prepare_steps(candidate, on_progress=on_progress)
                 furniture = []
-                for placement in network.furniture:
+                for index, placement in enumerate(network.furniture, 1):
                     if placement.section_id in replacements:
                         old = update.products[Key('path', placement.section_id)]
                         new = prepared.products[Key('path', placement.section_id)]
@@ -295,6 +312,8 @@ class ClippedApproachSupport:
                         parameter = old.parameter(placement.station) + shift
                         placement = replace(placement, station=float(new.station(parameter)))
                     furniture.append(placement)
+                    if index % 32 == 0:
+                        yield from progress.checkpoint('Preserving clipped street furniture positions')
                 network = replace(candidate, furniture=tuple(furniture))
                 coordinator.commit(prepared)
                 update = prepared

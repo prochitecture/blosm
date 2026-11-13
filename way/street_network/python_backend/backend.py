@@ -4,8 +4,8 @@ from dataclasses import replace
 from .intersections import IntersectionProvider
 from .patterns import PatternLibrary
 from .providers import PathProvider, CarriagewayProvider, FurnitureProvider
-from .updates import UpdateCoordinator
-from .validation import validate_overlaps
+from .updates import UpdateCoordinator, drain_steps, _PreparationProgress
+from .validation import validate_overlaps_steps
 from .profiles import ProfileProvider
 from .bundles import BundleProvider
 
@@ -45,32 +45,54 @@ class PythonMeshBackend:
         self.updates = UpdateCoordinator(self.providers, self.patterns)
 
     def prepare(self, network, *, force=False):
-        start = time.perf_counter()
+        return drain_steps(self.prepare_steps(network, force=force))
+
+    def prepare_steps(self, network, *, force=False, on_progress=None):
+        """Prepare numerical products cooperatively without accepting them.
+
+        UV fallback yields between products, and overlap validation yields at
+        its existing numerical batch boundaries. Individual builders and UV
+        mappings remain indivisible operations; the phase callback identifies
+        those operations before they begin. No Blender or
+        scheduler dependency is needed by this numerical producer.
+        """
+        progress = _PreparationProgress(on_progress)
+        yield from progress.checkpoint('Checking street feature support')
         supported = set().union(*(provider.source_kinds for provider in self.providers))
         missing = {key.kind for key in network.records()} - supported
         if missing:
             raise ValueError('No registered numerical provider supports: ' + ', '.join(sorted(missing)))
         self.patterns.set_budget(network.settings.pattern_cache_bytes)
-        prepared = self.updates.prepare(network, force=force)
+        prepared = yield from progress.forward(self.updates.prepare_steps(
+            network, force=force, on_progress=on_progress))
         # Feature providers can supply their own charts and extra UV sets.
         # Every otherwise uncharted Part gets a shared physical-plan fallback,
         # after its final geometry has been assembled and before placement.
         from .providers import Part
         from .uv import DEFAULT_UV_MAP, PlanarMapping, apply_mapping
-        uv_start = time.perf_counter()
+        uv_seconds = 0.
         products = dict(prepared.products)
-        for key, part in products.items():
+        yield from progress.checkpoint('Checking street UV maps')
+        for index, (key, part) in enumerate(products.items(), 1):
             if isinstance(part, Part) and part.mesh is not None and DEFAULT_UV_MAP not in part.mesh.uv_layers:
+                yield from progress.checkpoint(f'Mapping street UVs for {key.text()}')
+                before = time.perf_counter()
                 products[key] = Part(part.owner, apply_mapping(part.mesh, PlanarMapping()),
                                      dict(part.metadata, uv_mapping='planar_xy_metres'))
+                uv_seconds += time.perf_counter() - before
+            elif index % 32 == 0:
+                yield from progress.checkpoint()
         prepared = replace(prepared, products=products)
-        prepared.timings['uv_seconds'] = time.perf_counter() - uv_start
+        prepared.timings['uv_seconds'] = uv_seconds
+        yield from progress.checkpoint('Validating street overlaps')
         meshes = {key: part.mesh for key, part in prepared.products.items()
                   if hasattr(part, 'mesh') and part.mesh is not None}
-        prepared.timings['overlap_check'] = validate_overlaps(meshes, changed=prepared.rebuilt,
-            cell_size=max(1., network.settings.spacing * 2.))
+        prepared.timings['overlap_check'] = yield from progress.forward(validate_overlaps_steps(
+            meshes, changed=prepared.rebuilt, cell_size=max(1., network.settings.spacing * 2.),
+            on_progress=on_progress))
+        yield from progress.checkpoint('Street numerical validation complete')
         prepared.timings['geometry_seconds'] = prepared.timings['total']
-        prepared.timings['total'] = time.perf_counter() - start
+        prepared.timings['total'] = progress.elapsed()
         return prepared
 
     def commit(self, prepared):

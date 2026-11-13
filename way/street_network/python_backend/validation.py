@@ -1,5 +1,12 @@
 """Spatial broad phase and batched separating-axis tests for pavement quads."""
 import numpy as np
+from .updates import drain_steps
+
+
+def _checkpoint(on_progress, label):
+    if on_progress is not None:
+        on_progress(label)
+    yield None
 
 
 def bounds_overlap(a, b):
@@ -73,6 +80,16 @@ def _entries(first, spans, indices):
 class _CellGrid:
     """CSR grid containing changed faces only; no unchanged/unchanged work."""
     def __init__(self, first, spans, indices, max_entries):
+        drain_steps(self._initialize_steps(first, spans, indices, max_entries))
+
+    @classmethod
+    def create_steps(cls, first, spans, indices, max_entries, on_progress=None):
+        grid = cls.__new__(cls)
+        yield from grid._initialize_steps(first, spans, indices, max_entries, on_progress)
+        return grid
+
+    def _initialize_steps(self, first, spans, indices, max_entries, on_progress=None):
+        yield from _checkpoint(on_progress, 'Indexing street overlap cells')
         count = int(np.sum(spans[indices, 0] * spans[indices, 1]))
         if count > max_entries:
             raise ValueError('Overlap index exceeds its entry budget; increase cell size or partition the network')
@@ -83,6 +100,10 @@ class _CellGrid:
             stop = at + len(faces)
             coordinates[at:stop], owners[at:stop] = cells, faces
             at = stop
+            yield None
+        # NumPy sorting remains one indivisible call. Yield before it so its
+        # phase is visible, and retain the exact original ordering decisions.
+        yield from _checkpoint(on_progress, 'Sorting street overlap cells')
         order = np.lexsort((owners, coordinates[:, 1], coordinates[:, 0]))
         coordinates, owners = coordinates[order], owners[order]
         starts = np.flatnonzero(np.r_[True, np.any(coordinates[1:] != coordinates[:-1], axis=1)])
@@ -91,6 +112,7 @@ class _CellGrid:
         self.offsets = np.r_[starts, len(owners)]
         self.owners = owners
         self.entries = count
+        yield None
 
     def pairs(self, first, spans, indices):
         for faces, cells in _entries(first, spans, indices):
@@ -126,20 +148,33 @@ class _CellGrid:
 
 def validate_overlaps(meshes, *, changed=None, cell_size=2., tolerance=1e-6,
                       max_index_entries=8_000_000):
+    return drain_steps(validate_overlaps_steps(meshes, changed=changed, cell_size=cell_size,
+        tolerance=tolerance, max_index_entries=max_index_entries))
+
+
+def validate_overlaps_steps(meshes, *, changed=None, cell_size=2., tolerance=1e-6,
+                            max_index_entries=8_000_000, on_progress=None):
     """Test changed parts against each other, themselves and nearby old parts.
 
     The index is rebuilt from supplied geometry, so a newly introduced spatial
     interaction cannot be missed because it was absent from an old dependency
     graph. Persistent topology still decides which feature owns each surface.
+    Yield between mesh collection, grid, candidate and SAT batches. Array
+    concatenation, indexing and sorting remain indivisible NumPy operations;
+    the existing batch limits and numerical decisions are unchanged.
     """
     if (not np.isfinite(cell_size) or cell_size <= 0. or not np.isfinite(tolerance) or tolerance < 0.
             or type(max_index_entries) is not int or max_index_entries < 1):
         raise ValueError('Invalid overlap-index limits')
     if not meshes:
         return dict(quads=0, candidate_pairs=0)
+    yield from _checkpoint(on_progress, 'Collecting street overlap geometry')
     keys = list(meshes)
     changed = set(keys) if changed is None else set(changed)
-    arrays = [meshes[key].xyz[meshes[key].quads, :2] for key in keys]
+    arrays = []
+    for key in keys:
+        arrays.append(meshes[key].xyz[meshes[key].quads, :2])
+        yield None
     points = np.concatenate(arrays)
     owners = np.concatenate([np.full(len(a), i, dtype=np.int32) for i, a in enumerate(arrays)])
     selected = np.array([key in changed for key in keys], dtype=bool)[owners]
@@ -153,9 +188,12 @@ def validate_overlaps(meshes, *, changed=None, cell_size=2., tolerance=1e-6,
     spans = last - first + 1
     if np.any(spans > 4096) or np.any(spans[:, 0] * spans[:, 1] > 4096):
         raise ValueError('Surface quad exceeds the overlap-index spatial budget')
-    grid = _CellGrid(first, spans, np.flatnonzero(selected), max_index_entries)
+    grid = yield from _CellGrid.create_steps(first, spans, np.flatnonzero(selected),
+                                             max_index_entries, on_progress)
     pair_count, batches = 0, 0
+    yield from _checkpoint(on_progress, 'Checking street overlap pairs')
     for target, partner, slots in grid.pairs(first, spans, np.arange(len(points), dtype=np.int32)):
+        yield None
         # Choose the lexicographically first common cell, so a face pair is
         # tested once even when its boxes share many cells. Both changed faces
         # use their original order; an unchanged face can query any changed one.
@@ -178,5 +216,6 @@ def validate_overlaps(meshes, *, changed=None, cell_size=2., tolerance=1e-6,
                 at = int(np.flatnonzero(hit)[0])
                 raise ValueError(f'Pavement interiors overlap: {keys[owners[a[at]]].text()} '
                                  f'and {keys[owners[b[at]]].text()}')
+            yield None
     return dict(quads=len(points), candidate_pairs=pair_count,
                 index_entries=grid.entries, sat_batches=batches)

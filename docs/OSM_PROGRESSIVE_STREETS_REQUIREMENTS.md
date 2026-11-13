@@ -1,5 +1,10 @@
 # Progressive OSM import: street and intersection integration requirements
 
+**Implementation update, 13 November 2026:** the dev82 street integration is
+documented in [Cooperative Python street import](STREETS_PROGRESSIVE_IMPORT.md).
+This document retains the original 12 November source audit and proposed merge
+contract; its descriptions of the then-current implementation are historical.
+
 Technical handoff for the chat implementing progressive OSM import on `release`.
 Prepared on **12 November 2026** from the street-development checkout based on
 `buildings_gn`. This is a design and source audit, **not an implementation of

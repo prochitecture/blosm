@@ -83,6 +83,15 @@ class OsmImport:
                          for p in context.scene.blosm.bl_rna.properties
                          if p.identifier != 'rna_type' and p.type not in ('COLLECTION', 'POINTER')}
         self.requested = bool(self.settings['progressiveImport'])
+        # Blender ID inputs (for example a street material override) are not
+        # scalar settings, but still belong to the captured import request.
+        # Do not retain RNA PropertyGroups or re-read the panel on later turns.
+        self.pointer_settings = {}
+        for prop in context.scene.blosm.bl_rna.properties:
+            if prop.type == 'POINTER' and prop.identifier != 'rna_type':
+                value = getattr(context.scene.blosm, prop.identifier)
+                if value is None or isinstance(value, bpy.types.ID):
+                    self.pointer_settings[prop.identifier] = value
         self.progressive = self.requested and not self.settings['commandLineMode']
         self.effective_single = self.settings['singleObject'] and not self.requested
         self.units = self.scene.unit_settings.scale_length
@@ -157,6 +166,9 @@ class OsmImport:
                 hashlib.sha256(coordinates.tobytes()).digest(), len(obj.data.polygons), tuple(modifiers))
 
     def validate(self):
+        for name, value in self.pointer_settings.items():
+            if value is not None and not alive(value):
+                raise RuntimeError('An import input was deleted: ' + name)
         if not alive(self.scene):
             raise RuntimeError('The import scene was deleted')
         if self.scene.unit_settings.scale_length != self.units:
@@ -297,6 +309,8 @@ class OsmImport:
         self.owns_app = True
         app.projection = None
         for name, value in self.settings.items():
+            setattr(app, name, value)
+        for name, value in self.pointer_settings.items():
             setattr(app, name, value)
         app.singleObject = self.effective_single
         app.osm_default_levels = self.default_levels

@@ -96,6 +96,10 @@ class StreetGenerator():
         self.allWays = True
 
     def do(self, manager):
+        for _ in self.do_steps(manager):
+            pass
+
+    def do_steps(self, manager, session=None):
 
         # Finally, the results of StreetGenerator.do() are stored by the WayManager.
         # Link the local attributes to them.
@@ -118,50 +122,105 @@ class StreetGenerator():
         NetSection.ID = 0
 
         # Find the way segments, that intersect each other.
-        self.findSelfIntersections()
+        if session is not None:
+            session.phase = 'Finding street crossings'
+            session.call(self.findSelfIntersections)
+        else:
+            self.findSelfIntersections()
+        yield None
 
         # Split evetually crossing segments.
         # Join the OSM segments to sections between the intersection points.
         # Store them in the network graph <self.sectionNetwork>.
-        self.createWaySectionNetwork()
+        if session is not None:
+            session.phase = 'Connecting street sections'
+            session.call(self.createWaySectionNetwork)
+        else:
+            self.createWaySectionNetwork()
+        yield None
 
         # Create instances of class Section sections, including style block parameters
         # and attributes. Cretae instances of class Street, containing only a single section.
         # Add these Street instances as edges to the waymap (class WayMap), construct Instances of class
         # Intersection and add them as nodes to the waymap..
-        self.createWaymap()
+        if session is not None:
+            session.phase = 'Reading street widths and styles'
+            session.call(self.createWaymap)
+        else:
+            self.createWaymap()
+        yield None
 
         # Check all instances of Street for SymLane or SideLane intersections. Construct them,
         # create longer Street objects with both streets and the SymSideLane object. Replace
         # these two streets and the intersection by the new instance of Street.
-        self.createSymSideLanes()
+        if session is not None:
+            session.phase = 'Joining linked street sections'
+            session.call(self.createSymSideLanes)
+        else:
+            self.createSymSideLanes()
+        yield None
 
         # Construct the connectors off the intersections
-        self.updateIntersections()
+        if session is not None:
+            session.phase = 'Preparing intersection approaches'
+            session.call(self.updateIntersections)
+        else:
+            self.updateIntersections()
+        yield None
 
         # Create the dictionary <manager.streets> of Street instances.
-        self.createStreets()
+        if session is not None:
+            session.phase = 'Assembling street paths'
+            session.call(self.createStreets)
+        else:
+            self.createStreets()
+        yield None
 
         # Find and plot possibly circular streets like roundabouts (curently not active)
         # self.circularStreets()
 
         # Create an instance self.parallelStreets of <DisjointSets> with
         # groups of streets, that are considered as parallel.
-        self.createParallelStreets()
+        if session is not None:
+            session.phase = 'Finding neighboring carriageways'
+            session.call(self.createParallelStreets)
+        else:
+            self.createParallelStreets()
+        yield None
 
         # Constructs the Bundles and includes their inner streets
-        self.createBundles()
+        if session is not None:
+            session.phase = 'Grouping divided carriageways'
+            session.call(self.createBundles)
+        else:
+            self.createBundles()
+        yield None
 
         # If two bundles meet and there are no major inner streets at the meeting
         # intersection, they can be merged into one bundle.
-        self.joinBundles()
+        if session is not None:
+            session.phase = 'Joining divided street groups'
+            session.call(self.joinBundles)
+        else:
+            self.joinBundles()
+        yield None
 
         # Finally, the intersections of bundles are constructed.
-        self.createBundleIntersections()
+        if session is not None:
+            session.phase = 'Preparing divided intersections'
+            session.call(self.createBundleIntersections)
+        else:
+            self.createBundleIntersections()
+        yield None
 
         # Post-processing:
         # - Propagate the width and offset from a Section following SideLane or SymLane
-        self.postProcessing()
+        if session is not None:
+            session.phase = 'Finishing street input preparation'
+            session.call(self.postProcessing)
+        else:
+            self.postProcessing()
+        yield None
 
 
     # Find the way segments, that intersect each other.

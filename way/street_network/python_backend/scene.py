@@ -14,12 +14,19 @@ from .backend import PythonMeshBackend, DEFAULT_FEATURES
 from .model import Network, Key, fingerprint
 from .providers import Part, AnchorTransform
 from .mesh import Mesh, publication_coordinates
-from .validation import bounds_overlap, validate_overlaps
+from .validation import bounds_overlap, validate_overlaps_steps
+from .updates import drain_steps
+from ....progressive.ownership import Ownership, alive
 from . import VERSION
 
 _ENGINES = {}
+_UPDATING = set()
 _ATTRIBUTES = (('st_section_id', 'INT'), ('st_width', 'FLOAT'),
                ('st_offset', 'FLOAT'), ('st_rise', 'FLOAT'), ('st_interpolation', 'INT'))
+
+
+class StreetInputChanged(RuntimeError):
+    """A pending publication lost its inputs; do not accept diagnostic output."""
 
 
 def _scale():
@@ -68,6 +75,115 @@ def _prune_runtime():
         for identity in tuple(_ENGINES):
             if identity not in live:
                 del _ENGINES[identity]
+
+
+class _SceneRevision:
+    """Validate authored inputs across checkpoints without observing selection.
+
+    Source geometry is checked once more before publication. Cheap controller
+    checks run on each turn; the OSM session also supplies its terrain/scene
+    validation. All producers retain an evaluated terrain signature.
+    """
+    def __init__(self, controller, network, validate=None):
+        self.controller, self.network, self.validate_external = controller, network, validate
+        self.scene = bpy.context.scene
+        self.scale = _scale()
+        self.source = controller['st_py_sources']
+        self.output = controller['st_py_outputs']
+        self.parents = tuple(controller.users_collection)
+        self.signature = self._signature()
+        self.network_signature = fingerprint(network)
+        self.terrain = getattr(getattr(controller, 'blosm_street_terrain', None), 'target', None)
+        # The shared OSM guard detects ordinary source edits cheaply, but
+        # modifier dependency geometry/topology needs an evaluated final check.
+        self.terrain_signature = self._terrain_signature() if self.terrain else None
+
+    def _signature(self):
+        controller = self.controller
+        props = getattr(controller, 'blosm_street_terrain', None)
+        terrain = tuple(getattr(props, field) for field in (
+            'target', 'mode', 'clearance', 'maximum_grade', 'control_spacing',
+            'sample_spacing', 'maximum_lift')) if props else ()
+        return (tuple(controller.get(key) for key in (
+            'st_py_network_uuid', 'st_py_source_data', 'st_py_manifest', 'st_py_features',
+            'st_py_cell_size', 'st_py_resolution', 'st_py_exaggeration',
+            'st_py_pavement_material', 'st_py_grass_material')),
+            getattr(controller, 'blosm_street_pavement', None), terrain,
+            tuple(v for row in controller.matrix_world for v in row))
+
+    def _terrain_signature(self):
+        from .terrain.blender import TerrainSampler
+        return TerrainSampler(self.terrain, self.controller, self.scale).signature
+
+    def _linked_to_scene(self):
+        # Alive datablocks can still have been unlinked through the Outliner.
+        # Do not accept a component whose controls or outputs became invisible
+        # merely because its collection pointers are unchanged.
+        required = {self.source, self.output, *self.parents}
+        pending, visited = [self.scene.collection], set()
+        while pending and required:
+            collection = pending.pop()
+            if collection in visited:
+                continue
+            visited.add(collection)
+            required.discard(collection)
+            pending.extend(collection.children)
+        return not required
+
+    def __call__(self, *, final=False):
+        if self.validate_external:
+            self.validate_external()
+        controller = self.controller
+        if not all(alive(item) for item in (self.scene, controller, self.source, self.output)):
+            raise StreetInputChanged('Street update targets were deleted')
+        if bpy.context.scene != self.scene or _scale() != self.scale:
+            raise StreetInputChanged('Street update scene or units changed')
+        if (controller.get('st_py_sources') != self.source or controller.get('st_py_outputs') != self.output
+                or tuple(controller.users_collection) != self.parents or self._signature() != self.signature):
+            raise StreetInputChanged('Street update inputs changed; prepare the streets again')
+        if not self._linked_to_scene():
+            raise StreetInputChanged('Street source or output collection was unlinked from the import scene')
+        if self.terrain is not None and not alive(self.terrain):
+            raise StreetInputChanged('Street terrain was deleted')
+        if final:
+            try:
+                source_signature = fingerprint(SourceObjects.read(controller))
+            except (ValueError, RuntimeError) as exc:
+                raise StreetInputChanged('Authored street sources changed during generation') from exc
+            if source_signature != self.network_signature:
+                raise StreetInputChanged('Authored street sources changed during generation')
+            if self.terrain_signature is not None and self._terrain_signature() != self.terrain_signature:
+                raise StreetInputChanged('Street terrain changed during generation')
+
+    def final(self):
+        self(final=True)
+
+
+def _guard_steps(steps, validate):
+    """Close nested work on cancellation and validate each resumed checkpoint."""
+    try:
+        while True:
+            validate()
+            try:
+                command = next(steps)
+            except StopIteration as finished:
+                return finished.value
+            yield command
+    finally:
+        steps.close()
+
+
+class _SceneOwnership(Ownership):
+    """Share explicit allocation records with the containing import session."""
+    def __init__(self, parent=None):
+        super().__init__()
+        self.parent = parent
+
+    def own(self, kind, item):
+        super().own(kind, item)
+        if self.parent is not None:
+            self.parent.own(kind, item)
+        return item
 
 
 class SourceObjects:
@@ -185,10 +301,12 @@ class SceneWriter:
         self.materials = materials or {}
 
     @staticmethod
-    def _mesh(name, mesh, scale):
+    def _mesh(name, mesh, scale, *, ownership=None):
         from .uv import publication_uv_coordinates
         mesh.validate()
         result = bpy.data.meshes.new(name)
+        if ownership is not None:
+            ownership.own('meshes', result)
         try:
             result.vertices.add(len(mesh.xyz))
             result.vertices.foreach_set('co', publication_coordinates(mesh.xyz, scale).ravel())
@@ -212,60 +330,101 @@ class SceneWriter:
             bpy.data.meshes.remove(result)
             raise
 
-    def publish(self, controller, network, engine, update):
+    def publish(self, controller, network, engine, update, *, validate=None, on_progress=None,
+                parent_ownership=None):
+        return drain_steps(self.publish_steps(controller, network, engine, update,
+            validate=validate or getattr(self, '_validate', None),
+            on_progress=on_progress or getattr(self, '_on_progress', None), parent_ownership=parent_ownership))
+
+    def publish_steps(self, controller, network, engine, update, *, validate=None, on_progress=None,
+                      parent_ownership=None):
+        """Stage detached owned outputs; perform the complete swap in one turn.
+
+        Closing this producer removes only its pending IDs. No accepted output
+        or controller metadata changes before the final non-yielding commit.
+        """
         collection = controller['st_py_outputs']
         owned = {Key.parse(obj['st_py_key']): obj for obj in collection.objects
                  if obj.get('st_py_controller') == controller and obj.get('st_py_key')}
         if len(owned) != sum(obj.get('st_py_controller') == controller for obj in collection.objects):
             raise ValueError('Duplicate or invalid generated ownership')
-        from .terrain.blender import ScenePlacement
-        placement = ScenePlacement(controller, network, update, owned, _scale(), fit_cache=engine.terrain_constraints)
-        update = placement.update
-        changed = {key: p.mesh for key, p in update.products.items()
-                   if key in update.rebuilt and isinstance(p, Part) and p.mesh is not None}
-        scale = _scale()
-        # Validate the representation that will actually be stored. Comparing
-        # a rebuilt double-precision seam with an unchanged float32 seam can
-        # manufacture an overlap when both round to identical stored points.
-        nearby = {key: Mesh(publication_coordinates(mesh.xyz, scale, physical=True), mesh.quads)
-                  for key, mesh in changed.items()}
-        for key, mesh in nearby.items():
-            if mesh.validate()['maximum_edge_ratio'] > 8.:
-                raise ValueError(f'Published quad edge ratio exceeds 8: {key.text()}')
-        changed_bounds = tuple(mesh.bounds for mesh in nearby.values())
-        for key, obj in owned.items():
-            if key in update.rebuilt or key in update.removed or obj.type != 'MESH':
-                continue
-            product = update.products.get(key)
-            if not isinstance(product, Part) or not any(bounds_overlap(
-                    publication_coordinates(product.metadata['bounds'], scale, physical=True), bounds)
-                                          for bounds in changed_bounds):
-                continue
-            xyz = np.empty(len(obj.data.vertices) * 3, dtype=np.float32)
-            ids = np.empty(len(obj.data.loops), dtype=np.int32)
-            obj.data.vertices.foreach_get('co', xyz)
-            obj.data.loops.foreach_get('vertex_index', ids)
-            nearby[key] = Mesh(xyz.reshape(-1, 3).astype(float) * scale, ids.reshape(-1, 4))
-        # Retain the existing 20 um publication tolerance. Every comparison
-        # now uses actual stored precision, independently of coordinate size.
-        update.timings['publication_overlap_check'] = validate_overlaps(nearby, changed=changed,
-            cell_size=max(1., network.settings.spacing * 2.), tolerance=2e-5)
+        original_ids = {key: (obj, obj.data) for key, obj in owned.items()}
+        ownership = _SceneOwnership(parent_ownership)
         staged = []
-        snapshots = {name: controller.get(name) for name in
-                     ('st_py_source_data', 'st_py_manifest', 'st_py_last_update', 'st_py_error', 'st_py_features',
-                      'st_py_terrain_signature', 'st_py_terrain_report', 'st_py_terrain_mode')}
+        committed = False
+
+        def check():
+            if validate:
+                validate()
+            if not alive(controller) or not alive(collection) or controller.get('st_py_outputs') != collection:
+                raise StreetInputChanged('Street publication target was deleted or replaced')
+            current = {Key.parse(obj['st_py_key']): (obj, obj.data) for obj in collection.objects
+                       if obj.get('st_py_controller') == controller and obj.get('st_py_key')}
+            if (current != original_ids or len(current) !=
+                    sum(obj.get('st_py_controller') == controller for obj in collection.objects)):
+                raise StreetInputChanged('Generated street ownership changed during publication')
+            if any(not alive(item) for _, item in ownership.pending.values()):
+                raise StreetInputChanged('Pending street output was deleted')
+
+        def phase(message):
+            check()
+            if on_progress:
+                on_progress(message)
+
         try:
+            phase('Fitting street terrain')
+            yield None
+            check()
+            from .terrain.blender import ScenePlacement
+            placement = yield from _guard_steps(ScenePlacement.create_steps(
+                controller, network, update, owned, _scale(), fit_cache=engine.terrain_constraints,
+                ownership=ownership, on_progress=on_progress), check)
+            update = placement.update
+            yield None
+            phase('Validating stored street geometry')
+            changed = {key: p.mesh for key, p in update.products.items()
+                       if key in update.rebuilt and isinstance(p, Part) and p.mesh is not None}
+            scale = _scale()
+            # Compare actual stored precision for both rebuilt and unchanged
+            # seams, retaining the existing 20 um overlap tolerance.
+            nearby = {}
+            for key, mesh in changed.items():
+                check()
+                stored = Mesh(publication_coordinates(mesh.xyz, scale, physical=True), mesh.quads)
+                if stored.validate()['maximum_edge_ratio'] > 8.:
+                    raise ValueError(f'Published quad edge ratio exceeds 8: {key.text()}')
+                nearby[key] = stored
+                yield None
+            changed_bounds = tuple(mesh.bounds for mesh in nearby.values())
+            for key, obj in owned.items():
+                check()
+                if key in update.rebuilt or key in update.removed or obj.type != 'MESH':
+                    continue
+                product = update.products.get(key)
+                if not isinstance(product, Part) or not any(bounds_overlap(
+                        publication_coordinates(product.metadata['bounds'], scale, physical=True), bounds)
+                                              for bounds in changed_bounds):
+                    continue
+                xyz = np.empty(len(obj.data.vertices) * 3, dtype=np.float32)
+                ids = np.empty(len(obj.data.loops), dtype=np.int32)
+                obj.data.vertices.foreach_get('co', xyz)
+                obj.data.loops.foreach_get('vertex_index', ids)
+                nearby[key] = Mesh(xyz.reshape(-1, 3).astype(float) * scale, ids.reshape(-1, 4))
+                yield None
+            phase('Checking stored street overlaps (complete component)')
+            yield None
+            check()
+            update.timings['publication_overlap_check'] = yield from _guard_steps(validate_overlaps_steps(
+                nearby, changed=changed, cell_size=max(1., network.settings.spacing * 2.), tolerance=2e-5,
+                on_progress=on_progress), check)
+            del nearby
+            yield None
             for key in update.rebuilt:
+                phase('Staging street object ' + key.text())
                 product = update.products[key]
                 if isinstance(product, Part):
-                    mesh = self._mesh(key.text(), product.mesh, _scale())
-                    try:
-                        obj = bpy.data.objects.new(key.text(), mesh)
-                    except Exception:
-                        bpy.data.meshes.remove(mesh)
-                        raise
-                    # Register immediately: metadata/material/property errors
-                    # below must not leak a detached object or its mesh.
+                    mesh = self._mesh(key.text(), product.mesh, scale, ownership=ownership)
+                    obj = ownership.own('objects', bpy.data.objects.new(key.text(), mesh))
                     staged.append(obj)
                     from .materials import resolve, assign
                     assign(mesh, resolve(controller, product.mesh.material, self.materials))
@@ -274,7 +433,7 @@ class SceneWriter:
                     product.metadata['terrain_material'] = product.mesh.material
                     obj['st_py_metadata'] = json.dumps(product.metadata, separators=(',', ':'), allow_nan=False)
                 elif isinstance(product, AnchorTransform):
-                    obj = bpy.data.objects.new(key.text(), None)
+                    obj = ownership.own('objects', bpy.data.objects.new(key.text(), None))
                     staged.append(obj)
                     obj.empty_display_type = 'SINGLE_ARROW'
                     obj.empty_display_size = 3. / _scale()
@@ -287,54 +446,90 @@ class SceneWriter:
                 obj['st_py_controller'] = controller
                 obj['st_py_key'] = key.text()
                 placement.decorate(obj, key)
-            for obj in staged:
-                collection.objects.link(obj)
+                yield None
+            phase('Committing street component')
+            # Final input validation precedes serialization and scene mutation.
+            # The callback supplied by NetworkScene includes source geometry.
+            if validate:
+                getattr(validate, 'final', validate)()
             update.timings['published_objects'] = len(staged)
             retired = set(update.removed) | {key for key in update.rebuilt
                 if not isinstance(update.products[key], (Part, AnchorTransform))}
             update.timings['removed_objects'] = sum(key in owned for key in retired)
-            controller['st_py_source_data'] = json.dumps(network.to_dict(), separators=(',', ':'), allow_nan=False)
-            controller['st_py_features'] = json.dumps(engine.feature_names)
-            # Compute a prospective manifest without advancing the engine. A
-            # publication failure can still restore the complete previous state.
             manifest = dict(version=1, implementation=VERSION, network_uuid=update.network_id, revision=engine.updates.revision + 1,
                 source_fingerprints={k.text(): v for k, v in update.source_fingerprints.items()},
                 task_fingerprints={k.text(): v for k, v in update.task_fingerprints.items()},
                 dependencies={k.text(): [d.text() for d in ds] for k, ds in update.dependencies.items()})
-            controller['st_py_manifest'] = json.dumps(manifest, separators=(',', ':'))
-            controller['st_py_last_update'] = json.dumps(dict(rebuilt=[k.text() for k in update.rebuilt],
-                removed=[k.text() for k in update.removed], timings=update.timings), separators=(',', ':'))
-            controller['st_py_error'] = ''
-            controller['st_py_terrain_signature'] = placement.signature
-            controller['st_py_terrain_mode'] = placement.mode
+            properties = dict(st_py_source_data=json.dumps(network.to_dict(), separators=(',', ':'), allow_nan=False),
+                st_py_features=json.dumps(engine.feature_names), st_py_manifest=json.dumps(manifest, separators=(',', ':')),
+                st_py_error='', st_py_terrain_signature=placement.signature, st_py_terrain_mode=placement.mode)
             if placement.report is not None:
-                controller['st_py_terrain_report'] = json.dumps(placement.report, separators=(',', ':'))
-            engine.commit(placement.raw)
-        except Exception:
-            for obj in staged:
-                data = obj.data
-                bpy.data.objects.remove(obj, do_unlink=True)
-                if isinstance(data, bpy.types.Mesh) and data.users == 0:
-                    bpy.data.meshes.remove(data)
-            for name, value in snapshots.items():
-                if value is None:
-                    if name in controller:
-                        del controller[name]
-                else:
+                properties['st_py_terrain_report'] = json.dumps(placement.report, separators=(',', ':'))
+            retiring = [owned[key] for key in set(update.rebuilt) | set(update.removed) if key in owned]
+            old_links = [(obj, tuple(obj.users_collection)) for obj in retiring]
+            material_slots = [(obj.data, tuple(obj.data.materials)) for key, obj in owned.items()
+                              if key not in set(update.rebuilt) | set(update.removed) and obj.type == 'MESH']
+            snapshots = {name: controller.get(name) for name in (*properties, 'st_py_last_update')}
+            coordinator = engine.updates
+            engine_state = {name: getattr(coordinator, name) for name in (
+                'network_id', 'source_fingerprints', 'task_fingerprints', 'dependencies', 'products', 'revision')}
+            try:
+                # No suspension from the first link through retirement. Old
+                # objects remain allocated until every fallible commit step
+                # succeeds, allowing complete restoration of the prior state.
+                for obj in staged:
+                    collection.objects.link(obj)
+                for obj, links in old_links:
+                    for owner in links:
+                        owner.objects.unlink(obj)
+                for name, value in properties.items():
                     controller[name] = value
-            raise
-        for key in set(update.rebuilt) | set(update.removed):
-            if key not in owned:
-                continue
-            old = owned[key]
-            data = old.data
-            bpy.data.objects.remove(old, do_unlink=True)
-            if isinstance(data, bpy.types.Mesh) and data.users == 0:
-                bpy.data.meshes.remove(data)
-        engine.release_published_meshes()
-        from .materials import refresh
-        update.timings['material_objects_updated'] = refresh(controller, update.products, self.materials)
-        return update
+                from .materials import refresh
+                update.timings['material_objects_updated'] = refresh(controller, update.products, self.materials)
+                controller['st_py_last_update'] = json.dumps(dict(rebuilt=[k.text() for k in update.rebuilt],
+                    removed=[k.text() for k in update.removed], timings=update.timings), separators=(',', ':'))
+                engine.commit(placement.raw)
+                ownership.accept()
+                committed = True
+            except BaseException:
+                for name, value in engine_state.items():
+                    setattr(coordinator, name, value)
+                for mesh, slots in material_slots:
+                    mesh.materials.clear()
+                    for material in slots:
+                        mesh.materials.append(material)
+                for obj, links in old_links:
+                    for owner in links:
+                        if obj.name not in owner.objects:
+                            owner.objects.link(obj)
+                for name, value in snapshots.items():
+                    if value is None:
+                        if name in controller:
+                            del controller[name]
+                    else:
+                        controller[name] = value
+                raise
+            # Postcommit disposal errors retain the coherent accepted result.
+            # Old IDs are detached, so a failed removal cannot show duplicates.
+            cleanup_errors = []
+            for old in retiring:
+                try:
+                    data = old.data
+                    bpy.data.objects.remove(old, do_unlink=True)
+                    if isinstance(data, bpy.types.Mesh) and data.users == 0:
+                        bpy.data.meshes.remove(data)
+                except Exception as exc:
+                    cleanup_errors.append(str(exc))
+            try:
+                engine.release_published_meshes()
+            except Exception as exc:
+                cleanup_errors.append(str(exc))
+            if cleanup_errors:
+                update.timings['publication_cleanup_errors'] = cleanup_errors
+            return update
+        finally:
+            if not committed:
+                ownership.rollback()
 
 
 class NetworkScene:
@@ -371,11 +566,37 @@ class NetworkScene:
 
     @staticmethod
     def update(controller, *, force=False, materials=None):
+        return drain_steps(NetworkScene._update_steps(controller, force=force, materials=materials,
+                                                     blocking=True))
+
+    @staticmethod
+    def update_steps(controller, *, force=False, materials=None, validate=None, on_progress=None,
+                     parent_ownership=None):
+        """Cooperative Update with the same numerical and publication algorithms."""
+        return (yield from NetworkScene._update_steps(controller, force=force, materials=materials,
+                    validate=validate, on_progress=on_progress, parent_ownership=parent_ownership))
+
+    @staticmethod
+    def _update_steps(controller, *, force=False, materials=None, validate=None, on_progress=None,
+                      blocking=False, parent_ownership=None):
+        identity = None
+        original_engine = engine = None
+        completed = False
         try:
             register_runtime()
             _prune_runtime()
+            if on_progress:
+                on_progress('Reading street sources')
+            identity = controller['st_py_network_uuid']
+            if identity in _UPDATING:
+                identity = None
+                raise RuntimeError('This street network already has an update in progress')
+            _UPDATING.add(identity)
             network = SourceObjects.read(controller)
-            engine = _ENGINES.get(network.uuid)
+            revision = _SceneRevision(controller, network, validate)
+            yield None
+            revision()
+            original_engine = engine = _ENGINES.get(network.uuid)
             saved = json.loads(controller.get('st_py_manifest', '{}'))
             features = tuple(json.loads(controller.get('st_py_features', json.dumps(DEFAULT_FEATURES))))
             if (features == ('paths', 'intersections', 'carriageways', 'furniture')
@@ -404,8 +625,28 @@ class NetworkScene:
                                     tuple(float(v) * _scale() for v in obj.location))),
                                 float(obj.rotation_euler.z), obj.get('st_py_asset', 'placeholder'))
                 _ENGINES[network.uuid] = engine
-            update = engine.prepare(network, force=force)
-            return SceneWriter(materials).publish(controller, network, engine, update)
+            update = yield from _guard_steps(engine.prepare_steps(network, force=force,
+                                                                 on_progress=on_progress), revision)
+            writer = SceneWriter(materials)
+            if blocking:
+                # Preserve the public synchronous publication hook used by
+                # extensions and fault-injection tests. It drains publish_steps.
+                writer._validate, writer._on_progress = revision, on_progress
+                result = writer.publish(controller, network, engine, update)
+            else:
+                result = yield from writer.publish_steps(controller, network, engine, update,
+                    validate=revision, on_progress=on_progress, parent_ownership=parent_ownership)
+            completed = True
+            return result
         except Exception as exc:
-            controller['st_py_error'] = str(exc)
+            if alive(controller):
+                controller['st_py_error'] = str(exc)
             raise
+        finally:
+            if identity is not None:
+                _UPDATING.discard(identity)
+                if not completed and engine is not None and _ENGINES.get(identity) is engine:
+                    if original_engine is None:
+                        _ENGINES.pop(identity, None)
+                    else:
+                        _ENGINES[identity] = original_engine

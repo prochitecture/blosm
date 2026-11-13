@@ -1,14 +1,16 @@
 # Street rendering backends
 
-Updated 4 November 2026. **Python is the only installed street backend.**
+Updated 13 November 2026. **Python is the only installed street backend.**
 Both the old Legacy renderer and the experimental GN renderer are removed from
 `buildings_gn`. Building GN, shared street preparation, street materials and the
 feature-independent asset service remain available.
 
-For the planned release-branch progressive OSM importer and its later street
-integration, see [Progressive OSM street requirements](OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md).
-That handoff documents lifecycle, dependencies, publication and cancellation
-contracts; progressive street generation is not implemented yet.
+The Python backend now supplies cooperative OSM preparation, numerical work,
+terrain fitting, validation and detached staging, with complete-component
+publication. See [Cooperative Python street import](STREETS_PROGRESSIVE_IMPORT.md)
+for the dev82 implementation, API and remaining synchronous operations. The
+[progressive OSM street requirements](OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md)
+remain the historical lifecycle, dependency and cancellation design contract.
 
 The [terrain placement stage](STREETS_TERRAIN.md) now offers profile-preserving
 Python placement or a small shared direct-projection GN modifier. This modifier
@@ -33,6 +35,7 @@ Legacy-renderer requirement. Street-only import no longer needs Legacy
 | --- | --- |
 | `prepare()` | Check dependencies, load required assets and initialize import resources |
 | `render(manager, data)` | Read the shared prepared network, generate output and return the backend's context |
+| `render_steps(manager, data, session)` (optional) | Cooperatively prepare and publish backend-defined units; the facade retains an atomic fallback when absent |
 | `finalize()` | Finish publication of successful output |
 | `cleanup()` | Release temporary backend resources |
 
@@ -43,6 +46,10 @@ this import, not a cached mutable engine shared between imports. Existing
 import transactions and per-backend rollback/publication policies remain the
 implementation's responsibility. The facade forwards return values/errors and
 the existing caller controls the lifecycle; it does not change failure handling.
+Optional cooperative dispatch respects subclass overrides: a newer blocking
+`render` override takes precedence over an inherited `render_steps` producer
+and runs as one atomic unit. Supply a matching producer to opt that override
+into cooperative rendering; see [the dispatch contract](STREETS_PROGRESSIVE_IMPORT.md#preparation-and-dependency-order).
 
 ## Adding a backend, including GN
 

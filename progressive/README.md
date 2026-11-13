@@ -4,11 +4,15 @@ OpenStreetMap now uses the same controller and scheduler. See
 [OSM progressive import](../docs/OSM_PROGRESSIVE_IMPORT.md) for supported modes,
 separate-object behavior, provider hooks, tests and the `buildings_gn` handoff.
 The [OSM street integration requirements](../docs/OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md)
-describe the bulk network contract. Native simple-3D PADL buildings use one
+describe the bulk network contract. The
+[Python street implementation](../docs/STREETS_PROGRESSIVE_IMPORT.md) now yields
+during preparation, numerical tasks, terrain fitting, validation and detached
+staging, then publishes a complete connected component without yielding.
+Individual task builders and the final swap remain synchronous; there are no
+street mesh previews before a component is ready. Native simple-3D PADL buildings use one
 complete outline/parts group per progressive step for both GN and Python.
-Native streets and legacy two-pass realistic building generation still use
-their atomic manager fallback; scheduling within those backends remains
-separate work.
+Legacy two-pass realistic building generation still uses its atomic manager
+fallback; scheduling within that backend remains separate work.
 
 **Progressive import** is enabled by default for 3D Tiles. Its checkbox appears
 in the import box directly above the data-type selector. Disable it to use
@@ -132,7 +136,10 @@ callbacks, with the previous policy restored between callbacks and while
 paused. The shared addon preference and failure handling are documented in
 [Import performance](../docs/IMPORT_PERFORMANCE.md).
 
-All development outputs belong under C:/dev/workspace/artifacts/progressive_import.
+Shared progressive development outputs belong under C:/dev/workspace/artifacts/progressive_import.
+Street-specific qualification outputs belong under
+`C:/dev/workspace/artifacts/streets`; the current runs and isolated reproduction
+commands are recorded in [Cooperative Python street import](../docs/STREETS_PROGRESSIVE_IMPORT.md#reproducing-the-checks).
 
 Run tests/test_progressive_transport.py using ordinary Python (not Blender).
 It covers helper reuse, byte payload framing, gzip, HTTP errors, truncated replies,

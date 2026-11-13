@@ -1,5 +1,6 @@
 """Stable importer facade for registered street rendering backends."""
 from .street_network.backends import DEFAULT_BACKEND, registry
+from .progressive import producer_for
 
 
 class StreetRenderer:
@@ -16,6 +17,13 @@ class StreetRenderer:
 
     def render(self, manager, data):
         return self.implementation.render(manager, data)
+
+    def render_steps(self, manager, data, session):
+        producer = producer_for(self.implementation, 'render')
+        if producer is None:
+            yield from session.unit(lambda: self.render(manager, data))
+        else:
+            return (yield from producer(manager, data, session))
 
     def finalize(self):
         return self.implementation.finalize()

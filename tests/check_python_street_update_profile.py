@@ -117,15 +117,21 @@ def main():
         distance=0. if args.edit_kind == 'width' else .05,
         width=0. if args.edit_kind == 'vertex' else .05)
     records = []
-    batched = backend.validate_overlaps
+    backend_batched = backend.validate_overlaps_steps
+    scene_batched = scene.validate_overlaps_steps
     frame = intersections.Approach.frame
     order = updates.DependencyIndex._topological_order
-    terrain_fit = terrain_backend.fit
-    def uncached_fit(*args, **kwargs):
+    terrain_fit_steps = terrain_backend.fit_steps
+    def uncached_fit_steps(*args, **kwargs):
         kwargs['cache'] = None
-        return terrain_fit(*args, **kwargs)
+        return (yield from terrain_fit_steps(*args, **kwargs))
     if args.compare_validation:
         from _python_overlap_reference import validate_reference
+        def reference_steps(meshes, *, on_progress=None, **kwargs):
+            if on_progress is not None:
+                on_progress('Validating street overlaps with frozen reference')
+            yield None
+            return validate_reference(meshes, **kwargs)
         modes = [('reference', False), ('batched', False), ('batched', False), ('reference', False), ('batched', True)]
     elif args.compare_work:
         from _python_work_reference import uncached_approach_frame, sorted_list_topological_order
@@ -140,8 +146,9 @@ def main():
     reference_edited = None
     reference_visual = None
     for method, profiled in modes:
-        terrain_backend.fit = uncached_fit if method == 'uncached-terrain' else terrain_fit
-        backend.validate_overlaps = scene.validate_overlaps = validate_reference if method == 'reference' else batched
+        terrain_backend.fit_steps = uncached_fit_steps if method == 'uncached-terrain' else terrain_fit_steps
+        backend.validate_overlaps_steps = reference_steps if method == 'reference' else backend_batched
+        scene.validate_overlaps_steps = reference_steps if method == 'reference' else scene_batched
         if args.compare_work:
             intersections.Approach.frame = uncached_approach_frame if method == 'old-work' else frame
             updates.DependencyIndex._topological_order = (sorted_list_topological_order if method == 'old-work' else order)
@@ -180,10 +187,11 @@ def main():
         NetworkScene.update(controller)
         assert equal(before, mesh_buffers(controller))
         assert visual_before == visual_signature(controller)
-    backend.validate_overlaps = scene.validate_overlaps = batched
+    backend.validate_overlaps_steps = backend_batched
+    scene.validate_overlaps_steps = scene_batched
     intersections.Approach.frame = frame
     updates.DependencyIndex._topological_order = order
-    terrain_backend.fit = terrain_fit
+    terrain_backend.fit_steps = terrain_fit_steps
     counts = [(r['update']['timings']['overlap_check']['candidate_pairs'],
                r['update']['timings']['publication_overlap_check']['candidate_pairs']) for r in records]
     assert len(set(counts)) == 1, 'Reference/batched candidate sets differ'

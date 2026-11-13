@@ -8,11 +8,12 @@ import bpy
 import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
-from .alignment import PlacementSettings, fit, quad_samples
+from .alignment import PlacementSettings, fit, fit_steps, quad_samples
 from .corridor import prepare as prepare_corridor
 from ..model import Key, fingerprint
 from ..mesh import Mesh, publication_coordinates
 from ..providers import Part, AnchorTransform
+from ..updates import _PreparationProgress
 
 RAW_Z = 'st_terrain_prepared_z'
 MODE_ITEMS = (('PROFILE','Preserve profiles (Python)','Fit complete cross-sections and shared junction minima when Update is pressed'),
@@ -155,7 +156,19 @@ def configure(controller, app):
         setattr(props,field,getattr(app,app_name,getattr(props,field)))
 
 
+def _drain(producer):
+    while True:
+        try:
+            next(producer)
+        except StopIteration as done:
+            return done.value
+
+
 def hydrate(update, owned, scale):
+    return _drain(hydrate_steps(update, owned, scale))
+
+
+def hydrate_steps(update, owned, scale):
     products=dict(update.products)
     for key,product in products.items():
         if not isinstance(product,Part): continue
@@ -186,11 +199,23 @@ def hydrate(update, owned, scale):
         else:
             mesh=product.mesh.with_positions(publication_coordinates(product.mesh.xyz,scale,physical=True))
         products[key]=Part(product.owner,mesh,dict(product.metadata,terrain_material=mesh.material))
+        yield None
     return replace(update,products=products)
 
 
 class ScenePlacement:
     def __init__(self,controller,network,update,owned,scale,*,fit_cache=None):
+        _drain(self.prepare_steps(controller,network,update,owned,scale,fit_cache=fit_cache))
+
+    @classmethod
+    def create_steps(cls,controller,network,update,owned,scale,*,fit_cache=None,ownership=None,on_progress=None):
+        self = cls.__new__(cls)
+        yield from self.prepare_steps(controller,network,update,owned,scale,fit_cache=fit_cache,ownership=ownership,on_progress=on_progress)
+        return self
+
+    def prepare_steps(self,controller,network,update,owned,scale,*,fit_cache=None,ownership=None,on_progress=None):
+        if on_progress is not None:
+            on_progress('Preparing street terrain corridor')
         self.controller,self.scale,self.raw=controller,scale,update
         self.datums={}; self.group=None; self.report=None
         props=getattr(controller,'blosm_street_terrain',None)
@@ -200,20 +225,24 @@ class ScenePlacement:
         self.settings=PlacementSettings(props.clearance,props.maximum_grade,props.control_spacing,
             props.sample_spacing,props.maximum_lift) if props else PlacementSettings()
         start=time.perf_counter()
+        progress=_PreparationProgress(on_progress)
         sampler=TerrainSampler(self.target,controller,scale) if self.target else None
         self.signature=fingerprint((sampler.signature if sampler else None,self.mode,asdict(self.settings),scale,'1'))
         self.update=update
         changed=any(isinstance(update.products[k],(Part,AnchorTransform)) for k in update.rebuilt)
         if self.mode=='NONE' and controller.get('st_py_terrain_mode','NONE')=='NONE': return
         if old==self.signature and not changed: return
-        self.raw=hydrate(update,owned,scale)
+        self.raw=yield from progress.forward(hydrate_steps(update,owned,scale))
         refs,components,report=(prepare_corridor(network,self.raw.products,self.settings)
                                if self.mode!='NONE' else ([],[],{}))
         self.datums={Key.parse(c.identity):c.datum for c in components}
         products=dict(self.raw.products)
         fitted=None
         if self.mode=='PROFILE':
-            fitted=fit(refs,components,sampler,self.settings,cache=fit_cache,terrain_token=sampler.signature)
+            if on_progress is not None:
+                on_progress('Fitting street terrain references')
+            fitted=yield from progress.forward(fit_steps(refs,components,sampler,self.settings,
+                cache=fit_cache,terrain_token=sampler.signature))
             report.update(fitted.report)
             if fit_cache is not None:
                 report['constraint_cache']=fit_cache.stats()
@@ -224,12 +253,18 @@ class ScenePlacement:
             for c in components:
                 for _,points in quad_samples(c.xyz,c.quads,self.settings.sample_spacing):
                     sampler(points[:,:,:2].reshape(-1,2))
-            self.group=load_projection_group()
+                    yield from progress.checkpoint()
+            if ownership is None:
+                self.group=load_projection_group()
+            else:
+                with ownership.capture():
+                    self.group=load_projection_group()
         for c in components:
             key=Key.parse(c.identity); raw=products[key]
             xyz=fitted.coordinates[c.identity] if fitted else raw.mesh.xyz
             products[key]=Part(raw.owner,raw.mesh.with_positions(xyz),
                 dict(raw.metadata,terrain_datum=c.datum,terrain_reference=c.reference))
+            yield from progress.checkpoint()
         by_key={c.identity:c for c in components}
         placements={p.id:p for p in network.furniture}
         for key,p in list(products.items()):
@@ -255,6 +290,7 @@ class ScenePlacement:
                 delta=float(curve(station))-datum
             else: delta=0.
             products[key]=replace(p,position=(*p.position[:2],p.position[2]+delta))
+            yield from progress.checkpoint()
         rebuilt=set(update.rebuilt)
         for key,product in products.items():
             obj=owned.get(key)
@@ -268,7 +304,8 @@ class ScenePlacement:
                 if obj is None or not np.allclose(np.array(obj.location)*scale,product.position,rtol=0,atol=1e-6): rebuilt.add(key)
         # On a geometric edit a propagated fit can affect adjacent, unchanged
         # outputs. Publish those too, while committing only raw solver products.
-        self.report=dict(report,mode=self.mode,seconds=time.perf_counter()-start,
+        self.report=dict(report,mode=self.mode,seconds=progress.elapsed(),
+                         elapsed_seconds=time.perf_counter()-start,
                          terrain_samples=sampler.count if sampler else 0,
                          terrain_unique_rays=sampler.ray_count if sampler else 0)
         self.update=replace(update,products=products,rebuilt=tuple(sorted(rebuilt)))

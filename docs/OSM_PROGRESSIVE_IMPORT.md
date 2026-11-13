@@ -83,6 +83,9 @@ To request combined meshes, set `progressiveImport=False` explicitly.
 Panel options and default-level distributions are captured at start. Changing
 them affects the next import. Random choices use session state, isolated from
 other addons' random calls between callbacks.
+Blender ID pointer settings, including a street carriageway material override,
+are also captured with the request; later panel changes do not replace the
+active import's selected material.
 
 ## Provider contract and buildings_gn integration
 
@@ -142,7 +145,9 @@ when resolving conflicts. In particular:
 
 The release implementation supplies the extension contract without copying the
 branch algorithms. The native PADL integration below implements that contract;
-the street integration remains separate work.
+the [dev82 Python street integration](STREETS_PROGRESSIVE_IMPORT.md) now adds
+cooperative numerical/terrain work and complete-component publication. Individual
+street builders and the final swap remain synchronous.
 
 ### buildings_gn merge qualification (13 November 2026)
 
@@ -152,8 +157,10 @@ revised realistic building-part algorithm, renderer-owned preprocessing and
 two-pass realistic rendering. At merge time PADL simple 3D, two-pass realistic
 buildings and native streets used the atomic manager fallback. The PADL
 integration below replaces that fallback for simple 3D. Two-pass realistic
-buildings and native streets still run atomically; cancellation cannot interrupt
-those native calls.
+buildings still run atomically. The later
+[Python street integration](STREETS_PROGRESSIVE_IMPORT.md) replaces the street
+manager fallback with cooperative checkpoints; cancellation still cannot
+interrupt an individual synchronous builder or final component swap.
 
 The merge adapts the branch's BMesh finalization for 2D GN buildings, separate
 curves and forest areas, and passes the renderer to realistic footprint

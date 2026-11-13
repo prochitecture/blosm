@@ -5,6 +5,18 @@ from .scene import controller_for, NetworkScene, register_runtime, unregister_ru
 from .terrain.blender import MODE_ITEMS
 
 
+def _import_active():
+    from ....progressive.blender import is_busy
+    from ....app.blender import app
+    session = getattr(app, 'osm_session', None)
+    return is_busy() or (session is not None and not session.finished)
+
+
+def _require_idle():
+    if _import_active():
+        raise RuntimeError('Finish or cancel the active import before editing streets')
+
+
 class BLOSM_PG_StreetTerrain(bpy.types.PropertyGroup):
     target: bpy.props.PointerProperty(name='Original terrain', type=bpy.types.Object,
         poll=lambda self,obj: obj.type == 'MESH' and not obj.get('st_py_controller'),
@@ -26,11 +38,12 @@ class BLOSM_OT_UpdatePythonStreets(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return controller_for(context.active_object) is not None
+        return not _import_active() and controller_for(context.active_object) is not None
 
     def execute(self, context):
         controller = controller_for(context.active_object)
         try:
+            _require_idle()
             update = NetworkScene.update(controller)
         except Exception as exc:
             self.report({'ERROR'}, str(exc))
@@ -48,6 +61,10 @@ class BLOSM_OT_LoadStreetMaterials(bpy.types.Operator):
     bl_description = 'Load the three PBR and three diffuse-only asphalt materials from the street material library'
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context):
+        return not _import_active()
+
     def execute(self, context):
         from pathlib import Path
         from ....app.asset_library import BlenderAssetLoader
@@ -55,6 +72,7 @@ class BLOSM_OT_LoadStreetMaterials(bpy.types.Operator):
         settings = getattr(context.scene, 'blosm', None)
         external = getattr(settings, 'streetMaterialFile', '')
         try:
+            _require_idle()
             # Explicit user library browsing embeds the chosen materials. Import
             # generation retains its normal asset storage policy.
             loader = BlenderAssetLoader(Path(__file__).resolve().parents[3] / 'assets',
@@ -96,8 +114,13 @@ class BLOSM_OT_PythonStreetSection(bpy.types.Operator):
         ('0', 'Exact polyline', 'Preserve polyline segments and mitered joins'),
         ('3', 'Smooth interpolation', 'Cubic smoothing with bounded local corner transitions')), default='3')
 
+    @classmethod
+    def poll(cls, context):
+        return not _import_active() and controller_for(context.active_object) is not None
+
     def invoke(self, context, event):
         try:
+            _require_idle()
             bm, temporary, identity = selected_section(context.active_object)
             try:
                 layer = bm.edges.layers.int['st_section_id']
@@ -116,6 +139,7 @@ class BLOSM_OT_PythonStreetSection(bpy.types.Operator):
     def execute(self, context):
         obj = context.active_object
         try:
+            _require_idle()
             bm, temporary, identity = selected_section(obj)
             try:
                 identity_layer = bm.edges.layers.int['st_section_id']
@@ -152,6 +176,9 @@ class BLOSM_PT_PythonStreets(bpy.types.Panel):
 
     def draw(self, context):
         controller = controller_for(context.active_object)
+        if _import_active():
+            self.layout.label(text='Finish or cancel the import to edit streets', icon='INFO')
+            self.layout.enabled = False
         self.layout.operator('blosm.update_python_streets', icon='FILE_REFRESH')
         self.layout.operator('blosm.python_street_section')
         self.layout.prop(controller, 'blosm_street_pavement')

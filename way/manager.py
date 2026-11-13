@@ -4,6 +4,7 @@ from ..style import StyleStore
 from .waymap.waymap import WayMap
 from .item.street import Street
 from .item.connectors import IntConnector
+from .progressive import producer_for
 
 
 class WayManager:
@@ -89,15 +90,29 @@ class WayManager:
         return ( way for category in categories for way in self.layers[category] )
     
     def process(self):
+        for _ in self.process_steps():
+            pass
+
+    def process_steps(self, session=None):
         # set <self.rightHandTraffic> here, since during the execution of the constructor OSM data is not yet parsed
         self.rightHandTraffic = self.isRightHandTraffic(self.data) if self.app.trafficSide == 'auto' else self.app.trafficSide == "rht"
         
-        for way in self.getAllWays():
+        for index, way in enumerate(self.getAllWays()):
             # <osm.projection> may not be availabe in the constructor of a <Way>, but it's needed to
             # create way-segments. That's why an additional <init(..)> method is needed.
             way.init(self)
+            if index % 128 == 127:
+                yield None
         for action in self.actions:
-            action.do(self)
+            producer = producer_for(action, 'do')
+            if producer:
+                yield from producer(self, session)
+            elif session is None:
+                action.do(self)
+            else:
+                session.phase = 'Preparing streets: ' + type(action).__name__
+                session.call(lambda: action.do(self))
+            yield None
     
     def addRenderer(self, renderer):
         self.renderers.append(renderer)
@@ -106,6 +121,14 @@ class WayManager:
     def render(self):
         for renderer in self.renderers:
             renderer.render(self, self.data)
+
+    def render_steps(self, session):
+        for renderer in self.renderers:
+            producer = producer_for(renderer, 'render')
+            if producer is None:
+                yield from session.unit(lambda: renderer.render(self, self.data))
+            else:
+                yield from producer(self, self.data, session)
     
     def renderExtra(self):
         return
