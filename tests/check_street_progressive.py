@@ -318,7 +318,7 @@ class StreetProgressiveChecks(unittest.TestCase):
         self.assertEqual(sentinel['user_document'], note)
         self.assertFalse(session.ownership.pending)
 
-    def test_cancel_staging_reclaims_detached_meshes(self):
+    def test_cancel_staging_reclaims_pending_meshes(self):
         self.prepare()
         session = self.new_session()
         self.first_component(session)
@@ -326,7 +326,8 @@ class StreetProgressiveChecks(unittest.TestCase):
         sentinel, note = self.sentinel()
         before = inventory()
         staged = lambda: [obj for obj in bpy.data.objects if obj.get('st_py_key')
-                          and not obj.users_collection and obj.get(ownership.PENDING)]
+                          and obj.get(ownership.PENDING)
+                          and (obj.get('st_py_preview') or not obj.users_collection)]
         self.advance(session, lambda: bool(staged()))
         self.assertEqual(session.committed_units, 1)
         detached = [obj.as_pointer() for obj in staged()]
@@ -448,7 +449,8 @@ class StreetProgressiveChecks(unittest.TestCase):
                 first = self.first_component(session)
                 expected = controller_state(first)
                 staged = lambda: [obj for obj in bpy.data.objects if obj.get('st_py_key')
-                                  and not obj.users_collection and obj.get(ownership.PENDING)]
+                                  and obj.get(ownership.PENDING)
+                                  and (obj.get('st_py_preview') or not obj.users_collection)]
                 self.advance(session, lambda: bool(staged()))
                 pending_controller = staged()[0]['st_py_controller']
                 component = pending_controller.users_collection[0]

@@ -6,10 +6,11 @@ separate-object behavior, provider hooks, tests and the `buildings_gn` handoff.
 The [OSM street integration requirements](../docs/OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md)
 describe the bulk network contract. The
 [Python street implementation](../docs/STREETS_PROGRESSIVE_IMPORT.md) now yields
-during preparation, numerical tasks, terrain fitting, validation and detached
-staging, then publishes a complete connected component without yielding.
-Individual task builders and the final swap remain synchronous; there are no
-street mesh previews before a component is ready. Native simple-3D PADL buildings use one
+during preparation, numerical tasks, terrain fitting and validation. New imports
+also show [provisional mesh previews](../docs/STREETS_PROGRESSIVE_PREVIEWS.md)
+within a connected component, reusing their objects and meshes for final output.
+Acceptance still commits a complete component without yielding; individual task
+builders and the final swap remain synchronous. Native simple-3D PADL buildings use one
 complete outline/parts group per progressive step for both GN and Python.
 Legacy two-pass realistic building generation still uses its atomic manager
 fallback; scheduling within that backend remains separate work.

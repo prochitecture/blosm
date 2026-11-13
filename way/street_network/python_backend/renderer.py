@@ -159,7 +159,8 @@ class PythonStreetRenderer(StreetRenderBackend):
                     update = NetworkScene.update(controller)
                 else:
                     update = yield from self._drive(NetworkScene.update_steps(controller,
-                        validate=validate, on_progress=progress, parent_ownership=session.ownership), session)
+                        validate=validate, on_progress=progress, parent_ownership=session.ownership,
+                        on_preview=session.preview_changed if session.progressive else None), session)
                 result.update(status='READY', quads=sum(len(o.data.polygons)
                     for o in controller['st_py_outputs'].objects if o.type == 'MESH'), timings=update.timings)
                 result['fitted_corner_radii'] = [fit for obj in controller['st_py_outputs'].objects

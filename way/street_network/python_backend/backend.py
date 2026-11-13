@@ -47,7 +47,7 @@ class PythonMeshBackend:
     def prepare(self, network, *, force=False):
         return drain_steps(self.prepare_steps(network, force=force))
 
-    def prepare_steps(self, network, *, force=False, on_progress=None):
+    def prepare_steps(self, network, *, force=False, on_progress=None, emit_products=False):
         """Prepare numerical products cooperatively without accepting them.
 
         UV fallback yields between products, and overlap validation yields at
@@ -55,6 +55,8 @@ class PythonMeshBackend:
         mappings remain indivisible operations; the phase callback identifies
         those operations before they begin. No Blender or
         scheduler dependency is needed by this numerical producer.
+        Optional product events expose read-only raw products before fallback
+        UV mapping and final validation; they do not accept the update.
         """
         progress = _PreparationProgress(on_progress)
         yield from progress.checkpoint('Checking street feature support')
@@ -64,7 +66,7 @@ class PythonMeshBackend:
             raise ValueError('No registered numerical provider supports: ' + ', '.join(sorted(missing)))
         self.patterns.set_budget(network.settings.pattern_cache_bytes)
         prepared = yield from progress.forward(self.updates.prepare_steps(
-            network, force=force, on_progress=on_progress))
+            network, force=force, on_progress=on_progress, emit_products=emit_products))
         # Feature providers can supply their own charts and extra UV sets.
         # Every otherwise uncharted Part gets a shared physical-plan fallback,
         # after its final geometry has been assembled and before placement.

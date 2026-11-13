@@ -15,7 +15,8 @@ from .model import Network, Key, fingerprint
 from .providers import Part, AnchorTransform
 from .mesh import Mesh, publication_coordinates
 from .validation import bounds_overlap, validate_overlaps_steps
-from .updates import drain_steps
+from .updates import ProductReady, drain_steps
+from ....progressive.core import YieldToUI
 from ....progressive.ownership import Ownership, alive
 from . import VERSION
 
@@ -330,6 +331,36 @@ class SceneWriter:
             bpy.data.meshes.remove(result)
             raise
 
+    @staticmethod
+    def _update_mesh(result, mesh, scale):
+        """Refine a pending surface without replacing its object or mesh ID."""
+        from .uv import publication_uv_coordinates
+        mesh.validate()
+        if (len(result.vertices) != len(mesh.xyz) or len(result.loops) != mesh.quads.size
+                or len(result.polygons) != len(mesh.quads)):
+            raise StreetInputChanged('Street preview topology changed before publication')
+        indices = np.empty(len(result.loops), dtype=np.int32)
+        result.loops.foreach_get('vertex_index', indices)
+        if not np.array_equal(indices, mesh.quads.ravel()):
+            raise StreetInputChanged('Street preview topology changed before publication')
+        coordinates = publication_coordinates(mesh.xyz, scale)
+        layers = {name: publication_uv_coordinates(values) for name, values in mesh.uv_layers.items()}
+        result.vertices.foreach_set('co', coordinates.ravel())
+        for layer in tuple(result.uv_layers):
+            if layer.name not in layers:
+                result.uv_layers.remove(layer)
+        for name, values in layers.items():
+            layer = result.uv_layers.get(name)
+            if layer is None:
+                layer = result.uv_layers.new(name=name, do_init=False)
+            if layer.name != name:
+                raise ValueError('UV map name cannot be represented in Blender: ' + name)
+            layer.uv.foreach_set('vector', values.reshape(-1))
+        if result.uv_layers.get('UVMap') is not None:
+            result.uv_layers.active = result.uv_layers['UVMap']
+            result.uv_layers['UVMap'].active_render = True
+        result.update()
+
     def publish(self, controller, network, engine, update, *, validate=None, on_progress=None,
                 parent_ownership=None):
         return drain_steps(self.publish_steps(controller, network, engine, update,
@@ -337,7 +368,7 @@ class SceneWriter:
             on_progress=on_progress or getattr(self, '_on_progress', None), parent_ownership=parent_ownership))
 
     def publish_steps(self, controller, network, engine, update, *, validate=None, on_progress=None,
-                      parent_ownership=None):
+                      parent_ownership=None, previews=None):
         """Stage detached owned outputs; perform the complete swap in one turn.
 
         Closing this producer removes only its pending IDs. No accepted output
@@ -349,7 +380,7 @@ class SceneWriter:
         if len(owned) != sum(obj.get('st_py_controller') == controller for obj in collection.objects):
             raise ValueError('Duplicate or invalid generated ownership')
         original_ids = {key: (obj, obj.data) for key, obj in owned.items()}
-        ownership = _SceneOwnership(parent_ownership)
+        ownership = previews.ownership if previews is not None else _SceneOwnership(parent_ownership)
         staged = []
         committed = False
 
@@ -365,6 +396,8 @@ class SceneWriter:
                 raise StreetInputChanged('Generated street ownership changed during publication')
             if any(not alive(item) for _, item in ownership.pending.values()):
                 raise StreetInputChanged('Pending street output was deleted')
+            if previews is not None:
+                previews.check()
 
         def phase(message):
             check()
@@ -372,6 +405,8 @@ class SceneWriter:
                 on_progress(message)
 
         try:
+            if previews is not None:
+                previews.check(full=True)
             phase('Fitting street terrain')
             yield None
             check()
@@ -422,9 +457,15 @@ class SceneWriter:
             for key in update.rebuilt:
                 phase('Staging street object ' + key.text())
                 product = update.products[key]
+                preview = previews.objects.get(key) if previews is not None else None
                 if isinstance(product, Part):
-                    mesh = self._mesh(key.text(), product.mesh, scale, ownership=ownership)
-                    obj = ownership.own('objects', bpy.data.objects.new(key.text(), mesh))
+                    if preview is None:
+                        mesh = self._mesh(key.text(), product.mesh, scale, ownership=ownership)
+                        obj = ownership.own('objects', bpy.data.objects.new(key.text(), mesh))
+                    else:
+                        previews.check_object(key)
+                        obj, mesh = preview, preview.data
+                        self._update_mesh(mesh, product.mesh, scale)
                     staged.append(obj)
                     from .materials import resolve, assign
                     assign(mesh, resolve(controller, product.mesh.material, self.materials))
@@ -446,8 +487,20 @@ class SceneWriter:
                 obj['st_py_controller'] = controller
                 obj['st_py_key'] = key.text()
                 placement.decorate(obj, key)
-                yield None
+                if preview is not None:
+                    if previews.refreshed(key):
+                        previews.flush()
+                        yield YieldToUI()
+                else:
+                    if previews is not None and previews.flush():
+                        yield YieldToUI()
+                    else:
+                        yield None
+            if previews is not None and previews.flush():
+                yield YieldToUI()
             phase('Committing street component')
+            if previews is not None:
+                previews.validate_final(update.products, placement.raw.products)
             # Final input validation precedes serialization and scene mutation.
             # The callback supplied by NetworkScene includes source geometry.
             if validate:
@@ -489,6 +542,8 @@ class SceneWriter:
                 controller['st_py_last_update'] = json.dumps(dict(rebuilt=[k.text() for k in update.rebuilt],
                     removed=[k.text() for k in update.removed], timings=update.timings), separators=(',', ':'))
                 engine.commit(placement.raw)
+                if previews is not None:
+                    previews.promote()
                 ownership.accept()
                 committed = True
             except BaseException:
@@ -509,6 +564,8 @@ class SceneWriter:
                     else:
                         controller[name] = value
                 raise
+            if previews is not None:
+                previews.accept()
             # Postcommit disposal errors retain the coherent accepted result.
             # Old IDs are detached, so a failed removal cannot show duplicates.
             cleanup_errors = []
@@ -529,7 +586,10 @@ class SceneWriter:
             return update
         finally:
             if not committed:
-                ownership.rollback()
+                if previews is not None:
+                    previews.rollback()
+                else:
+                    ownership.rollback()
 
 
 class NetworkScene:
@@ -571,17 +631,19 @@ class NetworkScene:
 
     @staticmethod
     def update_steps(controller, *, force=False, materials=None, validate=None, on_progress=None,
-                     parent_ownership=None):
+                     parent_ownership=None, on_preview=None):
         """Cooperative Update with the same numerical and publication algorithms."""
         return (yield from NetworkScene._update_steps(controller, force=force, materials=materials,
-                    validate=validate, on_progress=on_progress, parent_ownership=parent_ownership))
+                    validate=validate, on_progress=on_progress, parent_ownership=parent_ownership,
+                    on_preview=on_preview))
 
     @staticmethod
     def _update_steps(controller, *, force=False, materials=None, validate=None, on_progress=None,
-                      blocking=False, parent_ownership=None):
+                      blocking=False, parent_ownership=None, on_preview=None):
         identity = None
         original_engine = engine = None
         completed = False
+        previews = None
         try:
             register_runtime()
             _prune_runtime()
@@ -625,9 +687,36 @@ class NetworkScene:
                                     tuple(float(v) * _scale() for v in obj.location))),
                                 float(obj.rotation_euler.z), obj.get('st_py_asset', 'placeholder'))
                 _ENGINES[network.uuid] = engine
-            update = yield from _guard_steps(engine.prepare_steps(network, force=force,
-                                                                 on_progress=on_progress), revision)
             writer = SceneWriter(materials)
+            if (on_preview is not None and not blocking and not controller.get('st_py_manifest')
+                    and not len(controller['st_py_outputs'].objects)):
+                from .previews import PendingPreviews
+                previews = PendingPreviews(controller, writer, _SceneOwnership(parent_ownership),
+                                           on_preview, _scale())
+
+            def check_preparation():
+                revision()
+                if previews is not None:
+                    previews.check()
+
+            preparation = _guard_steps(engine.prepare_steps(network, force=force,
+                on_progress=on_progress, emit_products=previews is not None), check_preparation)
+            try:
+                while True:
+                    try:
+                        command = next(preparation)
+                    except StopIteration as finished:
+                        update = finished.value
+                        break
+                    if isinstance(command, ProductReady):
+                        if previews is not None and previews.add(command.key, command.product):
+                            yield YieldToUI()
+                    else:
+                        yield command
+                if previews is not None and previews.flush():
+                    yield YieldToUI()
+            finally:
+                preparation.close()
             if blocking:
                 # Preserve the public synchronous publication hook used by
                 # extensions and fault-injection tests. It drains publish_steps.
@@ -635,7 +724,8 @@ class NetworkScene:
                 result = writer.publish(controller, network, engine, update)
             else:
                 result = yield from writer.publish_steps(controller, network, engine, update,
-                    validate=revision, on_progress=on_progress, parent_ownership=parent_ownership)
+                    validate=revision, on_progress=on_progress, parent_ownership=parent_ownership,
+                    previews=previews)
             completed = True
             return result
         except Exception as exc:
@@ -643,10 +733,14 @@ class NetworkScene:
                 controller['st_py_error'] = str(exc)
             raise
         finally:
-            if identity is not None:
-                _UPDATING.discard(identity)
-                if not completed and engine is not None and _ENGINES.get(identity) is engine:
-                    if original_engine is None:
-                        _ENGINES.pop(identity, None)
-                    else:
-                        _ENGINES[identity] = original_engine
+            try:
+                if previews is not None and not completed:
+                    previews.rollback()
+            finally:
+                if identity is not None:
+                    _UPDATING.discard(identity)
+                    if not completed and engine is not None and _ENGINES.get(identity) is engine:
+                        if original_engine is None:
+                            _ENGINES.pop(identity, None)
+                        else:
+                            _ENGINES[identity] = original_engine

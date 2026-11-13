@@ -83,7 +83,7 @@ class Ownership:
 
 @bpy.app.handlers.persistent
 def discard_pending_history(*_):
-    """A user undo/save snapshot may include hidden staged IDs, never accepted output.
+    """Remove unaccepted staged IDs and visible previews from restored snapshots.
 
 Remove only explicitly tagged allocations on restore. Committing strips tags;
 canonical objects and user-created IDs are never inferred from global deltas.

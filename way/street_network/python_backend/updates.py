@@ -31,27 +31,41 @@ class _PreparationProgress:
         self.started = time.perf_counter()
         self.suspended = 0.
 
-    def checkpoint(self, label=None):
+    def checkpoint(self, label=None, *, command=None):
         if label is not None and self.on_progress is not None:
             self.on_progress(label)
         before = time.perf_counter()
-        yield None
-        self.suspended += time.perf_counter() - before
+        try:
+            yield command
+        finally:
+            self.suspended += time.perf_counter() - before
 
     def forward(self, steps):
-        """Forward nested checkpoints while excluding their suspension too."""
+        """Preserve nested commands while excluding their suspension too."""
         try:
             while True:
                 try:
-                    next(steps)
+                    command = next(steps)
                 except StopIteration as finished:
                     return finished.value
-                yield from self.checkpoint()
+                yield from self.checkpoint(command=command)
         finally:
             steps.close()
 
     def elapsed(self):
         return time.perf_counter() - self.started - self.suspended
+
+
+@dataclass(frozen=True)
+class ProductReady:
+    """A rebuilt, uncommitted product available for a read-only preview.
+
+    The builder and its dependency digest are complete. Backend UV fallback
+    and whole-update validation can still be pending, so this event does not
+    authorize accepting or mutating its product.
+    """
+    key: Key
+    product: object
 
 
 @dataclass(frozen=True)
@@ -159,7 +173,7 @@ class UpdateCoordinator:
     def prepare(self, network, *, force=False):
         return drain_steps(self.prepare_steps(network, force=force))
 
-    def prepare_steps(self, network, *, force=False, on_progress=None):
+    def prepare_steps(self, network, *, force=False, on_progress=None, emit_products=False):
         """Yield local checkpoints and return an uncommitted PreparedUpdate.
 
         Source and task iteration retain the blocking path's deterministic
@@ -167,6 +181,8 @@ class UpdateCoordinator:
         digest become available together only after it returns successfully.
         Closing this iterator never commits its pending products. Providers
         must treat accepted upstream products as read-only, as in prepare().
+        Opting into product events exposes each rebuilt product immediately
+        after its digest is ready; consumers must also treat it as read-only.
         """
         progress = _PreparationProgress(on_progress)
         if self.network_id is not None and self.network_id != network.uuid:
@@ -219,7 +235,8 @@ class UpdateCoordinator:
                 dependencies = ([dep.text() for dep in sorted(task.dependencies)],
                                 fingerprint(task.signature(context)))
             digest = fingerprint((VERSION, task.version, dependencies, settings))
-            if force or digest != previous_tasks.get(key) or key not in products:
+            rebuilding = force or digest != previous_tasks.get(key) or key not in products
+            if rebuilding:
                 yield from progress.checkpoint(f'Building {key.text()}')
                 before = time.perf_counter()
                 try:
@@ -230,6 +247,8 @@ class UpdateCoordinator:
                 products[key] = product
                 rebuilt.append(key)
             digests[key] = digest
+            if rebuilding and emit_products:
+                yield from progress.checkpoint(command=ProductReady(key, product))
         yield from progress.checkpoint('Street geometry prepared')
         return PreparedUpdate(network.uuid, source, digests, products, tuple(rebuilt),
             tuple(sorted(previous_tasks.keys() - digests.keys())), tuple(sorted(changed)),

@@ -1,9 +1,9 @@
-"""Native street timers, navigation, pause, staging cancellation and Undo/Redo.
+"""Native street timers, early previews, pause, cancellation and Undo/Redo.
 
 Run in a newly launched factory-profile Blender GUI (never --background) with
 --factory-startup --disable-autoexec --python this_file -- --artifacts <folder>.
 The first import uses the unchanged production driver and records heartbeat
-gaps. A second import holds one genuine detached staging checkpoint to exercise
+gaps. A second import holds one genuine early visible preview checkpoint to exercise
 pending-data history restoration deterministically; its timing is separate.
 --osm runs only the unchanged production timer on the selected real extract;
 --expected-hash optionally checks its final exact scene digest against the
@@ -25,6 +25,7 @@ import bpy
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_street_progressive as support
+import check_street_previews as preview_support
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifacts', required=True, type=Path)
@@ -62,7 +63,7 @@ results, heartbeats, cases = [], [], []
 driver.show_result = lambda level, message: results.append((level, message))
 started = time.monotonic()
 phase = 'normal completion'
-original_publish = scene_runtime.SceneWriter.publish_steps
+original_update = scene_runtime.NetworkScene.update_steps
 stage_held = False
 other_scene = None
 first_state = complete_state = None
@@ -77,8 +78,10 @@ original_core_step = core.Job.step
 original_controller_tick = driver.Controller.tick
 controller_tick_depth = 0
 source_hashes = {str(Path(path).resolve()): hashlib.sha256(Path(path).read_bytes()).hexdigest()
-                 for path in (__file__, support.__file__, runtime.__file__, driver.__file__,
-                              core.__file__, scene_runtime.__file__)}
+                 for path in (__file__, support.__file__, preview_support.__file__, runtime.__file__,
+                    driver.__file__, core.__file__, scene_runtime.__file__,
+                    *(Path(scene_runtime.__file__).with_name(name) for name in
+                      ('previews.py', 'backend.py', 'updates.py', 'renderer.py')))}
 
 
 def empty_scope():
@@ -250,10 +253,10 @@ def coherent():
     return support.scene_state()
 
 
-def held_publish(self, controller, network, engine, update, **kwargs):
-    """Hold at a real owned mesh checkpoint, not before allocation or commit."""
+def held_update(controller, **kwargs):
+    """Hold the first visible preview of component two, before validation."""
     global stage_held
-    producer = original_publish(self, controller, network, engine, update, **kwargs)
+    producer = original_update(controller, **kwargs)
     try:
         while True:
             try:
@@ -261,9 +264,8 @@ def held_publish(self, controller, network, engine, update, **kwargs):
             except StopIteration as done:
                 return done.value
             active = driver.active
-            detached = any(obj.get('st_py_key') and obj.get(ownership.PENDING)
-                           and not obj.users_collection for obj in bpy.data.objects)
-            if active is not None and active.adapter.committed_units == 1 and detached:
+            visible = preview_support.previews(controller, visible=True)
+            if active is not None and active.adapter.committed_units == 1 and visible:
                 stage_held = True
                 while stage_held:
                     yield core.YieldToUI()
@@ -313,10 +315,18 @@ def scenario():
     assert len(complete_beats) >= 5, 'No meaningful timer heartbeat observation'
     assert any(row['visible_components'] > 0 for row in complete_beats), \
         'No visible published street geometry was observed'
+    preview_beats = [row for row in complete_beats if row['visible_previews']]
+    assert preview_beats, 'No actual visible early street preview was observed'
+    first_accepted = next(row for row in complete_beats if row['visible_components'])
+    assert preview_beats[0]['import_seconds'] < first_accepted['import_seconds'], \
+        'First preview appeared only after component commit'
+    assert preview_beats[0]['committed'] == 0
+    assert normal_result['first_preview_seconds'] < normal_result['first_result_seconds']
+    assert normal_result['preview_batches'] > 1
     if component_count > 1:
         assert any(0 < row['visible_components'] < component_count for row in complete_beats), \
             'No partially completed import was presented between components'
-    cases.append('unmodified production timer: incremental networks and viewport navigation')
+    cases.append('unmodified production timer: early visible previews before component commit')
     if args.osm:
         cases.append(dict(real_extract=str(args.osm.resolve()), accepted_components=component_count,
                           exact_geometry_sha256=normal_geometry_digest,
@@ -329,21 +339,26 @@ def scenario():
     yield from undo_redo(complete_state)
     cases.append('completed import: repeated native Undo/Redo preserves exact geometry')
 
-    phase = 'staging cancellation setup'
+    phase = 'early preview cancellation setup'
     checks.prepare()
-    scene_runtime.SceneWriter.publish_steps = held_publish
+    scene_runtime.NetworkScene.update_steps = staticmethod(held_update)
     start_import()
     while not stage_held:
-        assert driver.active is not None, 'Import ended before detached staging was exercised'
+        assert driver.active is not None, 'Import ended before early preview cancellation was exercised'
         yield
-    phase = 'paused with staged street objects'
+    phase = 'paused with early street previews'
     session = driver.active.adapter
     assert session.committed_units == 1
     first_state = support.scene_state()
     assert len(first_state) == 1
-    detached = [obj for obj in bpy.data.objects if obj.get('st_py_key')
-                and obj.get(ownership.PENDING) and not obj.users_collection]
-    assert detached, 'No real detached mesh was held'
+    visible_previews = preview_support.previews(visible=True)
+    assert visible_previews, 'No real visible preview mesh was held'
+    assert session.preview_count == len(visible_previews)
+    assert all(obj.get(ownership.PENDING) and obj.data.get(ownership.PENDING)
+               for obj in visible_previews)
+    preview_controller = visible_previews[0]['st_py_controller']
+    assert not preview_controller.get('st_py_manifest')
+    assert not preview_controller['st_py_outputs'].objects
     assert pending(), 'Pending component has no explicit ownership'
     sentinel, note = checks.sentinel()
     sentinel_name, text_name = sentinel.name, note.name
@@ -367,7 +382,7 @@ def scenario():
     assert bpy.context.view_layer.objects.active == sentinel
     assert sentinel.select_get()
     cases.append('scene-switch pause/resume preserves pending allocation and user selection')
-    phase = 'cancel detached staging'
+    phase = 'cancel early previews'
     before_cancel = time.monotonic()
     assert bpy.ops.blosm.cancel_progressive() == {'FINISHED'}
     latency = time.monotonic() - before_cancel
@@ -379,7 +394,7 @@ def scenario():
     assert bpy.data.texts.get(text_name) is not None
     assert not session.ownership.pending
     assert session.finish(silent=True) is None
-    cases.append('staging cancel preserves prior network and unrelated user object/text')
+    cases.append('early preview cancel preserves prior network and unrelated user object/text')
     cases.append(dict(cancel_latency_seconds=latency))
     # The user edit's undo snapshot captured pending source/staged IDs. Repeated
     # history restoration must remove those IDs before they become visible.
@@ -392,7 +407,7 @@ steps = scenario()
 
 
 def complete(error=None):
-    scene_runtime.SceneWriter.publish_steps = original_publish
+    scene_runtime.NetworkScene.update_steps = staticmethod(original_update)
     try:
         if driver.active is not None:
             driver.active.close(silent=True)
@@ -405,6 +420,8 @@ def complete(error=None):
     gaps = [second['seconds'] - first['seconds'] for first, second in zip(normal_beats, normal_beats[1:])]
     first_visible = next((row['import_seconds'] for row in normal_beats
                           if row['visible_components'] and row['import_seconds'] is not None), None)
+    first_preview = next((row['import_seconds'] for row in normal_beats
+                          if row['visible_previews'] and row['import_seconds'] is not None), None)
     report = dict(passed=error is None, blender=bpy.app.version_string, checkout=str(support.ROOT),
                   checks=cases, error=error, normal_result=normal_result,
                   source_path=str(support.FIXTURE.resolve()),
@@ -415,7 +432,11 @@ def complete(error=None):
                   real_extract_only=bool(args.osm), expected_geometry_sha256=args.expected_hash,
                   normal_exact_geometry_sha256=normal_geometry_digest,
                   normal_first_visible_scene_seconds=first_visible,
-                  visibility_measurement='Visible mesh components sampled from the UI heartbeat; not pixel timing',
+                  normal_first_visible_preview_seconds=first_preview,
+                  normal_preview_to_commit_seconds=(first_visible - first_preview
+                    if first_visible is not None and first_preview is not None else None),
+                  normal_peak_visible_preview_meshes=max((row['visible_previews'] for row in normal_beats), default=0),
+                  visibility_measurement='Visible preview meshes and accepted components sampled from the UI heartbeat; not pixel timing',
                   normal_worst_heartbeat_gap_seconds=max(gaps, default=None),
                   heartbeats=heartbeats, result_notifications=results)
     (args.artifacts / 'ui_checks.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
@@ -443,6 +464,8 @@ def heartbeat():
         heartbeats.append(dict(phase=phase, seconds=time.monotonic() - started,
             import_seconds=(time.monotonic() - normal_started if normal_started is not None else None),
             visible_components=visible,
+            visible_previews=len(preview_support.previews(visible=True)),
+            session_phase=active.adapter.phase if active else None,
             committed=active.adapter.committed_units if active else
             (runtime.last_result['committed'] if runtime.last_result else 0),
             paused=bool(active and active.paused)))

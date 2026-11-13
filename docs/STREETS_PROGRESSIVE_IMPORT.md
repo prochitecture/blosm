@@ -1,5 +1,11 @@
 # Cooperative Python street import
 
+**Current extension:** [Early mesh previews](STREETS_PROGRESSIVE_PREVIEWS.md)
+adds gradual appearance within a connected component during a new progressive
+import. The final acceptance unit is still the complete component. The record
+below describes the initial integration and its qualification before that
+extension; its detached-only presentation is not the current preview behavior.
+
 Implementation record, **13 November 2026**, Python street runtime
 `0.1.0.dev82`. Development is in the chat's `streets_development` checkout,
 synchronized with committed `buildings_gn` at

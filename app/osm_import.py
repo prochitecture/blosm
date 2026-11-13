@@ -120,6 +120,8 @@ class OsmImport:
         self.started = time.monotonic()
         self.max_callback = 0.
         self.first_result = None
+        self.first_preview = None
+        self.preview_count = self.preview_batches = self.peak_preview_count = 0
         self.terrain_source = None
         self.terrain_dirty = False
         self.terrain_signature = None
@@ -130,7 +132,20 @@ class OsmImport:
 
     @property
     def status(self):
-        return '%s: %s completed, %s errors' % (self.phase, self.committed_units, len(self.errors))
+        message = '%s: %s completed, %s errors' % (self.phase, self.committed_units, len(self.errors))
+        if self.preview_count:
+            message += ' (%s preview meshes)' % self.preview_count
+        return message
+
+    def preview_changed(self, count):
+        """Record visible provisional output without accepting an import unit."""
+        self.preview_count = count
+        self.peak_preview_count = max(self.peak_preview_count, count)
+        if count:
+            self.preview_batches += 1
+            if self.first_preview is None:
+                self.first_preview = time.monotonic() - self.started
+        self.revision += 1
 
     def report(self, levels, message):
         if 'ERROR' in levels:
@@ -519,6 +534,8 @@ class OsmImport:
         last_result = dict(outcome=outcome, committed=self.committed_units, errors=list(self.errors),
                            preliminary_failure=outcome == 'failed' and not self.preflight_complete,
                            warnings=list(self.warnings), first_result_seconds=self.first_result,
+                           first_preview_seconds=self.first_preview, preview_batches=self.preview_batches,
+                           peak_preview_meshes=self.peak_preview_count,
                            max_callback_seconds=self.max_callback, elapsed_seconds=time.monotonic()-self.started)
         for error in self.errors:
             print('OSM import:', error)

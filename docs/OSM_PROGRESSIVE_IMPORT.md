@@ -147,7 +147,10 @@ The release implementation supplies the extension contract without copying the
 branch algorithms. The native PADL integration below implements that contract;
 the [dev82 Python street integration](STREETS_PROGRESSIVE_IMPORT.md) now adds
 cooperative numerical/terrain work and complete-component publication. Individual
-street builders and the final swap remain synchronous.
+street builders and the final swap remain synchronous. Its
+[early-preview extension](STREETS_PROGRESSIVE_PREVIEWS.md) shows provisional
+mesh parts during calculation of a new component. Full validation and acceptance
+still happen together, and cancellation removes the incomplete previews.
 
 ### buildings_gn merge qualification (13 November 2026)
 
