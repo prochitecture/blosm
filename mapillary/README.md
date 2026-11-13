@@ -1,5 +1,10 @@
 # Mapillary camera import
 
+The [native viewport API](../viewport/README.md) implements immersive panorama
+viewing and reusable controls. The
+[framework proposal](../docs/VIEWPORT_FRAMEWORK_PROPOSAL.md) describes future map
+selection, content panels and smooth transitions.
+
 Choose **Mapillary cameras**, set the geographic bounds and your **Mapillary
 client access token** in Blosm preferences, then import. Use the existing
 **Progressive import** checkbox for interactive loading; disable it for a
@@ -7,7 +12,27 @@ synchronous result. Command-line mode blocks. Progressive mode requires an
 interactive window and Object Mode. Camera import itself downloads no photographs
 or thumbnails.
 
-### View a camera's photo
+### View a panorama
+
+Select an imported spherical Mapillary camera and click **View Mapillary panorama**.
+Drag with the left mouse button to look around, use the wheel to zoom, and adjust
+**Photo opacity** to reveal the Blender scene. **Esc** or **Exit panorama** removes
+the overlay and keeps the final viewpoint, orientation and field of view.
+The imported camera, scene rendering camera and render settings are unchanged.
+
+The first view downloads and packs the usual 2048-pixel preview; later views reuse
+the image. If an import is running, the viewer queues its request and remains
+closable. Failed downloads show a retry control. Opacity is session-local; it
+starts from an existing flat-photo background's opacity when available.
+Controls adapt to viewport size and sidebars. Mirrored/ambiguous image layouts,
+quad view, locked views and Local View are currently unsupported.
+
+The photograph and 3D scene use the same view matrices. Geographic accuracy still
+depends on the capture pose and assumed 2 m camera height. No depth or parallax is
+reconstructed. Smooth transitions and navigation between captures are next-step
+work. Use the existing **View Mapillary photo** button for a flat preview.
+
+### View a camera's flat photo
 
 Select an imported Mapillary camera and click **View Mapillary photo** in the
 Blosm panel. The button appears only for the active Mapillary camera in the
@@ -44,8 +69,9 @@ stored in scene/image metadata. Temporary download files are packed and removed.
 
 The downloaded file's embedded EXIF orientation is applied once; the original
 capture's Graph EXIF tag is not reapplied to an already upright preview. Flat
-panorama previews show the complete equirectangular image. They are not an
-interactive 360-degree view or an accurate perspective/fisheye projection.
+panorama previews from this flat-photo action show the complete equirectangular
+image. Use the separate panorama action for an interactive 360-degree view.
+The flat-photo action does not correct fisheye distortion.
 Downloads are capped at 32 MiB, decoded images at 8 MiPixels and each side at
 8192 pixels. Native image decoding/packing and optional pixel rotation run on
 Blender's main thread and can cause a short pause despite asynchronous HTTP.

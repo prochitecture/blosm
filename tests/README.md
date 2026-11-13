@@ -161,6 +161,13 @@ one shared deadline without starting another request.
 
 ## Assertions and limits
 
+Native viewport and panorama tests are documented in
+[the viewport API handoff](../viewport/README.md#validation-and-handoff) and
+[Mapillary validation](../mapillary/Validation.md). Their UI scripts require a
+separate isolated Blender process with `--enable-event-simulate`; outputs belong
+under the supplied artifact directory. `test_viewport.py` runs with ordinary
+Python and requires neither Blender nor credentials.
+
 Geometry comparisons use world-space coordinates with a 1 cm tolerance. They
 preserve face multiplicity; 2D courtyard imports compare area and control vertices
 because joined/unjoined imports can decompose a courtyard into different faces.

@@ -557,21 +557,71 @@ Photo previews use `thumb_2048_url`, verified against the public
 and the credentialed API checks. Attribution follows
 [Mapillary's image licensing guidance](https://help.mapillary.com/hc/en-us/articles/115001770409-CC-BY-SA-license-for-open-data).
 
-Remaining photo limitations: backgrounds are viewport references, not rendered
-backgrounds, accurate fisheye projection or an interactive 360-degree viewer.
-Panoramas display their complete flat image. Downloaded previews are retained
+Remaining flat-photo limitations: backgrounds are viewport references, not rendered
+backgrounds or accurate fisheye projections. The flat-photo action displays the
+complete equirectangular image; the new panorama action is documented below.
+Downloaded previews are retained
 until the image datablock is removed; many photos can increase memory and saved
 file size. Native decode, pixel normalization, packing and Undo calls are
 synchronous despite asynchronous network IO, so short UI pauses remain possible.
+
+## Immersive panorama viewer (13 November 2026)
+
+The shared [viewport API](../viewport/README.md) and Mapillary adapter are implemented.
+Smooth transitions, capture-to-capture navigation, map selection and news/feed
+adapters remain separate work. No changes were required in the shared scheduler
+or HTTP transport. `PhotoImport` now supports acquisition without camera activation
+and exposes sanitized completion errors for inline display.
+
+Validation output is under
+`C:/dev/workspace/artifacts/mapillary_import/viewport_framework/`:
+
+* Six standalone layout/input/spherical-projection tests and all 38 existing
+  Mapillary unit tests passed.
+* `ui_release/ui.json`: 14 native Blender 5.2 checks, including GPU pixel samples
+  for EXIF 1/3/6/8 with nonzero pitch/roll, eye/projection alignment, actual editor
+  resizing, capture release, unchanged camera/scene state and exit orientation.
+* `ui_45_release/ui.json`: the same 14 native viewer/GPU/resize/cleanup checks
+  passed in Blender 4.5. This found and removed a dependency on a texture API
+  available only in newer Blender.
+* `loading/loading.json`: 17 loading/lifecycle checks, including finite task
+  completion, cache publication, Save, Undo/Redo, cancellation, retry, queuing
+  behind unrelated imports, generic surface composition and actual Esc events.
+* `photo_regression/photo.json`: 38 existing native background photo checks;
+  `photo_ui_regression/ui.json`: 14 existing native UI photo checks. Both passed.
+* `real_verified/real.json`: a fresh credentialed download of spherical image
+  `1079237249490765`, displayed interactively with attribution and opacity.
+  First usable view was approximately 1.51 seconds on this run. The token was read
+  from the authorized file without printing or persisting it. Initial restricted
+  runs stopped the helper; the isolated live run with network/helper execution
+  allowed passed. Offline mode also correctly prevented a download.
+* `real_cached/real.json`: offline reuse of the packed real photo, approximately
+  0.37 seconds to the first usable view. After 20 repeated open/close cycles the
+  image count and private committed memory were unchanged; working set increased
+  by about 20 KiB in this measurement. Persistent photo caches are not evicted.
+
+Performance fixture: Windows, Blender 5.2/OpenGL, NVIDIA GeForce RTX 4050 Laptop
+GPU, 1574 x 888 viewport, 2048 x 1024 panorama, a small fixture scene. Across 120
+scripted navigation updates, median timer interval was about 20.83 ms (roughly
+48 updates/s), p95 about 21.66 ms. Median draw submission CPU time was 0.109 ms,
+p95 0.141 ms. These are host-side measurements, not GPU completion times or a
+guarantee for large production scenes. Synchronous decode/pack/upload and undo
+may still pause the main thread during first loading.
+
+The shader's longitude/latitude and EXIF mapping were checked against Mapillary's
+[SphericalCamera](https://github.com/mapillary/mapillary-js/blob/main/src/geometry/camera/SphericalCamera.ts)
+and [Transform](https://github.com/mapillary/mapillary-js/blob/main/src/geo/Transform.ts).
+Visual captures include the synthetic grid, the real photo at full opacity and
+35% opacity, an editor resize, and the provider-free canvas/card example.
 
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client
   token and area, not every account/provider state or an API maximum. The main
   current API documentation was login-gated during initial implementation.
-- Camera frames/poses, metadata and on-demand photo previews are supported;
-  interactive 360-degree viewing, accurate fisheye projection and radial-
-  distortion rendering are subsequent work.
+- Camera frames/poses, metadata, on-demand photo previews and interactive
+  spherical viewing are supported. Accurate fisheye projection, radial-distortion
+  rendering and smooth navigation/transitions are subsequent work.
 - EXIF mirrors are approximate. Camera heights are estimated at 2 m above terrain
   or the scene plane; actual capture heights and cross-provider vertical-datum
   alignment are not recovered from provider altitude.
@@ -584,5 +634,7 @@ synchronous despite asynchronous network IO, so short UI pauses remain possible.
   malformed/oversized resources produce aggregate errors/incomplete coverage.
   Dateline-crossing or polar extents and datasets beyond stated bounds are not
   silently accepted.
-- Validation used Blender 5.2 on Windows. Other supported Blender versions and
-  operating systems still need release qualification.
+- Viewer qualification covers Blender 4.5 and 5.2 with OpenGL on Windows. Other
+  operating systems/backends still need qualification. Quad view, Local View,
+  locked views, EXIF mirrors and ambiguous/partial panorama layouts are rejected.
+  Panorama opacity is session-local; packed image caching persists as before.

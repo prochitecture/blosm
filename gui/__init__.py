@@ -427,7 +427,14 @@ class BLOSM_PT_Extent(bpy.types.Panel):
         camera = photo.imported_camera(context)
         if camera is not None:
             photo_box = layout.box()
+            from ..mapillary.panorama import is_panorama
+            if is_panorama(camera):
+                photo_box.operator('blosm.view_mapillary_panorama', icon='WORLD')
             photo_box.operator('blosm.view_mapillary_photo', icon='CAMERA_DATA')
+        from .. import viewport
+        session = viewport.current()
+        if session is not None and session.area == context.area:
+            layout.operator('blosm.close_viewport', text=session.surface.close_label, icon='X')
         # Credit the displayed photo even when selecting another object hides
         # the action button. This is the scene camera selected by the viewer.
         viewed = context.scene.camera

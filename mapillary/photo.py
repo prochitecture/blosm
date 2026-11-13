@@ -152,7 +152,7 @@ def load_photo(content, image_id, creator):
 
 
 class PhotoImport:
-    def __init__(self,context,obj,token,*,transport=None):
+    def __init__(self,context,obj,token,*,transport=None,activate=True,report_result=True):
         if not token or any(c.isspace() for c in token):
             raise ValueError('Set a valid Mapillary client access token in Blosm preferences')
         self.scene, self.view_layer = context.scene, context.view_layer
@@ -163,6 +163,8 @@ class PhotoImport:
         self.revision = 0
         self.phase = 'Downloading photo metadata…'
         self.image = None
+        self.result_error = None
+        self.activate,self.report_result = activate,report_result
         self.transport = transport if transport is not None else DownloadTransport(
             max_requests=1,max_bytes=MAX_BYTES,max_buffer_bytes=MAX_BYTES)
         self.job = Job(self.steps(),self.transport,validate=self.validate)
@@ -193,7 +195,7 @@ class PhotoImport:
             with bpy.context.temp_override(window=self.window,scene=self.scene,view_layer=self.view_layer):
                 # A download must not steal the view back after the user has
                 # selected a different camera (possibly queuing its photo).
-                if self.view_layer.objects.active == self.obj:
+                if self.activate and self.view_layer.objects.active == self.obj:
                     show_photo(bpy.context,self.obj,image,self.area)
         except Exception:
             bpy.data.images.remove(image)
@@ -209,7 +211,8 @@ class PhotoImport:
         self.job.cancel()
 
     def finish(self,silent=False):
-        if not silent:
+        self.result_error = redact_text(self.job.error,headers=self.headers) if self.job.error else None
+        if not silent and self.report_result:
             if self.job.error:
                 runtime.notify_result('ERROR','Mapillary photo failed: '+redact_text(self.job.error,headers=self.headers))
             elif self.job.cancelled:
@@ -289,6 +292,9 @@ class BLOSM_OT_ViewMapillaryPhoto(bpy.types.Operator):
 
     def execute(self,context):
         global pending
+        from .. import viewport
+        session=viewport.current()
+        if session is not None: session.request_close('REPLACED')
         obj = imported_camera(context)
         try:
             image = cached_image(obj['mapillary_image_id'])
