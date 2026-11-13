@@ -247,6 +247,46 @@ evaluated=task(8)
 drive(evaluated)
 check('terrain modifiers evaluated and upper surface sampled',
       all(abs(o.location.z-18.)<1e-4 for o in evaluated.collection.objects))
+terrain.hide_viewport=True
+terrain.hide_render=True
+terrain.hide_set(True)
+hidden_objects=set(bpy.data.objects.keys())
+hidden_collections=set(bpy.data.collections.keys())
+hidden=task(8)
+drive(hidden)
+check('hidden terrain evaluates modifiers without unhiding source',
+      hidden.count==8 and all(abs(o.location.z-18.)<1e-4 for o in hidden.collection.objects)
+      and terrain.hide_viewport and terrain.hide_render and terrain.hide_get())
+check('temporary terrain evaluator leaves no IDs',
+      set(bpy.data.objects.keys())-hidden_objects==set(o.name for o in hidden.collection.objects)
+      and set(bpy.data.collections.keys())-hidden_collections=={hidden.collection.name})
+excluded_collection=bpy.data.collections.new('Excluded terrain fixture')
+scene.collection.children.link(excluded_collection)
+excluded_collection.objects.link(terrain)
+scene.collection.objects.unlink(terrain)
+bpy.context.view_layer.layer_collection.children[excluded_collection.name].exclude=True
+bpy.context.view_layer.update()
+excluded=task(8)
+drive(excluded)
+check('terrain excluded from active view layer remains sampleable',excluded.count==8
+      and all(abs(o.location.z-18.)<1e-4 for o in excluded.collection.objects)
+      and bpy.context.view_layer.layer_collection.children[excluded_collection.name].exclude)
+scene.collection.objects.link(terrain)
+bpy.data.collections.remove(excluded_collection)
+terrain.hide_viewport=False
+terrain.hide_render=False
+terrain.hide_set(False)
+terrain.scale.z=0.
+bpy.context.view_layer.update()
+before_failure_objects=set(bpy.data.objects.keys())
+before_failure_collections=set(bpy.data.collections.keys())
+singular=task(8)
+while not singular.job.done: singular.job.step()
+check('failed terrain evaluation removes all temporary IDs',singular.job.error is not None
+      and 'singular' in str(singular.job.error)
+      and before_failure_objects==set(bpy.data.objects.keys())
+      and before_failure_collections==set(bpy.data.collections.keys()))
+terrain.scale.z=2.
 terrain.modifiers.remove(modifier)
 terrain.location.z=-10.
 bpy.context.view_layer.update()
@@ -289,7 +329,7 @@ scale=dict(count=large.count,elapsed=time.monotonic()-started,max_turn=max(scale
 check('bounded decoded metadata',large.metrics['peak_metadata_records']<=32)
 check('scale count and processing',large.count==args.count)
 
-# Exercise thousands of native cached rays on a moderately detailed mesh. This
+# Exercise thousands of independent BVH rays on a moderately detailed mesh. This
 # is separate from the no-terrain baseline and excludes GUI undo overhead.
 grid=100
 verts=[(-100.+2*x,-100.+2*y,35.) for y in range(grid+1) for x in range(grid+1)]
@@ -310,6 +350,8 @@ check('scale terrain rays place every camera above the mesh',ground_large.count=
       and ground_large.terrain_misses==0 and all(abs(o.location.z-37.)<1e-5 for o in ground_large.collection.objects))
 check('ground sampling does not create extra terrain geometry',len(dense_mesh.vertices)==len(verts)
       and len(dense_mesh.polygons)==len(faces) and len(dense_terrain.modifiers)==0)
+check('terrain snapshots released after completed and cancelled imports',
+      ground_large.ground.tree is None and singular.ground.tree is None and interrupted.ground.tree is None)
 report={'checks':checks,'scale':scale,'ground_scale':ground_scale,
         'small_max_turn':max(turns),'blender':bpy.app.version_string}
 (args.artifacts/'background.json').write_text(json.dumps(report,indent=2))

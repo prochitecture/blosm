@@ -177,6 +177,7 @@ class MapillaryImport:
             raw.clear()
             self.seen.clear()
             self.counted_ids.clear()
+            self.ground.clear()
             # No credentials belong to the persisted Blender scene or reports.
             # Retain credentials only in memory through finish(), so even an
             # unexpected fatal exception can be redacted before reporting it.
@@ -345,6 +346,7 @@ class MapillaryImport:
 
     def cancel(self):
         self.job.cancel()
+        self.ground.clear()
 
     def finish(self, silent=False):
         for detail in self.details:

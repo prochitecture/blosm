@@ -1,7 +1,9 @@
 """Main-thread terrain sampling without changing terrain geometry or transforms."""
 import math
 
+import bpy
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 
 class GroundSurface:
@@ -11,7 +13,52 @@ class GroundSurface:
         self.terrain = self.scene.objects.get(name) if name else None
         if self.terrain is not None and self.terrain.type != 'MESH':
             raise ValueError('The selected Mapillary terrain must be a mesh')
-        self.depsgraph = None
+        self.tree = None
+        self.matrix = self.inverse = None
+        self.project_z = None
+
+    def snapshot(self):
+        """Evaluate a temporary visible copy, then keep only Python/math data.
+
+        A hidden/excluded source can have a Mesh datablock but no evaluated mesh
+        for Object.ray_cast. A private copy also evaluates its modifiers without
+        changing the user's visibility, mesh, selection, or object transform.
+        This scope never yields: all temporary IDs are removed before an undo
+        checkpoint or viewport redraw can observe them.
+        """
+        collection = proxy = None
+        try:
+            collection = bpy.data.collections.new('.Mapillary terrain evaluation')
+            self.scene.collection.children.link(collection)
+            proxy = self.terrain.copy()
+            collection.objects.link(proxy)
+            proxy.hide_viewport = False
+            proxy.hide_render = True
+            proxy.hide_set(False, view_layer=self.context.view_layer)
+            depsgraph = self.context.evaluated_depsgraph_get()
+            depsgraph.update()
+            evaluated = proxy.evaluated_get(depsgraph)
+            matrix = evaluated.matrix_world.copy()
+            try:
+                inverse = matrix.inverted()
+            except ValueError:
+                raise RuntimeError('The Mapillary terrain has a singular transform') from None
+            try:
+                tree = BVHTree.FromObject(proxy, depsgraph)
+            except (ValueError, RuntimeError):
+                raise RuntimeError('The selected Mapillary terrain could not be evaluated as a mesh') from None
+            if tree is None:
+                raise RuntimeError('The selected Mapillary terrain could not be evaluated as a mesh')
+            self.project_z = max((matrix @ Vector(corner)).z for corner in evaluated.bound_box) + 1.
+            self.tree, self.matrix, self.inverse = tree, matrix, inverse
+        finally:
+            if proxy is not None:
+                bpy.data.objects.remove(proxy, do_unlink=True)
+            if collection is not None:
+                bpy.data.collections.remove(collection)
+
+    def clear(self):
+        self.tree = self.matrix = self.inverse = self.project_z = None
 
     def validate(self):
         if self.terrain is not None:
@@ -26,23 +73,16 @@ class GroundSurface:
         self.validate()
         if self.terrain is None:
             return 0., 'scene_plane'
-        # Acquire evaluated geometry lazily within a cooperative camera turn.
-        # Object.ray_cast uses Blender's cached mesh acceleration structure;
-        # do not rebuild a Python BVH or force a depsgraph update per camera.
-        if self.depsgraph is None:
-            self.depsgraph = self.context.evaluated_depsgraph_get()
-        terrain = self.terrain.evaluated_get(self.depsgraph)
-        matrix = terrain.matrix_world
-        try:
-            inverse = matrix.inverted()
-        except ValueError:
-            raise RuntimeError('The Mapillary terrain has a singular transform') from None
-        top = max((matrix @ Vector(corner)).z for corner in terrain.bound_box) + 1.
-        origin = inverse @ Vector((x, y, top))
-        direction = (inverse.to_3x3() @ Vector((0., 0., -1.))).normalized()
-        hit, location, _, _ = terrain.ray_cast(origin, direction)
-        if hit:
-            z = (matrix @ location).z
+        # Snapshot once, lazily inside the first camera's main-thread turn.
+        # The independent BVH survives depsgraph updates and undo checkpoints;
+        # subsequent cameras need neither reevaluation nor temporary objects.
+        if self.tree is None:
+            self.snapshot()
+        origin = self.inverse @ Vector((x, y, self.project_z))
+        direction = (self.inverse.to_3x3() @ Vector((0., 0., -1.))).normalized()
+        location, _, _, _ = self.tree.ray_cast(origin, direction)
+        if location is not None:
+            z = (self.matrix @ location).z
             if not math.isfinite(z):
                 raise RuntimeError('The Mapillary terrain returned an invalid elevation')
             return z, 'terrain_surface'

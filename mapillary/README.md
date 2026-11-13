@@ -158,6 +158,13 @@ Camera elevation follows the local scene ground, using an **estimated 2 m camera
 height**. Select the mesh with Blosm's existing **Terrain** object selector. Cast
 a vertical ray onto its evaluated world-space surface, including modifiers and
 object transforms, and place the camera 2 m above the uppermost intersection.
+Terrain can be hidden or excluded from the active view layer. At the first camera,
+the sampler evaluates a private temporary object copy and builds an independent
+BVH snapshot. The temporary object and collection are removed synchronously
+before any yield, redraw or undo checkpoint; the source is not unhidden or edited.
+The snapshot fixes geometry and transforms for that import. Restart the import
+after terrain edits if new cameras must use the changed surface. Completion,
+cancellation and failures release the snapshot.
 Without a selected terrain, place cameras at **scene Z = 2 m**. If a ray misses
 the selected terrain, also use Z=2 m, record `scene_plane_outside_terrain`, and
 include the number of these fallbacks in the aggregate result.

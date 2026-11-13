@@ -185,6 +185,9 @@ def scenario():
     terrain=bpy.data.objects.new('UI terrain surface',terrain_mesh)
     bpy.context.scene.collection.objects.link(terrain)
     terrain.location.z=7.
+    terrain.hide_viewport=True
+    terrain.hide_render=True
+    terrain.hide_set(True)
     settings().blosm.terrainObject=terrain.name
     bpy.context.view_layer.update()
     bpy.ops.ed.undo_push(message='Terrain fixture setup')
@@ -201,6 +204,8 @@ def scenario():
             for o in bpy.context.scene.objects if 'mapillary_image_id' in o)
         terrain=bpy.context.scene.objects['UI terrain surface']
         assert terrain.location.z==7. and all(v.co.z==0 for v in terrain.data.vertices)
+        assert terrain.hide_viewport and terrain.hide_render and terrain.hide_get()
+        assert not any(c.name.startswith('.Mapillary terrain evaluation') for c in bpy.data.collections)
         clear()
     terrain_mesh=terrain.data
     bpy.data.objects.remove(terrain,do_unlink=True)

@@ -311,6 +311,44 @@ Evidence is under `artifacts/mapillary_import/progress_messaging/`: `background/
 performance comparisons. Estimated percentages describe candidate work, not
 time remaining; spatially uneven density can still give poor early estimates.
 
+## Hidden terrain evaluation, 2026-11-13
+
+The user reported `Object 'Terrain' has no evaluated mesh data` for
+`C:/prochitecture/setup/bldg2_berlin_karl_marx_allee.blend`. A factory-startup
+isolated Blender process reproduced the native `Object.ray_cast` error: the
+object has a valid 1,298-vertex Mesh datablock, but viewport visibility is
+disabled (`hide_viewport`, `hide_get` and `hide_render` all true).
+
+The sampler now evaluates a private temporary copy and builds a per-import BVH
+snapshot in the first camera turn. Source visibility, mesh and transforms are
+unchanged. Temporary object/collection IDs are removed in a synchronous finally
+scope before any cooperative yield or undo checkpoint. The independent snapshot
+survives dependency-graph rebuilds and is released on completion/cancellation.
+Geometry and world transform are captured once; terrain edits require a new
+import to affect subsequent camera placement.
+
+`tests/check_mapillary_hidden_terrain.py` reads the supplied scene without saving
+it and uses synthetic metadata over 16 independently known terrain triangle
+centroids. Blocking and stepped imports each created 16 cameras at terrain+2 m.
+It verified mesh/transform/visibility, selection, active object/collection,
+cursor and rendering camera preservation, no temporary collection remaining,
+and an unchanged hash of the user's original scene file. No HTTP or real token
+is needed for this regression.
+
+The background suite additionally covers hidden terrain with a Solidify modifier,
+terrain excluded from the view layer, translated/rotated/scaled terrain and
+temporary-ID cleanup. A 5,000-camera run over a 10,000-quad surface completed;
+the first evaluated snapshot turn reached about 200 ms, while later rays reused
+the BVH. As with other native evaluation calls, that initial synchronous work
+cannot be preempted by the scheduler's soft time budget. All ten isolated UI
+scenarios also passed, including hidden-terrain placement in both modes and
+undo/redo with source visibility preserved.
+
+Evidence is under `artifacts/mapillary_import/terrain_evaluation/`: original
+`scene_probe.json`/`probe.log`, `scene_regression.json`/`regression.log`, plus the
+background and UI subdirectories. The original scene and normal Blender profile
+were never written or reconfigured.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client
@@ -324,7 +362,7 @@ time remaining; spatially uneven density can still give poor early estimates.
 - Main-thread work is cooperative and size-bounded, not hard-real-time. An
   individual Blender call, small JSON parse or undo checkpoint can exceed the
   nominal eight-millisecond job budget. The first terrain ray may build Blender's
-  cached mesh acceleration structure; very large evaluated terrain meshes can
+  evaluated BVH snapshot; very large evaluated terrain meshes can
   cause a longer initial camera turn.
 - Decoder support intentionally targets documented single-point image features;
   malformed/oversized resources produce aggregate errors/incomplete coverage.
