@@ -70,9 +70,9 @@ class PadlBuildingManager(Manager):
         footprints = OsmFootprintSource(self.osm, self.mapper, self.report).collect(self.ways, self.relations)
         terrain = self.app.terrain.terrain if self.app.terrain else None
         groups = group_buildings(footprints, self.app.singleObject)
-        # Reuse the status reader in blocking mode. In progressive mode its
-        # lifetime is confined to one synchronous allocation capture: neither
-        # the reader nor its temporary owner can enter user undo snapshots.
+        # Reuse the reader for the batch. Progressive status helpers live in a
+        # private scene; transient ownership removes them on teardown/history.
+        # Each read releases its borrowed building mesh before the next yield.
         progressive = session is not None
         with ExitStack() as batch:
             if groups:

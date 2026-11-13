@@ -1,7 +1,7 @@
 """Backend strategies share inputs, identity, PADL evaluation and terrain rules."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 
 from ...padl import services
 from ...padl.api import create_input_object
@@ -33,9 +33,11 @@ class BuildingBackend(ABC):
 
 class _ProgressiveGraph:
     """Revalidate shared assets after external edits, without hashing each turn."""
-    def __init__(self, library, role, tree):
+    def __init__(self, library, role, tree, *, ignored_scene=None):
         self.library, self.role = library, role
+        self.ignored_scene = ignored_scene
         self.dirty = self.busy = False
+        self.initialized = False
         self._remember(tree)
         self.handler = self._updated
 
@@ -58,7 +60,8 @@ class _ProgressiveGraph:
 
     def _updated(self, scene, graph):
         session = getattr(getattr(self.library, 'app', None), 'osm_session', None)
-        if self.busy or (session is not None and session.in_step):
+        if (self.busy or (session is not None and session.in_step) or
+                (self.ignored_scene is not None and graph.scene.original == self.ignored_scene)):
             return
         # Publishing a building also produces deferred Object/Mesh/Collection
         # updates after the timer returns. Those do not change the generator.
@@ -89,10 +92,12 @@ class GeometryNodesBackend(BuildingBackend):
         from .gn_runtime import StatusReader
         tree = library.tree(role)
         # Reuse verification until an external edit invalidates it. Progressive
-        # turns retain no temporary reader in the scene or undo snapshots.
-        with nullcontext() if progressive else StatusReader(tree) as reader:
+        # status evaluation has its own small graph, independent of the growing
+        # import scene; its tagged helpers are removed on teardown/history.
+        with StatusReader(tree, private_scene=progressive) as reader:
             self._batch_tree, self._batch_reader = tree, reader
-            self._batch_guard = guard = _ProgressiveGraph(library, role, tree) if progressive else None
+            self._batch_guard = guard = (_ProgressiveGraph(library, role, tree, ignored_scene=reader.scene)
+                                         if progressive else None)
             if guard is not None:
                 bpy.app.handlers.depsgraph_update_post.append(guard.handler)
             try:
@@ -121,6 +126,13 @@ class GeometryNodesBackend(BuildingBackend):
             guard.busy = True
         try:
             modifier = attach(owner, tree, terrain, collection)
+            if guard is not None and not guard.initialized:
+                import bpy
+                # Consume the newly loaded assets' initial notifications while
+                # still inside this step. Otherwise the first viewport update
+                # looks like an external edit and repeats full verification.
+                bpy.context.view_layer.update()
+                guard.initialized = True
             reader = getattr(self, '_batch_reader', None)
             statuses = reader.read(owner, modifier) if reader else read_status(owner, modifier)
         finally:

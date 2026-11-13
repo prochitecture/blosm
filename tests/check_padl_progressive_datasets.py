@@ -94,10 +94,8 @@ class PadlDatasetChecks(unittest.TestCase):
                             **json.loads(json.dumps(runtime.last_result))))
 
     def assert_no_readers(self):
-        self.assertFalse([item.name for item in bpy.data.node_groups
-                          if item.name.startswith('PADL temporary status reader')])
-        self.assertFalse([item.name for item in bpy.data.objects
-                          if item.name.startswith('PADL temporary status owner')])
+        from padl_status_support import assert_status_resources
+        assert_status_resources(runtime)
 
     def assert_summary_equal(self, expected, actual):
         self.assertTrue(expected, 'Dataset generated no geometry')

@@ -92,6 +92,11 @@ their original JSON reports. Both exit code and report status are checked.
 | `osm` | All 12 core extracts, 2D/simple 3D, **Single object on/off**, world geometry, road/rail curves, disabled layers, repeated import and save/reopen |
 | `osm_progressive` | Cooperative OSM sessions, real building/road parity, separate objects, per-object GN attributes, cancellation, owned bulk commits, RNG isolation; realistic forests and uncached asynchronous export with `--assets` |
 | `osm_progressive_ui` | Explicit GUI suite: actual OSM operator/timers, incremental visibility, grouped Undo/Redo, user edits, pause, cancellation, target deletion, staged bake history and disable |
+| `padl_progressive` | Native GN/Python building groups, blocking parity, editable inputs, reports, cancellation, asset edits and failure rollback |
+| `padl_progressive_datasets` | Full Karl Marx Allee parity, sloped terrain, shared helpers and cancellation for both native backends |
+| `padl_status_scene` | Private GN status evaluator reuse, diagnostic parity, borrowed mesh release, deletion/failure cleanup and graph invalidation |
+| `padl_progressive_ui` | Explicit GUI suite: native building publication, grouped/user-edit Undo/Redo, cancellation, deletion and unchanged-asset verification count |
+| `padl_progressive_performance` | Opt-in GUI benchmark: publication intervals, asset/status work and undo costs; `--extended` for all 138 Karl Marx Allee groups, `BLOSM_PADL_BENCHMARK_BACKEND=python` for comparison |
 | `roofs` | Independent rectangular controls for 12 supported roof shapes plus unknown-shape fallback, both grouping states, explicit height and valid faces |
 | `gpx` | Real track, curve/mesh, segments/edges, elevations, geographic control points, existing origin, terrain offsets/projection and curve width |
 | `geometry_nodes` | Socket types, zero/false/empty values, instance isolation, attributes, discovery/errors and evaluated geometry |

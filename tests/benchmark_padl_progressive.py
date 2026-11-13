@@ -3,6 +3,7 @@
 Run in an isolated GUI Blender with release_support arguments. By default stop
 after 20 groups of Karl Marx Allee; --extended completes the full extract.
 BLOSM_PADL_BENCHMARK_MODE=blocking selects the synchronous comparison.
+BLOSM_PADL_BENCHMARK_BACKEND=python selects the Python backend comparison.
 """
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -26,6 +27,7 @@ backends = importlib.import_module(PACKAGE + '.building.padl_integration.backend
 gn = importlib.import_module(PACKAGE + '.building.padl_integration.gn_runtime')
 driver.show_result = lambda *a: None
 mode = os.environ.get('BLOSM_PADL_BENCHMARK_MODE', 'progressive')
+backend = os.environ.get('BLOSM_PADL_BENCHMARK_BACKEND', 'geometry_nodes')
 limit = None if args.extended else 20
 timings, updates = defaultdict(list), Counter()
 commits, hearts = [], []
@@ -82,7 +84,7 @@ def scenario():
     fixture = next(entry for entry in catalog() if entry['id'] == 'karl_marx_allee')
     settings = configure_osm(args, fixture, '3Dsimple', False)
     settings.progressiveImport = mode == 'progressive'
-    settings.buildingBackend = 'geometry_nodes'
+    settings.buildingBackend = backend
     settings.buildingSeed = 113
     started = time.perf_counter()
     assert bpy.ops.blosm.import_data('EXEC_DEFAULT', True) == {'FINISHED'}
@@ -112,14 +114,19 @@ def tick():
     elapsed = time.perf_counter() - started if started else 0.
     if driver.active:
         driver.active.close(silent=True)
-    report = dict(status=status, error=error, mode=mode, limit=limit,
+    report = dict(status=status, error=error, mode=mode, backend=backend, limit=limit,
                   elapsed_seconds=elapsed, result=runtime.last_result, commits=commits,
                   heartbeats=len(hearts),
                   max_heartbeat_gap_seconds=max((b-a for a,b in zip(hearts, hearts[1:])), default=0),
-                  timings={key: dict(calls=len(values), seconds=sum(values), maximum=max(values), samples=values)
+                  timings={key: dict(calls=len(values), seconds=sum(values), maximum=max(values, default=0), samples=values)
                            for key, values in timings.items()},
                   external_updates=[dict(type=k[0], geometry=k[1], transform=k[2], shading=k[3], count=v)
                                     for k,v in updates.items()])
+    intervals = [right['seconds'] - left['seconds'] for left, right in zip(commits, commits[1:])]
+    report['publication_intervals'] = dict(
+        count=len(intervals), maximum=max(intervals, default=0),
+        mean=sum(intervals) / len(intervals) if intervals else 0,
+        p95=sorted(intervals)[int(.95 * (len(intervals)-1))] if intervals else 0)
     (args.artifacts/'padl_performance.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print('PADL_PERFORMANCE', json.dumps({key: value for key,value in report.items()
                                       if key not in ('timings','external_updates')}), flush=True)

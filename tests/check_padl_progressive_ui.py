@@ -59,10 +59,8 @@ def owners(scene_only=True):
 
 
 def assert_no_temporary_readers():
-    assert not [item.name for item in bpy.data.node_groups
-                if item.name.startswith('PADL temporary status reader')]
-    assert not [item.name for item in bpy.data.objects
-                if item.name.startswith('PADL temporary status owner')]
+    from padl_status_support import assert_status_resources
+    assert_status_resources(runtime)
 
 
 def report_state(owner_count, status_count=None, *, scene_only=True):

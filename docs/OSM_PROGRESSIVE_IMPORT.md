@@ -195,14 +195,27 @@ uses separate buildings; the stored blocking single-object preference is retaine
 
 Blocking imports drain the same generation code in one ownership scope and
 retain batch status-reader reuse. Progressive GN imports verify the shared graph
-for the batch and create the temporary status reader only inside a synchronous
-building call. Updates to the original root or nested generator NodeTree IDs
+for the batch and reuse a status reader in a private temporary scene. The private
+scene contains one status owner, its empty mesh and the shared terrain dependencies
+when needed. Each synchronous building call borrows that building's input mesh,
+reads diagnostics and releases the mesh before yielding. It does not add temporary
+owners to the growing import scene. Updates to the original root or nested generator NodeTree IDs
 trigger revalidation before the next building. Deferred scene/object/mesh updates
 from publication and normal viewport work do not invalidate the generator.
 NodeTree updates matter even when their geometry/shading/transform flags are all
 false. Deleted GN dependencies and changed embedded program Texts stop the import
-with a partial-result error. No temporary status reader survives a UI boundary
-or enters an undo snapshot. Loaded generator dependencies remain shared by completed owners.
+with a partial-result error. The private scene, owner, empty mesh and reader group
+are tagged transient: they persist between import turns, are removed on batch
+teardown and are stripped from restored undo snapshots. Shared generator and
+terrain dependencies remain owned by completed buildings. Deleting a private
+helper stops further generation with an error and cleans up the remaining helpers.
+Terrain status uses the import scene's frame/subframe, FPS, time remapping and
+viewport subdivision simplification settings; the private scene follows changes
+without changing the active scene or its time.
+Only the private graph's notifications are ignored; edits to shared generators
+in another user scene still invalidate the asset. The first progressive building
+updates the main view layer once to consume asset-initialization notifications;
+subsequent status reads update only the private layer.
 The report Text and app result/status attributes are updated after each building,
 so cancellation and failures retain the report for completed work. Renamed or
 deleted accepted owners are handled by RNA identity/liveness rather than names;
@@ -235,9 +248,10 @@ updates. On the first 20 Karl Marx Allee groups it took 48.09 seconds, including
 44.49 seconds in 20 asset validations. Restricting invalidation to the actual
 generator IDs reduced that same GUI run to 5.31 seconds with one validation;
 the final registered benchmark repeated it in 5.48 seconds (about 9x faster).
-The full 138-group GUI import completed in 72.88 seconds, including 32.57 seconds
-of status evaluation and 34.53 seconds in undo checkpoints. Those costs remain;
-the speedup above describes the measured 20-group comparison, not every dataset.
+Before the private status scene optimization, the full 138-group GUI import
+completed in 72.88 seconds, including 32.57 seconds of status evaluation and
+34.53 seconds in undo checkpoints. The speedup above describes the measured
+20-group comparison, not every dataset.
 Per-building status evaluation and undo checkpoints remain enabled. Report links
 are only assigned when needed, avoiding writes to unchanged owner metadata.
 The GUI suite now asserts that uninterrupted import, ordinary scene edits and
@@ -245,6 +259,24 @@ accepted-object renaming/deletion do not revalidate an unchanged generator;
 root/nested graph, interface, document and deletion checks protect invalidation.
 Profiles and event probes are under
 `C:/dev/workspace/artifacts/osm_progressive_import/padl_progressive_performance/`.
+
+The subsequent private-scene optimization avoids rebuilding the growing main
+scene's dependency relations merely to add/remove a diagnostic owner. The final
+138-group GUI run in Blender 5.2 took 43.59 seconds (an earlier repeat took 45.70),
+versus 72.88 seconds before this change. Status work fell from 32.57 to 3.35
+seconds. Average observed publication intervals fell from 510 to 294 ms, and
+the 95th percentile from 886 to 494 ms. A Python run of the same extract took
+7.20 seconds with 46 ms average intervals. GN therefore improves by about 40%
+in total time but does not yet match Python responsiveness. Initial GN results
+still take about 2.8 seconds. Main-scene work during undo checkpoints dominates
+the remaining cost (34.60 seconds); individual building evaluation and initial
+asset loading also remain synchronous. These are observations on this machine,
+not guaranteed input-event latency. Editable GN modifiers, per-building reports
+and the existing undo boundaries remain enabled. All four native building suites
+pass, including animated/remapped-time and simplified terrain, helper deletion,
+failure cleanup, dataset geometry parity and actual GUI history operations.
+Measurements and validation provenance are in
+`C:/dev/workspace/artifacts/osm_progressive_import/gn_responsiveness/qualification.json`.
 
 The separate `blosm_build` repository uses explicit runtime file inventories.
 Its common inventory includes `app/osm_import.py` and `progressive/ownership.py`;
@@ -269,11 +301,15 @@ The release catalog now contains:
 - `padl_progressive_datasets`: full Karl Marx Allee evaluated-output and report
   parity for both backends, translated/sloped terrain, shared GN terrain helpers
   and partial cancellation; records observed callback and first-result timings;
+- `padl_status_scene`: private evaluator reuse, diagnostic parity, borrowed input
+  release, exception/deletion cleanup, terrain dependencies and asset invalidation;
 - `padl_progressive_performance` (opt-in GUI benchmark): times actual timer
   execution, asset validation, status evaluation and undo checkpoints. The
   default stops after 20 Karl Marx Allee groups; `--extended` completes all 138.
   Set `BLOSM_PADL_BENCHMARK_MODE=blocking` in the launch environment for the
-  synchronous separate-object comparison. It records `padl_performance.json`;
+  synchronous separate-object comparison, or `BLOSM_PADL_BENCHMARK_BACKEND=python`
+  for the Python backend. It records `padl_performance.json`, including the
+  intervals between observed building publications (not a hard UI latency bound);
 - `osm_progressive`: real extract parity, local parsing, missing-member POST and
   companion reuse, captured settings, per-object GN, resource/transaction failures,
   terrain validity, forests, realistic materials and real uncached export;

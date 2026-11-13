@@ -48,7 +48,7 @@ def evaluated_geometry(results):
 
 
 def data_ids():
-    return {kind: {item.as_pointer() for item in getattr(bpy.data, kind)}
+    return {kind: {item.as_pointer() for item in getattr(bpy.data, kind) if not item.get(ownership.TRANSIENT)}
             for kind in ownership.KINDS}
 
 
@@ -73,10 +73,8 @@ class PadlProgressiveChecks(unittest.TestCase):
         return session
 
     def assert_no_temporary_readers(self):
-        self.assertFalse([item.name for item in bpy.data.node_groups
-                          if item.name.startswith('PADL temporary status reader')])
-        self.assertFalse([item.name for item in bpy.data.objects
-                          if item.name.startswith('PADL temporary status owner')])
+        from padl_status_support import assert_status_resources
+        assert_status_resources(runtime)
 
     def assert_report(self, count, input_count):
         results = runtime.app.padlBuildingResults

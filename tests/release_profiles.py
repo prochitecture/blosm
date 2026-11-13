@@ -6,6 +6,7 @@ import zipfile
 NEW = {
     'padl_progressive': 'check_padl_progressive.py',
     'padl_progressive_datasets': 'check_padl_progressive_datasets.py',
+    'padl_status_scene': 'check_padl_status_scene.py',
     'osm_progressive': 'check_osm_progressive.py',
     'osm': 'check_release_osm.py', 'gpx': 'check_release_gpx.py',
     'geometry_nodes': 'check_release_geometry_nodes.py', 'buildify': 'check_release_buildify.py',
@@ -26,7 +27,7 @@ EXISTING = {
     'ui': ('check_progressive_ui.py', 'ui_checks.json'),
 }
 CORE = ['preflight', 'standalone', 'direct', 'operator', 'progressive', 'concurrent', 'osm_progressive',
-        'padl_progressive', 'padl_progressive_datasets',
+        'padl_progressive', 'padl_progressive_datasets', 'padl_status_scene',
         'osm', 'roofs', 'gpx', 'geometry_nodes', 'buildify', 'terrain', 'overlay',
         'validation', 'baking', 'export', 'pml']
 PRO_ONLY = frozenset(('baking', 'export', 'pml'))
