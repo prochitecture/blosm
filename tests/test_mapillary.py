@@ -8,7 +8,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mapillary_test_support import fixture, mvt, field, BOUNDS, BASE_ID
-from mapillary.tiles import image_points, identifier, tile_coordinates, fields, MAX_TILE_BYTES
+from mapillary.tiles import image_points, image_ids, feature, varint, identifier, tile_coordinates, fields, MAX_TILE_BYTES
 from mapillary.pose import interpret, place_on_ground, rotation_vector, matrix_product, transpose
 import importlib.util
 spec = importlib.util.spec_from_file_location('blosm_projection', Path(__file__).resolve().parents[1] / 'util/transverse_mercator.py')
@@ -179,6 +179,40 @@ class PoseChecks(unittest.TestCase):
 
 
 class TileChecks(unittest.TestCase):
+    def test_count_and_import_filter_match_unfiltered_reference(self):
+        for extent in (512,4096,8192):
+            tile=next(tile_coordinates(BOUNDS))
+            points=[(BASE_ID+i,24.938+i*.0001,60.168+i*.0001) for i in range(50)]
+            payload=mvt(points,tile,extent,duplicate=True)
+            reference=[r for r in image_points(payload,tile) if r is not None]
+            for bounds in (BOUNDS,(24.938,60.168,24.94,60.170),(24.941,60.171,24.944,60.174)):
+                selected=[r for r in reference if bounds[0]<=r['coverage_geometry'][0]<=bounds[2]
+                          and bounds[1]<=r['coverage_geometry'][1]<=bounds[3]]
+                actual=[r for r in image_points(payload,tile,bounds) if r is not None]
+                ids=[identity for identity in image_ids(payload,tile,bounds) if identity is not None]
+                self.assertEqual(actual,selected)
+                self.assertEqual(ids,[r['id'] for r in selected])
+
+    def test_fast_varint_uint64_and_truncation(self):
+        from mapillary_test_support import vint
+        for value in (0,127,128,16384,BASE_ID,(1<<64)-1):
+            encoded=vint(value)
+            self.assertEqual(varint(encoded,0),(value,len(encoded)))
+            for end in range(len(encoded)):
+                with self.assertRaises(ValueError):varint(encoded[:end],0)
+        for encoded in (b'\x80'*10,b'\xff'*9+b'\x02'):
+            with self.assertRaises(ValueError):varint(encoded,0)
+
+    def test_count_path_rejects_invalid_selected_id_and_tags(self):
+        data=field(2,b'\x00\x00')+field(3,1)+field(4,b'\x09\x00\x00')
+        tile=next(tile_coordinates(BOUNDS))
+        with self.assertRaises(ValueError):feature(data,['id'],[float(BASE_ID)],4096,tile,ids_only=True)
+        bad_tags=field(2,b'\x00')+field(3,1)+field(4,b'\x09\x00\x00')
+        with self.assertRaises(ValueError):feature(bad_tags,['id'],[BASE_ID],4096,tile,ids_only=True)
+        # Attributes of a point outside the requested area are intentionally
+        # irrelevant, just like dictionaries in an unrelated coverage layer.
+        self.assertIsNone(feature(bad_tags,['id'],[BASE_ID],4096,tile,bounds=BOUNDS,ids_only=True))
+
     def test_dense_live_style_dictionaries_and_unused_layers(self):
         tile,data,_=fixture(1)
         layer=bytes(next(fields(memoryview(data)))[2])

@@ -17,7 +17,7 @@ from ..progressive.blender import notify_result, preserve_context
 from . import pose
 from .placement import GroundSurface
 from .progress import ImageProgress
-from .tiles import MAX_TILE_BYTES, contains, identifier, image_points, tile_coordinates, validate_bounds
+from .tiles import MAX_TILE_BYTES, contains, identifier, image_points, image_ids, tile_coordinates, validate_bounds
 
 TILE_URL = 'https://tiles.mapillary.com/maps/vtp/mly1_computed_public/2/{z}/{x}/{y}'
 GRAPH_URL = 'https://graph.mapillary.com/images'
@@ -132,7 +132,7 @@ class MapillaryImport:
                         del content
                         continue
                     records = []
-                    iterator = image_points(content, tile)
+                    iterator = image_points(content, tile, self.bounds)
                     processed = 0
                     checkpoint = time.monotonic()
                     try:
@@ -188,27 +188,27 @@ class MapillaryImport:
         # Publish a sample only after a complete successful scan, so a corrupt
         # tile cannot masquerade as empty or distort the extrapolated density.
         new_ids = set()
-        iterator = image_points(content,tile)
-        processed = 0
+        iterator = image_ids(content,tile,self.bounds)
         checkpoint = time.monotonic()
         try:
             while True:
                 started = time.monotonic()
                 try:
-                    record = next(iterator)
+                    identity = next(iterator)
                 except StopIteration:
                     break
                 elapsed = time.monotonic()-started
                 self.metrics['count_seconds'] += elapsed
                 self.metrics['max_count_turn'] = max(self.metrics['max_count_turn'],elapsed)
-                if record is not None and contains(self.bounds,*record['coverage_geometry']):
-                    identity = record['id']
+                if identity is not None:
                     if identity not in self.counted_ids and identity not in new_ids:
                         if len(self.counted_ids)+len(new_ids) >= self.max_images:
                             raise RuntimeError('Mapillary image limit reached; select a smaller area')
                         new_ids.add(identity)
-                processed += 1
-                if record is None or processed % 16 == 0 or time.monotonic()-checkpoint >= .002:
+                # The decoder's frequent checkpoints are safety opportunities,
+                # not a requirement to spend a whole timer turn after 32 tiny
+                # operations. Coalesce them into ~2 ms chunks under Job's budget.
+                if time.monotonic()-checkpoint >= .002:
                     yield None
                     checkpoint = time.monotonic()
             # Incremental transfer keeps cancellation responsive at the ID cap.

@@ -37,6 +37,11 @@ download of all tiles. Before importing a downloaded tile, a cooperative first
 pass counts its unique, in-bounds image IDs. A second pass streams its records
 into the existing 32-entry metadata/camera batches. Only bounded ID sets are
 retained for counting, not whole-tile decoded records or camera metadata.
+Both passes test each point's coordinates before decoding its attributes;
+points outside the selected bounds do not allocate property dictionaries. The
+counting pass retains only image IDs from selected features. Dictionary and
+geometry validation, selected-feature tag validation and resource caps remain
+in force; irrelevant out-of-bounds feature attributes are skipped.
 
 The estimated total is the unique candidate count multiplied by the ratio of
 selected area to successfully counted area. Each tile contributes only its
@@ -51,9 +56,12 @@ Density varies across the area, so subsequent samples may revise the percentage
 downward. Running percentages are capped at 99 until the job finishes. Normal
 completion can still report per-resource errors or incomplete coverage.
 
-Counting adds a tile scan before that tile's first cameras appear and roughly
-doubles vector decoding work. Its checkpoints keep this scan cooperative, but
-an individual parsing/Blender call can exceed the scheduler's soft budget.
+Counting adds a tile scan before that tile's first cameras appear. Its reduced
+decoder and roughly 2 ms processing chunks avoid spending UI timer intervals
+on tiny checkpoint operations. Network latency and dense tiles still delay the
+first estimate; an empty sample cannot predict image density. Checkpoints keep
+the scan cooperative, but an individual parsing/Blender call can exceed the
+scheduler's soft budget. See `Validation.md` for measured count-phase timings.
 
 ## Adapter structure
 

@@ -349,6 +349,58 @@ Evidence is under `artifacts/mapillary_import/terrain_evaluation/`: original
 background and UI subdirectories. The original scene and normal Blender profile
 were never written or reconfigured.
 
+## Counting latency, 2026-11-13
+
+Reference `release` was checked at `e5fe4ac8b0e3a66e56ac9019dd90f99a8b434702`,
+with no missing committed changes before this optimization. The earlier count
+pass decoded every feature's attributes, including those outside the requested
+bounds. Its frequent decoder/record checkpoints also exhausted the scheduler's
+32-operation limit before using its available time budget, adding idle timer
+intervals to the initial "Estimating…" phase.
+
+The reader now tests geometry before attributes and provides an ID-only count
+path. Single-byte protobuf integers have a fast path, retaining uint64 overflow
+and truncation checks. Counting combines decoder checkpoints into approximately
+2 ms chunks under the existing job budget. No shared-core change, whole-area
+prefetch or larger request/decoded-record window was introduced.
+
+A freshly downloaded Berlin tile was reused offline for identical-input
+comparisons: 12,015,652 bytes, 165,861 image features and 750 unique entries in
+the selected subarea. Standalone Python counting fell from 11.65 s to 2.04 s
+(5.7 times faster), with exactly the same selected IDs. Bounded full-record
+decoding took 1.98 s. These comparisons exclude download and metadata requests.
+
+`tests/benchmark_mapillary_count.py` drives the production Job through Blender
+UI timers with a cached-tile transport. The baseline reader/count method is
+loaded read-only from commit `9dd2509`. Time until the first counted tile fell
+from 60.98 s to 14.21 s (77% less). Decoder time was 12.88 s versus 3.66 s;
+maximum job turns were 10.43 ms versus 13.97 ms, and maximum timer heartbeat
+gaps were 36.52 ms versus 39.24 ms. Both returned 750 candidates without errors.
+This is a count-phase timer benchmark, not a complete network/import benchmark
+or a measurement of the shared Controller's undo handling. Timings are individual
+local runs and will vary with coverage density and machine load.
+A repeat with the corrected artifact-local temporary directory took 16.71 s,
+returned the same 750 candidates and left the shared recovery-file timestamp
+unchanged. The observed optimized timer range is therefore 14–17 s here.
+
+Nineteen standalone tests pass, including count/full-record parity across three
+extents and three bounding regions, duplicate IDs, exact large IDs, invalid
+selected tags, truncated/overflowing integers and out-of-bounds attribute
+skipping. All 49 background Blender checks pass, including 5,000-camera runs,
+terrain, count cancellation, parity and lifecycle behavior. All ten isolated UI
+scenarios pass, including grouped undo/redo and intervening user edits. Its
+1,000-camera fixture completed in 4.25 s with Global Undo enabled, a maximum
+active-import heartbeat gap of 59.25 ms and a maximum job turn of 8.70 ms.
+
+Evidence is in `artifacts/mapillary_import/count_optimization/`, including the
+cached coverage, baseline/optimized profiles and reports, `timer_baseline/`,
+`timer_optimized/`, `background/` and `ui/`. The initial timer benchmark omitted
+Blender's temporary-directory override and wrote the shared temporary
+`quit.blend` recovery file, potentially replacing a previous last-session
+recovery file. The benchmark now sets its temporary directory to its artifact
+folder. The corrected repeat is in `timer_optimized_isolated/`. Saved source
+scenes and existing user Blender sessions were unchanged.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client

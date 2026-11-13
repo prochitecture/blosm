@@ -47,9 +47,16 @@ def contains(bounds, lon, lat):
 
 
 def varint(data, position):
-    value = 0
-    for shift in range(0, 70, 7):
-        if position >= len(data):
+    limit = len(data)
+    if position >= limit:
+        raise ValueError('Truncated MVT varint')
+    byte = data[position]
+    position += 1
+    if byte < 128:
+        return byte, position
+    value = byte & 127
+    for shift in range(7, 70, 7):
+        if position >= limit:
             raise ValueError('Truncated MVT varint')
         byte = data[position]
         position += 1
@@ -116,23 +123,18 @@ def packed(data):
         yield value
 
 
-def feature(data, keys, values, extent, tile):
+def feature(data, keys, values, extent, tile, bounds=None, ids_only=False):
     if len(data) > 65536:
         raise ValueError('MVT feature exceeds limit')
-    props, kind, geometry = {}, None, None
+    tag_blocks, kind, geometry = [], None, None
     for number, wire, value in fields(data):
         if number == 2 and wire == 2:
-            tags = iter(packed(value))
-            for key in tags:
-                index = next(tags, None)
-                if key >= len(keys) or index is None or index >= len(values):
-                    raise ValueError('Invalid MVT tags')
-                props[keys[key]] = values[index]
+            tag_blocks.append(value)
         elif number == 3 and wire == 0:
             kind = value
         elif number == 4 and wire == 2:
             geometry = value
-    if kind != 1 or geometry is None or 'id' not in props:
+    if kind != 1 or geometry is None:
         return None
     coords = list(packed(geometry))
     # Mapillary documents one point per image. Coordinates are tile-local,
@@ -144,13 +146,40 @@ def feature(data, keys, values, extent, tile):
     size = 1 << z
     lon = (tx + x/extent)/size*360 - 180
     lat = degrees(atan(sinh(pi*(1-2*(ty+y/extent)/size))))
+    # Dense city tiles mostly lie outside a small import extent. Decode point
+    # geometry first; irrelevant feature attributes need never be materialized.
+    if bounds is not None and not contains(bounds,lon,lat):
+        return None
+    props = {}
+    for block in tag_blocks:
+        tags = iter(packed(block))
+        for key in tags:
+            index = next(tags,None)
+            if key >= len(keys) or index is None or index >= len(values):
+                raise ValueError('Invalid MVT tags')
+            name = keys[key]
+            if not ids_only or name == 'id':
+                props[name] = values[index]
+    if 'id' not in props:
+        return None
     props['id'] = identifier(props['id'])
+    if ids_only:
+        return props['id']
     props['coverage_geometry'] = [lon, lat]
     return props
 
 
-def image_points(content, tile):
+def image_points(content, tile, bounds=None):
     """Yield records or None checkpoints; retain bytes, not a decoded tile list."""
+    yield from _image_entries(content,tile,bounds,False)
+
+
+def image_ids(content, tile, bounds):
+    """Count-path IDs/checkpoints, sharing the full reader's geometry and checks."""
+    yield from _image_entries(content,tile,bounds,True)
+
+
+def _image_entries(content, tile, bounds, ids_only):
     if len(content) > MAX_TILE_BYTES:
         raise ValueError('Mapillary coverage tile exceeds 32 MiB')
     data = memoryview(content)
@@ -189,7 +218,7 @@ def image_points(content, tile):
             raise ValueError('Invalid MVT extent')
         for index, (number, wire, value) in enumerate(fields(layer)):
             if number == 2 and wire == 2:
-                record = feature(value, keys, values, extent, tile)
+                record = feature(value, keys, values, extent, tile, bounds, ids_only)
                 if record is not None:
                     yield record
             if index % 32 == 0:
