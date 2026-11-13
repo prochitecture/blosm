@@ -12,6 +12,58 @@ synchronous result. Command-line mode blocks. Progressive mode requires an
 interactive window and Object Mode. Camera import itself downloads no photographs
 or thumbnails.
 
+### Filter camera visibility
+
+Open **Camera filters** in the Blosm panel with **Mapillary cameras** selected
+as the import type (the controls also appear for an active Mapillary camera or
+an applied filter). Set the desired values and click **Apply filters**:
+
+- **From / To**: inclusive capture dates in `YYYY-MM-DD` format, interpreted in
+  UTC. Either field can be blank. Invalid dates or reversed bounds are rejected
+  before visibility changes. **Include undated** includes missing/invalid capture
+  timestamps when a date range is specified; without a range all dates qualify.
+- **Ordinary**: perspective photographs.
+- **Panoramic**: spherical/equirectangular panoramas.
+- **Fisheye**: photographs identified as fisheye by the provider.
+- **Other / unknown**: absent or unrecognized camera models. These are not
+  silently classified as ordinary. Unchecking every type hides all candidates.
+
+The types follow [Mapillary's camera metadata](https://mapillary.github.io/mapillary-js/api/interfaces/api.CameraEnt/).
+The date uses [`captured_at`](https://mapillary.github.io/mapillary-js/api/interfaces/api.SpatialImageEnt/),
+an epoch timestamp in milliseconds, not an upload date.
+
+Filters hide nonmatching cameras in the **current view layer**. The same applied
+settings affect cameras created subsequently, including during a running import
+and in blocking mode. Changing the controls has no effect until Apply is pressed.
+Every image entry is still downloaded/imported; **cameras created** includes
+hidden cameras. Filtering does not reduce download size, camera count or scene
+memory. No photographs need downloading to filter cameras.
+
+**Reset** restores visibility hidden by the filter and clears its settings.
+Cameras already manually hidden before filtering stay hidden. Collection hiding,
+render visibility, other view layers, scene camera and poses are unchanged.
+As with Blender's Hide command, cameras hidden by a filter leave the selection;
+selection of cameras that remain visible and unrelated objects is preserved.
+Apply/Reset support undo; settings and visibility ownership survive `.blend`
+save/reload. An undo during progressive import stops that import through the
+existing controller. Renaming/deleting cameras does not invalidate the filter.
+
+The visibility flags remain normal Blender flags: manually unhiding a filtered
+camera overrides it until the next Apply. A manual hide made while the filter
+already owns that same hide flag cannot be distinguished from the filter's hide.
+Excluded collections are skipped; after re-including one, use Apply/Reset again
+to update its cameras. A newly created view layer starts with its own defaults;
+use Apply there to filter its existing cameras.
+
+Implementation: `filter_data.py` is the shared pure predicate, `filters.py` owns
+the GUI/operators and per-view-layer state, and the import commit path calls
+`apply_new_camera` after linking each camera. Small changes use `hide_set`; large
+changes use native batched visibility operations with hidden/selection snapshots
+to avoid per-object view-layer resynchronization. Non-selectable/disabled objects
+and contexts without a usable 3D View fall back to the data API. Panel drawing
+does not scan the scene. The applied predicate is cached by its saved snapshot,
+with no background handlers or separate import/download job.
+
 ### View a panorama
 
 Select an imported spherical Mapillary camera and click **View Mapillary panorama**.

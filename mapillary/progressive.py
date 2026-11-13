@@ -15,6 +15,7 @@ from ..downloads.transport import DownloadTransport
 from ..progressive.core import Job, Download, Drain
 from ..progressive.blender import notify_result, preserve_context
 from . import pose
+from .filters import apply_new_camera
 from .placement import GroundSurface
 from .progress import ImageProgress
 from .tiles import MAX_TILE_BYTES, ImageTile, contains, identifier, tile_coordinates, validate_bounds
@@ -338,6 +339,7 @@ class MapillaryImport:
                 safe = {key: metadata[key] for key in FIELDS if key in metadata}
                 obj['mapillary_metadata'] = redact_text(json.dumps(safe), headers=self.headers)
                 self.collection.objects.link(obj)
+                apply_new_camera(obj, self.view_layer)
                 if self.set_origin:
                     self.scene['lat'], self.scene['lon'] = self.origin
                 self.count += 1

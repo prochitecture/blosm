@@ -1,5 +1,50 @@
 # Mapillary import validation
 
+## Camera visibility filters — 2026-11-13
+
+Added inclusive UTC capture-date bounds, optional undated captures, and
+perspective/panorama/fisheye/other model filters. Apply affects existing cameras
+and subsequent production commits, including a live progressive import. Reset
+releases only filter-owned visibility. State is saved per view layer.
+
+Validation uses offline synthetic metadata, so this feature needs no credentials:
+
+- 44 standalone Mapillary tests passed, including six new date/model tests:
+  leap days, open/inclusive boundaries, invalid/reversed dates, undated captures,
+  unknown models, empty type selections and combined date/type predicates.
+- 17 native background checks passed with 10,000 new cameras / 10,383 total.
+  They cover immediate filtering of new cameras, blocking/progressive parity,
+  reversed metadata responses, unchanged render/global visibility, manual hiding,
+  disabled/non-selectable objects, matching selection, camera rename/deletion,
+  view-layer isolation, rejected edits and saved-file round trips.
+- 24 native GUI checks passed on Blender 5.2.0 LTS and 4.5.0, including real
+  timer-driven import, changing filters during import, Apply Undo/Redo, independent
+  undo around intervening filter edits, cancellation with retained cameras and
+  the actual Blosm sidebar. The final single-column layout was inspected on 5.2
+  so the Other / unknown label is not clipped at the default sidebar width.
+- All 38 existing photo integration checks passed after registration changes.
+
+Scale measurements on this workstation, Blender 5.2, no networking, background
+process (no GUI drawing or undo serialization): 10,000 new cameras imported with
+an active filter in 22.72 s; the slowest cooperative job step was 14.14 ms.
+Changing the filter over 10,383 cameras took 1.52 s (including profiler overhead
+and the operator's dependency-graph work); Reset took 0.22 s. The initial direct
+per-object approach took 13.54 / 12.35 s for Apply/Reset on a comparable scene.
+The final implementation batches native visibility changes, retaining unrelated
+hidden flags and visible selection. Apply/Reset are synchronous: large scenes,
+undo snapshots and the conservative data-API fallback can still cause a pause.
+This is not a 10,000-camera GUI/undo performance guarantee. Filters retain all
+camera data and therefore do not reduce import traffic or scene memory.
+
+Reproduce with `tests/test_mapillary_filters.py` and
+`tests/check_mapillary_filters.py --artifacts <directory> [--count 10000] [--ui]`.
+Use the same isolated startup/environment described below; `--ui` requires a GUI
+process and `--enable-event-simulate`. Outputs are under
+`artifacts/mapillary_import/filters/`: `scale_final/filters.json`,
+`ui_final/filters.json`, `ui_final/filters.png`, `ui_45/filters.json`,
+`photo_regression/photo.json`, and earlier comparative profiling runs. No
+generated scenes, logs, profiles or JSON results are stored in the repository.
+
 Date: 2026-11-10. Development branch: `mapillary_import_release`, based on local
 `release` at `72286b3e77e8cd3c6021384e856291d7315a6a07`.
 Runtime: Blender 5.2.0 LTS on Windows; standalone unit tests use Python 3.13.

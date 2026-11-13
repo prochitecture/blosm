@@ -663,7 +663,8 @@ def register():
     progressiveImport.register()
     from . import viewport
     viewport.register()
-    from .mapillary import photo, panorama
+    from .mapillary import photo, panorama, filters
+    filters.register()
     photo.register()
     panorama.register()
     for c in _classes:
@@ -691,6 +692,8 @@ def unregister():
     progressiveImport.unregister()
     from .mapillary import photo
     photo.unregister()
+    from .mapillary import filters
+    filters.unregister()
     for c in _classes:
         bpy.utils.unregister_class(c)
     gui.unregister()

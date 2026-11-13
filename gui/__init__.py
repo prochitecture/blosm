@@ -421,6 +421,8 @@ class BLOSM_PT_Extent(bpy.types.Panel):
             box.label(text=progressiveImport.active.status)
             box.operator('blosm.cancel_progressive', text='Cancel import', icon='CANCEL')
         from ..mapillary import photo
+        from ..mapillary import filters
+        filters.draw(layout, context)
         if photo.pending is not None:
             layout.label(text='Mapillary photo queued until the current import finishes')
             layout.operator('blosm.cancel_mapillary_photo')
