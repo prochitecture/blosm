@@ -26,26 +26,41 @@ def visibility_center(polygon, epsilon=1e-10):
     origin = polygon[0]
     local = polygon - origin
     lo, hi = local.min(axis=0), local.max(axis=0)
-    result = np.array((lo, (hi[0], lo[1]), hi, (lo[0], hi[1])))
+    result = [(float(lo[0]), float(lo[1])), (float(hi[0]), float(lo[1])),
+              (float(hi[0]), float(hi[1])), (float(lo[0]), float(hi[1]))]
     for a, b in zip(local, np.roll(local, -1, axis=0)):
         if len(result) < 3:
             raise ValueError('Block has no visibility kernel; decompose it into local charts')
         edge = b - a
-        distance = cross(edge, result - a) / np.linalg.norm(edge)
+        length = float(np.linalg.norm(edge))
+        if length == 0.:
+            raise ValueError('Block has no visibility kernel; decompose it into local charts')
+        ex, ey, ax, ay = float(edge[0]), float(edge[1]), float(a[0]), float(a[1])
+        # The clipped kernel is usually tiny even for a densely sampled rim.
+        # Plain double arithmetic avoids allocating/dispatching NumPy arrays
+        # for each of its points. Preserve every operation and output order.
+        distance = [(ex * (y - ay) - ey * (x - ax)) / length for x, y in result]
         points = []
-        for i, (p, q) in enumerate(zip(result, np.roll(result, -1, axis=0))):
-            first, last = distance[i], distance[(i + 1) % len(result)]
+        for i, p in enumerate(result):
+            following = (i + 1) % len(result)
+            q, first, last = result[following], distance[i], distance[following]
             inside, next_inside = first >= -epsilon, last >= -epsilon
             if inside:
                 points.append(p)
             if inside != next_inside:
-                fraction = np.clip(first / (first - last), 0., 1.)
-                points.append(p + fraction * (q - p))
+                fraction = min(1., max(0., first / (first - last)))
+                points.append((p[0] + fraction * (q[0] - p[0]),
+                               p[1] + fraction * (q[1] - p[1])))
         if not points:
             raise ValueError('Block has no visibility kernel; decompose it into local charts')
-        result = np.asarray(points)
-        keep = np.linalg.norm(result - np.roll(result, 1, axis=0), axis=1) > epsilon
-        result = result[keep]
+        result = []
+        previous = points[-1]
+        for p in points:
+            dx, dy = p[0] - previous[0], p[1] - previous[1]
+            if math.sqrt(dx * dx + dy * dy) > epsilon:
+                result.append(p)
+            previous = p
+    result = np.asarray(result)
     if len(result) < 3 or abs(signed_area(result)) <= epsilon ** 2:
         raise ValueError('Block has no strict visibility kernel')
     weights = cross(result, np.roll(result, -1, axis=0))

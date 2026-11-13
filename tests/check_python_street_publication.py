@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     args.output.mkdir(parents=True, exist_ok=True)
-    bpy.ops.wm.open_mainfile(filepath=str(args.scene.resolve()))
+    bpy.ops.wm.open_mainfile(filepath=str(args.scene.resolve()), use_scripts=False)
     controller = next(c for c in bpy.data.objects if c.get('st_py_network_uuid') == 'bent_two_intersections')
     scene.NetworkScene.update(controller)
     before = mesh_buffers(controller)

@@ -219,7 +219,7 @@ class SceneWriter:
         if len(owned) != sum(obj.get('st_py_controller') == controller for obj in collection.objects):
             raise ValueError('Duplicate or invalid generated ownership')
         from .terrain.blender import ScenePlacement
-        placement = ScenePlacement(controller, network, update, owned, _scale())
+        placement = ScenePlacement(controller, network, update, owned, _scale(), fit_cache=engine.terrain_constraints)
         update = placement.update
         changed = {key: p.mesh for key, p in update.products.items()
                    if key in update.rebuilt and isinstance(p, Part) and p.mesh is not None}

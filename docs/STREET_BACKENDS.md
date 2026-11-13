@@ -5,6 +5,11 @@ Both the old Legacy renderer and the experimental GN renderer are removed from
 `buildings_gn`. Building GN, shared street preparation, street materials and the
 feature-independent asset service remain available.
 
+For the planned release-branch progressive OSM importer and its later street
+integration, see [Progressive OSM street requirements](OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md).
+That handoff documents lifecycle, dependencies, publication and cancellation
+contracts; progressive street generation is not implemented yet.
+
 The [terrain placement stage](STREETS_TERRAIN.md) now offers profile-preserving
 Python placement or a small shared direct-projection GN modifier. This modifier
 acts on Python-generated meshes; it is independent of street backend selection.

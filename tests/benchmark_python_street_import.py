@@ -22,6 +22,17 @@ import bpy
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def runtime_digest():
+    """Identify uncommitted runtime edits as well as the Git parent revision."""
+    digest = hashlib.sha256()
+    for path in sorted(ROOT.rglob('*.py')):
+        relative = path.relative_to(ROOT)
+        if relative.parts[0] in ('tests', 'tools'):
+            continue
+        digest.update(relative.as_posix().encode('utf8') + b'\0' + path.read_bytes() + b'\0')
+    return digest.hexdigest()
+
+
 def operator_import(package, app, args, renderer_class, osm_class):
     """Use the real 3D-realistic Import operator, with streets as its only feature."""
     from contextlib import ExitStack
@@ -72,21 +83,29 @@ def operator_import(package, app, args, renderer_class, osm_class):
 
 
 def main():
+    global ROOT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--osm', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--revision', required=True)
+    parser.add_argument('--addon-root', type=Path, help='Explicit read-only reference snapshot instead of this checkout')
     parser.add_argument('--resolution', type=int, choices=(1, 2, 3, 4), default=1)
     parser.add_argument('--cell-size', type=float, default=.7)
     parser.add_argument('--save-scene', action='store_true')
     parser.add_argument('--scene', type=Path, help='Read saved street settings and terrain with embedded scripts disabled')
     parser.add_argument('--without-terrain', action='store_true', help='Control run with the scene terrain selection cleared')
-    parser.add_argument('--diagnostic-profile', action='store_true', help='Profile numerical calls; these timings include profiler overhead')
+    parser.add_argument('--diagnostic-profile', action='store_true', help='Collect call profiles; these timings include profiler overhead')
+    parser.add_argument('--profile-scope', choices=('numerical', 'publication', 'all'), default='numerical')
     parser.add_argument('--operator', action='store_true', help='Use the normal Import operator in 3D realistic, streets-only mode')
     parser.add_argument('--execution-diagnostics', action='store_true', help='Record coarse numerical call counts, CPU placement and calibration timings')
+    parser.add_argument('--construction-diagnostics', action='store_true', help='Record chart attempts and bounded kernel replay inputs; adds instrumentation overhead')
     parser.add_argument('--qos', choices=('system', 'high', 'eco'), default='system', help='Explicit current-test-process scheduling experiment; original policy restored')
     parser.add_argument('--import-performance', action='store_true', help='Enable the production Import preference; controlled baselines disable it')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
+    if args.addon_root is not None:
+        ROOT = args.addon_root.resolve()
+        if not (ROOT / '__init__.py').is_file():
+            parser.error('The selected addon snapshot has no __init__.py')
     if args.without_terrain and not args.scene:
         parser.error('--without-terrain requires --scene')
     if args.operator and not args.scene:
@@ -95,7 +114,11 @@ def main():
         parser.error('--import-performance requires --operator and no external --qos override')
     if args.execution_diagnostics and args.diagnostic_profile:
         parser.error('Keep coarse execution diagnostics separate from cProfile')
+    if args.profile_scope != 'numerical' and not args.diagnostic_profile:
+        parser.error('--profile-scope requires --diagnostic-profile')
     args.output.mkdir(parents=True, exist_ok=True)
+    scene_sha256 = hashlib.sha256(args.scene.read_bytes()).hexdigest() if args.scene else None
+    source_sha256 = runtime_digest()
     # Resolve this worktree, regardless of its directory/package name.
     spec = importlib.util.spec_from_file_location('blosm', ROOT / '__init__.py',
         submodule_search_locations=[str(ROOT)])
@@ -168,22 +191,29 @@ def main():
         diagnostics = ExecutionDiagnostics(args.output)
         diagnostics.install(package.__name__)
         diagnostics.calibrate('before_import')
+    profilers = {}
+    construction = None
+    if args.construction_diagnostics:
+        from blosm.tests.street_construction_diagnostics import ConstructionDiagnostics
+        construction = ConstructionDiagnostics(args.output)
+        construction.install(package.__name__)
     if args.diagnostic_profile:
         import cProfile
-        profiler = cProfile.Profile()
+        scopes = ('numerical', 'publication') if args.profile_scope == 'all' else (args.profile_scope,)
+        profilers = {scope: cProfile.Profile() for scope in scopes}
     original_prepare, original_publish = PythonMeshBackend.prepare, SceneWriter.publish
 
     def prepared(self, *a, **kw):
         if diagnostics:
             diagnostics.calibrate('before_numerical_' + str(len(numerical)))
         start = time.perf_counter()
-        if args.diagnostic_profile:
-            profiler.enable()
+        if 'numerical' in profilers:
+            profilers['numerical'].enable()
         try:
             result = original_prepare(self, *a, **kw)
         finally:
-            if args.diagnostic_profile:
-                profiler.disable()
+            if 'numerical' in profilers:
+                profilers['numerical'].disable()
         numerical.append(dict(seconds=time.perf_counter() - start, timings=result.timings))
         if diagnostics:
             diagnostics.calibrate('after_numerical_' + str(len(numerical) - 1))
@@ -192,7 +222,13 @@ def main():
 
     def published(self, *a, **kw):
         start = time.perf_counter()
-        result = original_publish(self, *a, **kw)
+        if 'publication' in profilers:
+            profilers['publication'].enable()
+        try:
+            result = original_publish(self, *a, **kw)
+        finally:
+            if 'publication' in profilers:
+                profilers['publication'].disable()
         publication.append(time.perf_counter() - start)
         print('STREET_BENCHMARK_PUBLICATION', publication[-1], flush=True)
         return result
@@ -228,6 +264,8 @@ def main():
     finally:
         PythonMeshBackend.prepare, SceneWriter.publish = original_prepare, original_publish
         try:
+            if construction:
+                construction.close()
             if diagnostics:
                 diagnostics.close()
         finally:
@@ -244,11 +282,12 @@ def main():
         stages['total_ready_seconds'] = stages['operator_seconds'] + stages['depsgraph_update_seconds']
     if args.diagnostic_profile:
         import pstats
-        profiler.dump_stats(str(args.output / 'numerical.prof'))
-        with (args.output / 'numerical_profile.txt').open('w', encoding='utf8') as stream:
-            stats = pstats.Stats(profiler, stream=stream).strip_dirs()
-            stats.sort_stats('cumulative').print_stats(80)
-            stats.sort_stats('tottime').print_stats(60)
+        for scope, profiler in profilers.items():
+            profiler.dump_stats(str(args.output / (scope + '.prof')))
+            with (args.output / (scope + '_profile.txt')).open('w', encoding='utf8') as stream:
+                stats = pstats.Stats(profiler, stream=stream).strip_dirs()
+                stats.sort_stats('cumulative').print_stats(80)
+                stats.sort_stats('tottime').print_stats(60)
     report = context.report
     stages['terrain_placement_seconds'] = sum(s.get('timings', {}).get('terrain', {}).get('seconds', 0.)
                                              for s in report['surfaces'])
@@ -262,6 +301,7 @@ def main():
         for key, seconds in component['timings']['tasks'].items():
             tasks[key.split(':', 1)[0]] += seconds
     resource_paths = {kind: bpy.utils.user_resource(kind) for kind in ('CONFIG', 'SCRIPTS', 'DATAFILES', 'EXTENSIONS')}
+    assert runtime_digest() == source_sha256, 'Runtime files changed during the measured import'
     profile = Path(os.environ['BLENDER_USER_CONFIG']).resolve().parent
     assert all(Path(p).resolve().is_relative_to(profile) for p in resource_paths.values())
     output = dict(passed=True, timings=stages, task_seconds=dict(tasks), importer=report,
@@ -269,14 +309,18 @@ def main():
         vertices=sum(len(o.data.vertices) for o in meshes), components=len(report['surfaces']),
         input=str(args.osm.resolve()), input_sha256=hashlib.sha256(args.osm.read_bytes()).hexdigest(),
         revision=args.revision, implementation=VERSION, checkout=str(ROOT), blender=bpy.app.version_string,
+        runtime_source_sha256=source_sha256,
+        source_scene_sha256=scene_sha256,
         execution_policy=qos.report if qos else None,
         settings=dict(resolution=app.streetResolution, cell_size=app.streetCellSize, interpolation='smooth cubic',
             crown_rise=app.streetProfileRise, exaggeration=app.streetExaggeration,
             terrain=getattr(app, 'terrainObject', False) or False,
             scene=str(args.scene.resolve()) if args.scene else None, saved_street_settings=scene_settings,
             diagnostic_profile=args.diagnostic_profile,
+            profile_scope=args.profile_scope if args.diagnostic_profile else None,
             entry_point='3D realistic Import, streets only' if args.operator else 'prepared street renderer',
             execution_diagnostics=args.execution_diagnostics,
+            construction_diagnostics=args.construction_diagnostics,
             qos=args.qos,
             import_performance=args.import_performance,
             materials='explicit selection' if getattr(app, 'streetCarriagewayMaterial', None) else 'library defaults',

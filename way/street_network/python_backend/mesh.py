@@ -31,22 +31,39 @@ class Mesh:
     def __post_init__(self):
         self.xyz = np.ascontiguousarray(self.xyz, dtype=np.float64)
         self.quads = np.ascontiguousarray(self.quads, dtype=np.int32)
-        self.uv_layers = dict(self.uv_layers)
+        self._set_uv_layers(self.uv_layers)
+
+    def _set_uv_layers(self, layers, owned=None):
+        self.uv_layers = dict(layers)
+        owned = {} if owned is None else owned
         for name, values in self.uv_layers.items():
             if (not isinstance(name, str) or not name or '\0' in name
                     or len(name.encode('utf-8')) > 63):
                 raise ValueError('UV layer names must contain 1 to 63 UTF-8 bytes without nulls')
-            values = np.array(values, dtype=np.float64, order='C', copy=True)
+            if (name in owned and values is owned[name] and values.dtype == np.float64
+                    and values.shape == (len(self.quads), 4, 2)
+                    and values.flags.c_contiguous and not values.flags.writeable):
+                continue
+            values = np.asarray(values, dtype=np.float64)
             if values.shape != (len(self.quads), 4, 2) or not np.isfinite(values).all():
                 raise ValueError('UV coordinates must be finite face-corner arrays shaped (quads, 4, 2)')
-            values.setflags(write=False)
+            # Immutable backing bytes make reuse safe even if a caller tries
+            # to re-enable writes on the returned array. External read-only
+            # views are not trusted: their original owner may still mutate.
+            values = np.frombuffer(values.tobytes(order='C'), dtype=np.float64).reshape(values.shape)
             self.uv_layers[name] = values
+        self._owned_uv_layers = dict(self.uv_layers)
+
+    def _with_buffers(self, xyz, layers):
+        result = Mesh(xyz, self.quads, self.material, self.seams)
+        result._set_uv_layers(layers, self._owned_uv_layers)
+        return result
 
     def with_uv_layer(self, name, values):
         """Return a payload with one replaced/added map and all other maps intact."""
         layers = dict(self.uv_layers)
         layers[name] = values
-        return Mesh(self.xyz, self.quads, self.material, self.seams, layers)
+        return self._with_buffers(self.xyz, layers)
 
     def with_positions(self, xyz):
         """Replace positions without changing topology, materials, seams or UVs.
@@ -58,7 +75,7 @@ class Mesh:
         xyz = np.asarray(xyz)
         if xyz.shape != self.xyz.shape:
             raise ValueError('Replacing mesh positions must preserve the vertex count')
-        return Mesh(xyz, self.quads, self.material, self.seams, self.uv_layers)
+        return self._with_buffers(xyz, self.uv_layers)
 
     @property
     def nbytes(self):

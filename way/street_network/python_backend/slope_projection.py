@@ -167,16 +167,37 @@ class SlopeProjection:
         heights = initial.copy()
         aim = maximum_slope
         maximum, movement = before, float('inf')
+        # Gather invariant color/corner coefficients once, with the same
+        # contiguous layout as advanced indexing in the original loop. Keep
+        # the old low-memory path when the extra workspace would exceed the
+        # configured budget; no accepted input loses its previous fallback.
+        cache_bytes = (coefficient.nbytes + movable.nbytes + values.nbytes +
+                       vectors.nbytes + faces.nbytes + free.nbytes + len(faces) * 32)
+        prepared_groups = None
+        if estimated + cache_bytes <= self.memory_bytes:
+            prepared_groups = []
+            for group in groups:
+                ids, available = faces[group], free[group]
+                constant = initial[ids][~available]
+                corners = tuple((coefficient[group, corner], movable[group, corner],
+                    values[group, corner], vectors[group, corner]) for corner in range(4))
+                prepared_groups.append((ids, available, constant, corners))
         for iteration in range(self.max_iterations):
             previous = heights.copy()
-            for group in groups:
-                ids = faces[group]
+            for gi, group in enumerate(groups):
+                if prepared_groups is None:
+                    ids, available = faces[group], free[group]
+                    constant = initial[ids][~available]
+                else:
+                    ids, available, constant, corners = prepared_groups[gi]
                 for corner in range(4):
                     x = heights[ids] + corrections[group, corner]
-                    projected = self.project(x, coefficient[group, corner], movable[group, corner],
-                        values[group, corner], vectors[group, corner], aim)
-                    projected[~free[group]] = initial[ids][~free[group]]
-                    corrections[group, corner] = (x - projected) * free[group]
+                    data = ((coefficient[group, corner], movable[group, corner],
+                             values[group, corner], vectors[group, corner]) if prepared_groups is None
+                            else corners[corner])
+                    projected = self.project(x, *data, aim)
+                    projected[~available] = constant
+                    corrections[group, corner] = (x - projected) * available
                     heights[ids] = projected
             x = heights + box_correction
             heights = np.clip(x, lower, ceiling)

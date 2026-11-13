@@ -4,6 +4,7 @@ These are inputs to the forthcoming compound surface provider, not an accepted
 surface. Internal, consumed junction mouths impose no phantom height seam.
 """
 from dataclasses import dataclass
+from math import comb
 import numpy as np
 from .paths import right
 from .compounds import rim_label
@@ -43,6 +44,31 @@ class CurbEdge:
     last_station: float
     tangent: tuple
 
+    def polynomial(self):
+        """Exact quintic height/inward jet and quartic along-curb derivative.
+
+        Coefficients use the retained chord's local t, while the underlying
+        smoothstep uses the complete physical curb-chain fraction.
+        """
+        a = self.first_station / self.length
+        b = (self.last_station - self.first_station) / self.length
+        weight, along = np.zeros(6), np.zeros(6)
+        for power, coefficient in ((3, 10.), (4, -15.), (5, 6.)):
+            for j in range(power + 1):
+                weight[j] += coefficient * comb(power, j) * a ** (power - j) * b ** j
+        for power, coefficient in ((2, 30.), (3, -60.), (4, 30.)):
+            for j in range(power + 1):
+                along[j] += coefficient * comb(power, j) * a ** (power - j) * b ** j
+        tangent = np.asarray(self.tangent)
+        delta_height = self.last_height - self.first_height
+        height = delta_height * weight
+        height[0] += self.first_height
+        inward = (self.last_slope - self.first_slope) * weight
+        inward[0] += self.first_slope
+        gradient = ((delta_height / self.length * along)[:, None] * tangent
+                    - inward[:, None] * right(tangent))
+        return np.column_stack((height, gradient))
+
     def sample(self, t):
         fraction = (self.first_station + np.asarray(t) * (self.last_station - self.first_station)) / self.length
         weight = _blend(fraction)
@@ -57,6 +83,9 @@ class CurbEdge:
 @dataclass(frozen=True)
 class PlateauEdge:
     height: float
+
+    def polynomial(self):
+        return np.array(((self.height, 0., 0.),))
 
     def sample(self, t):
         t = np.asarray(t)

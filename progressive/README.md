@@ -1,5 +1,10 @@
 # Progressive importing
 
+The [OSM street integration requirements](../docs/OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md)
+describe the shared hooks needed by a future progressive OSM importer, including
+bulk network producers and the later `buildings_gn` street adapter. They are a
+technical handoff, not a claim that OSM/street progressive import already exists.
+
 **Progressive import** is enabled by default for 3D Tiles. Its checkbox appears
 in the import box directly above the data-type selector. Disable it to use
 blocking mode. Progressive mode keeps the viewport responsive between tile imports.

@@ -11,13 +11,35 @@ def _interiors_overlap(first, second, tolerance):
     # local origin before projection to avoid cancellation on large map frames.
     origin = first[:, :1, :]
     a, b = first - origin, second - origin
+    # Most broad-phase pairs are neighbouring pavement cells. The first two
+    # existing SAT axes often already separate them. Compute those projections
+    # in exactly the original frame/order, then run all axes on the remainder.
+    # This is an exact rejection witness, not a replacement acceptance test.
+    if len(a) >= 32:
+        edge = a[:, 1:3] - a[:, :2]
+        axes = np.stack((edge[..., 1], -edge[..., 0]), axis=-1)
+        axes /= np.linalg.norm(axes, axis=-1, keepdims=True)
+        pa = np.einsum('nac,nvc->nav', axes, a)
+        pb = np.einsum('nac,nvc->nav', axes, b)
+        depth = np.minimum(pa.max(axis=2), pb.max(axis=2)) - np.maximum(pa.min(axis=2), pb.min(axis=2))
+        pending = np.flatnonzero(np.min(depth, axis=1) > tolerance)
+        result = np.zeros(len(a), dtype=bool)
+        if not len(pending):
+            return result
+        a, b = a[pending], b[pending]
+    else:
+        pending = None
     edges = np.concatenate((np.roll(a, -1, axis=1) - a, np.roll(b, -1, axis=1) - b), axis=1)
     axes = np.stack((edges[..., 1], -edges[..., 0]), axis=-1)
     axes /= np.linalg.norm(axes, axis=-1, keepdims=True)
     pa = np.einsum('nac,nvc->nav', axes, a)
     pb = np.einsum('nac,nvc->nav', axes, b)
     depth = np.minimum(pa.max(axis=2), pb.max(axis=2)) - np.maximum(pa.min(axis=2), pb.min(axis=2))
-    return np.min(depth, axis=1) > tolerance
+    hit = np.min(depth, axis=1) > tolerance
+    if pending is None:
+        return hit
+    result[pending] = hit
+    return result
 
 
 _CELL_DTYPE = np.dtype([('x', np.int64), ('y', np.int64)])
@@ -138,8 +160,11 @@ def validate_overlaps(meshes, *, changed=None, cell_size=2., tolerance=1e-6,
         # tested once even when its boxes share many cells. Both changed faces
         # use their original order; an unchanged face can query any changed one.
         active = (target > partner) | ~selected[target]
-        active &= np.all(np.maximum(first[target], first[partner]) == grid.coordinates[slots], axis=1)
-        active &= np.all(maximum[partner] - minimum[target] > tolerance, axis=1)
+        target, partner = target[active], partner[active]
+        slots = slots if np.ndim(slots) == 0 else slots[active]
+        active = np.all(np.maximum(first[target], first[partner]) == grid.coordinates[slots], axis=1)
+        target, partner = target[active], partner[active]
+        active = np.all(maximum[partner] - minimum[target] > tolerance, axis=1)
         active &= np.all(maximum[target] - minimum[partner] > tolerance, axis=1)
         left, right = np.maximum(target[active], partner[active]), np.minimum(target[active], partner[active])
         pair_count += len(left)

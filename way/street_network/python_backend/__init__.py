@@ -4,4 +4,4 @@ Blender adapters live in scene/renderer modules. Geometry, patterns, source
 identities and update planning can be exercised without a Blender process.
 """
 
-VERSION = '0.1.0.dev78'
+VERSION = '0.1.0.dev81'

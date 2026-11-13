@@ -155,7 +155,7 @@ class PlacementResult:
     report: dict
 
 
-def fit(references, components, terrain, settings=PlacementSettings()):
+def fit(references, components, terrain, settings=PlacementSettings(), *, cache=None, terrain_token=None):
     """terrain(xy[N,2]) returns original-terrain Z[N], or raises on any miss."""
     settings.validate()
     refs = {r.identity: r for r in references}
@@ -179,7 +179,7 @@ def fit(references, components, terrain, settings=PlacementSettings()):
     def join(a, b):
         a, b = root(a), root(b)
         parent[max(a,b)] = min(a,b)
-    contacts, mappings, sample_count = {}, {}, 0
+    contacts, constraints, sample_count = {}, {}, 0
     for c in components:
         ref = refs[c.reference]
         if np.min(c.stations) < ref.stations[0]-1e-6 or np.max(c.stations) > ref.stations[-1]+1e-6:
@@ -194,17 +194,27 @@ def fit(references, components, terrain, settings=PlacementSettings()):
             contacts[contact] = node
         lo = np.clip(np.searchsorted(ref.stations, c.stations, side='right')-1, 0, max(0,len(ref.stations)-2))
         hi = np.minimum(lo+1, len(ref.stations)-1)
-        mappings[c.identity] = (node_ids[c.reference][lo], node_ids[c.reference][hi])
-        for ids, samples in quad_samples(c.xyz, c.quads, settings.sample_spacing):
-            height = np.asarray(terrain(samples[:,:,:2].reshape(-1,2))).reshape(samples.shape[:2])
-            if not np.isfinite(height).all():
-                raise ValueError('Terrain does not cover the complete corridor: '+c.identity)
-            required = np.max(height - (samples[:,:,2]-c.datum), axis=1) + settings.clearance+c.clearance
-            # Raise all controls influencing every vertex of this face. The
-            # final face, not only the analytical reference, meets these bounds.
-            for nodes in mappings[c.identity]:
-                np.maximum.at(floors, nodes[c.quads[ids]].ravel(), np.repeat(required, 4))
-            sample_count += height.size
+        token = cache.key(c, ref, settings, terrain_token) if cache is not None else None
+        saved = cache.get(token) if cache is not None else None
+        if saved is None:
+            local_floors, samples_count = np.full(len(ref.stations), -np.inf), 0
+            for ids, samples in quad_samples(c.xyz, c.quads, settings.sample_spacing):
+                height = np.asarray(terrain(samples[:,:,:2].reshape(-1,2))).reshape(samples.shape[:2])
+                if not np.isfinite(height).all():
+                    raise ValueError('Terrain does not cover the complete corridor: '+c.identity)
+                required = np.max(height - (samples[:,:,2]-c.datum), axis=1) + settings.clearance+c.clearance
+                # Preserve both triangulations, all safety samples and the
+                # original maximum reduction order on this component's nodes.
+                for nodes in (lo, hi):
+                    np.maximum.at(local_floors, nodes[c.quads[ids]].ravel(), np.repeat(required, 4))
+                samples_count += height.size
+            constraints[c.identity] = (token, local_floors, samples_count, None)
+        else:
+            local_floors, samples_count = saved.floors, saved.samples
+            constraints[c.identity] = (token, local_floors, samples_count, saved.ground)
+        ns = node_ids[c.reference]
+        floors[ns] = np.maximum(floors[ns], local_floors)
+        sample_count += samples_count
     roots = np.array([root(i) for i in range(len(parent))])
     merged = np.full(len(parent), -np.inf)
     np.maximum.at(merged, roots, floors)
@@ -238,7 +248,13 @@ def fit(references, components, terrain, settings=PlacementSettings()):
     for c in components:
         xyz = c.xyz.copy()
         xyz[:,2] += curves[c.reference](c.stations)-c.datum
-        ground = np.asarray(terrain(xyz[:,:2]))
+        token, local_floors, samples_count, ground = constraints[c.identity]
+        if ground is None:
+            ground = np.asarray(terrain(xyz[:,:2]))
+            if not np.isfinite(ground).all():
+                raise ValueError('Terrain does not cover the complete corridor: '+c.identity)
+            if cache is not None:
+                cache.put(token, local_floors, ground, samples_count)
         lift = float(np.max(xyz[:,2]-ground))
         maximum_lift = max(maximum_lift, lift)
         if lift > settings.maximum_lift + settings.clearance+c.clearance:

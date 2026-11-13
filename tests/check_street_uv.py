@@ -454,7 +454,7 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=str(path))
     stage('scene saved')
     clear_runtime()
-    bpy.ops.wm.open_mainfile(filepath=str(path))
+    bpy.ops.wm.open_mainfile(filepath=str(path), use_scripts=False)
     stage('scene reopened')
     clear_runtime()
     for name in names:

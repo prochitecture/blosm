@@ -6,6 +6,9 @@ import _python_street_package
 from tested_python_streets.mesh import Mesh
 from tested_python_streets.model import Key
 from tested_python_streets.validation import validate_overlaps, _CellGrid, _PAIR_BATCH
+from tested_python_streets.validation import _interiors_overlap
+from _python_validation_performance_reference import _interiors_overlap as original_sat
+from _python_validation_performance_reference import validate_overlaps as original_validate
 
 
 def rectangle(x, y, w=1., h=1., angle=0.):
@@ -47,6 +50,33 @@ def oracle(meshes, changed, tolerance):
 
 
 class PythonOverlapBatches(unittest.TestCase):
+    def test_sat_early_witness_matches_all_eight_axes_near_contacts(self):
+        rng = np.random.default_rng(19206)
+        a, b = [], []
+        for _ in range(4096):
+            angle = rng.uniform(-np.pi, np.pi)
+            width, height = rng.uniform(.01, 20., 2)
+            center = rng.uniform(-1.e6, 1.e6, 2)
+            first = rectangle(*center, width, height, angle)
+            # Mix overlap, separation, shared edges and tolerance-scale edits.
+            gap = rng.choice((0., -1e-6, 1e-6, -.1, .1))
+            offset = (width + gap) * np.array((np.cos(angle), np.sin(angle)))
+            a.append(first)
+            b.append(first + offset)
+        a, b = np.asarray(a), np.asarray(b)
+        for n in (0, 1, 31, 32, 1024, len(a)):
+            for tolerance in (0., 1e-10, 1e-6, 1e-3):
+                np.testing.assert_array_equal(_interiors_overlap(a[:n], b[:n], tolerance),
+                                              original_sat(a[:n], b[:n], tolerance))
+
+    def test_compacted_candidate_filters_keep_the_original_counts_and_reports(self):
+        meshes = {Key('road', k): mesh([rectangle(1.05 * x, 1.05 * y + k * 20,
+                         .9, .9, .08) for x in range(12) for y in range(12)]) for k in range(3)}
+        for changed in (None, set(meshes), {Key('road', 1)}, set()):
+            for cell in (.25, 2., 30.):
+                self.assertEqual(validate_overlaps(meshes, changed=changed, cell_size=cell),
+                                 original_validate(meshes, changed=changed, cell_size=cell))
+
     def check_oracle(self, meshes, changed, cell_size=1., tolerance=1e-6):
         hits, pairs = oracle(meshes, changed, tolerance)
         if hits:

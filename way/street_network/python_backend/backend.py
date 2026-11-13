@@ -31,6 +31,8 @@ class PythonMeshBackend:
 
     def __init__(self, settings, providers=None, *, feature_names=None):
         self.patterns = PatternLibrary(settings.pattern_cache_bytes)
+        from .terrain.cache import TerrainConstraintCache
+        self.terrain_constraints = TerrainConstraintCache()
         self.feature_names = tuple(DEFAULT_FEATURES if feature_names is None else feature_names)
         if providers is not None and feature_names is not None:
             raise ValueError('Choose explicit provider objects or registered feature names')

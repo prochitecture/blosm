@@ -48,6 +48,8 @@ def half_intervals(settings):
 
 class Approach:
     frame_cache_limit = 16
+    array_frame_cache_limit = 8
+    array_frame_cache_bytes = 32 * 1024
 
     def __init__(self, path, end, profile):
         self.path, self.end = path, end
@@ -64,18 +66,23 @@ class Approach:
             self.offset = mouth.section.offset * (1. if mouth.forward else -1.)
             self.profile = path.mouth_profile
         self._frames = OrderedDict()
+        self._array_frames = OrderedDict()
+        self._array_frame_bytes = 0
         self.origin, self.direction, _ = self.frame(0.)
 
     def frame(self, station):
         station = np.asarray(station)
-        # Mouth conditions repeatedly query the same station and its two
-        # finite-difference neighbors. Cache scalar frames only; vectorized
-        # sampling and Exact miter arithmetic keep their established path.
-        key = ((station.dtype.str, station.tobytes()) if station.ndim == 0
-               and station.dtype.kind in 'fiu' and np.isfinite(station) else None)
-        if key is not None and key in self._frames:
-            self._frames.move_to_end(key)
-            return tuple(v.copy() for v in self._frames[key])
+        # Boundary construction also repeats small station arrays. Keep a
+        # separate byte-bounded cache so these never evict hot scalar mouth
+        # samples or retain whole mesh grids. dtype and shape are significant:
+        # Exact/scalar/vector evaluation keeps its established arithmetic.
+        key, cache = None, None
+        if station.size <= 256 and station.dtype.kind in 'fiu' and np.all(np.isfinite(station)):
+            key = (station.dtype.str, station.shape, station.tobytes())
+            cache = self._frames if station.ndim == 0 else self._array_frames
+        if key is not None and key in cache:
+            cache.move_to_end(key)
+            return tuple(v.copy() for v in cache[key])
         clipped = np.clip(station, 0., self.path.length)
         if getattr(self.path, 'outward', False):
             p, tangent, normal = self.path.frame(clipped)
@@ -88,9 +95,20 @@ class Approach:
         # the intersection. It changes none of the authored centerline controls.
         p = p + np.minimum(station, 0.)[..., None] * tangent
         if key is not None:
-            self._frames[key] = tuple(v.copy() for v in (p, tangent, normal))
-            if len(self._frames) > self.frame_cache_limit:
-                self._frames.popitem(last=False)
+            values = tuple(v.copy() for v in (p, tangent, normal))
+            if station.ndim == 0:
+                cache[key] = values
+                if len(cache) > self.frame_cache_limit:
+                    cache.popitem(last=False)
+            else:
+                size = len(key[2]) + sum(v.nbytes for v in values)
+                if size <= self.array_frame_cache_bytes:
+                    while cache and (len(cache) >= self.array_frame_cache_limit or
+                                     self._array_frame_bytes + size > self.array_frame_cache_bytes):
+                        old_key, old_values = cache.popitem(last=False)
+                        self._array_frame_bytes -= len(old_key[2]) + sum(v.nbytes for v in old_values)
+                    cache[key] = values
+                    self._array_frame_bytes += size
         return p, tangent, normal
 
     def point(self, station, distance):

@@ -46,6 +46,10 @@ def read_scene(path):
         sizes = np.empty(len(obj.data.polygons), np.int32)
         obj.data.polygons.foreach_get('loop_total', sizes)
         assert np.all(sizes == 4), key
+        smooth = np.empty(len(obj.data.polygons), dtype=bool)
+        obj.data.polygons.foreach_get('use_smooth', smooth)
+        normals = np.empty((len(obj.data.corner_normals), 3), np.float32)
+        obj.data.corner_normals.foreach_get('vector', normals.ravel())
         uv = {}
         for layer in obj.data.uv_layers:
             values = np.empty((len(obj.data.loops), 2), np.float32)
@@ -57,6 +61,8 @@ def read_scene(path):
         meshes[key] = dict(prepared_positions=hashlib.sha256(xyz.tobytes()).hexdigest(),
             final_positions=final_positions, faces=hashlib.sha256(ids.tobytes()).hexdigest(),
             quads=len(sizes), uv=uv, materials=[m.name if m else None for m in obj.data.materials],
+            corner_normals=hashlib.sha256(normals.tobytes()).hexdigest(),
+            smooth_shading=hashlib.sha256(smooth.tobytes()).hexdigest(),
             construction_metadata=digest(metadata))
     assert sources and meshes
     return dict(sources=sources, meshes=meshes)
@@ -67,6 +73,8 @@ def main():
     parser.add_argument('--input', type=Path, action='append', required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--allow-terrain-differences', action='store_true')
+    parser.add_argument('--allow-construction-metadata', action='store_true',
+                        help='Report changed strategy diagnostics separately; keep every geometry/UV check')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     if len(args.input) < 2:
         parser.error('At least two input scenes are required')
@@ -76,16 +84,24 @@ def main():
     for name, candidate in evidence.items():
         keys = sorted(baseline['meshes'].keys() | candidate['meshes'].keys())
         changed = []
+        metadata_changes = []
         for key in keys:
             a, b = dict(baseline['meshes'].get(key, {})), dict(candidate['meshes'].get(key, {}))
             if args.allow_terrain_differences:
                 a.pop('final_positions', None)
                 b.pop('final_positions', None)
+            if a.get('construction_metadata') != b.get('construction_metadata'):
+                metadata_changes.append(key)
+            if args.allow_construction_metadata:
+                a.pop('construction_metadata', None)
+                b.pop('construction_metadata', None)
             if a != b:
                 changed.append(key)
-        differences[name] = dict(source_equal=baseline['sources'] == candidate['sources'], changed_meshes=changed)
+        differences[name] = dict(source_equal=baseline['sources'] == candidate['sources'], changed_meshes=changed,
+                                 construction_metadata_changes=metadata_changes)
     report = dict(passed=all(d['source_equal'] and not d['changed_meshes'] for d in differences.values()),
         baseline=str(args.input[0].resolve()), final_terrain_positions_checked=not args.allow_terrain_differences,
+        construction_metadata_checked=not args.allow_construction_metadata,
         differences=differences, evidence=evidence)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding='utf8')

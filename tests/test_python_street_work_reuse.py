@@ -44,6 +44,31 @@ class PythonWorkReuseTests(unittest.TestCase):
         self.assertEqual(first.shape, second.shape)
         self.assertEqual(first.tobytes(), second.tobytes())
 
+    def test_speed_only_queries_keep_full_jet_bits_and_arc_length_construction(self):
+        for mode in (0, 3):
+            for points in (self.section(mode).points,
+                           ((0., 0., 0.), (0., -80., 0.), (120., -80., 0.), (120., 0., 0.))):
+                section = replace(self.section(mode), points=points)
+                actual = Path(section)
+                with patch.object(Path, '_velocity', lambda path, t: path.jet(t)[1]):
+                    reference = Path(section)
+                    stations = np.linspace(0., reference.length, 137)
+                    expected = reference.frame(stations)
+                self.assertEqual(actual.length, reference.length)
+                for a, b in zip(actual.frame(stations), expected):
+                    self.exact(a, b)
+                values = np.r_[actual.knots, np.linspace(0., actual.knots[-1], 101)]
+                for t in (0., np.float32(.4), np.float64(.4), values, values[:12].reshape(3, 4)):
+                    self.exact(actual._velocity(t), actual.jet(t)[1])
+
+        class DerivedPath(Path):
+            def jet(self, parameter):
+                p, d, a = super().jet(parameter)
+                return p, d * 1.001, a
+
+        derived = DerivedPath(self.section())
+        self.exact(derived._velocity(np.array((0., 1.))), derived.jet(np.array((0., 1.)))[1])
+
     def test_cached_frames_and_profile_gradients_are_bit_exact_in_both_modes_and_directions(self):
         for mode in (0, 3):
             for end in (0, 1):
@@ -100,6 +125,34 @@ class PythonWorkReuseTests(unittest.TestCase):
             for _ in range(2):
                 for a, b in zip(actual.frame(station), reference.frame(station)):
                     self.exact(a, b)
+
+    def test_small_array_cache_preserves_arithmetic_shape_and_is_bounded(self):
+        for mode in (0, 3):
+            for end in (0, 1):
+                path = CountedPath(Path(self.section(mode)))
+                actual = intersections.Approach(path, end, Crown(.12, 0.))
+                reference = LegacyApproach(path.path, end, Crown(.12, 0.))
+                for station in (np.linspace(-.1, path.length, 17),
+                                np.array([[.2, .4], [1., 2.]], dtype=np.float32),
+                                np.array([.2, .4, 1., 2.], dtype=np.float32)):
+                    wanted = reference.frame(station)
+                    start = path.calls
+                    for _ in range(3):
+                        received = actual.frame(station)
+                        for a, b in zip(received, wanted):
+                            self.exact(a, b)
+                            a[...] = 999.  # Caller writes must not alter cache.
+                    self.assertEqual(path.calls - start, 1)
+                for length in range(1, 257):
+                    actual.frame(np.linspace(0., path.length, length))
+                self.assertLessEqual(len(actual._array_frames), actual.array_frame_cache_limit)
+                self.assertLessEqual(actual._array_frame_bytes, actual.array_frame_cache_bytes)
+                self.assertEqual(actual._array_frame_bytes, sum(len(k[2]) + sum(v.nbytes for v in values)
+                    for k, values in actual._array_frames.items()))
+                large = np.linspace(0., path.length, 1000)
+                before = actual._array_frame_bytes
+                actual.frame(large)
+                self.assertEqual(actual._array_frame_bytes, before)
 
     def test_heap_retains_the_previous_minimum_ready_order_under_input_permutations(self):
         rng = random.Random(173)

@@ -77,6 +77,26 @@ class StreetUVTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'vertex count'):
             mapped.with_positions(xyz[:-1])
 
+    def test_placement_shares_owned_maps_but_defends_against_external_aliases(self):
+        mapped = apply_mapping(strip(), PlanarMapping())
+        placed = mapped.with_positions(mapped.xyz + (0., 0., 1.))
+        self.assertIs(placed.uv_layers['UVMap'], mapped.uv_layers['UVMap'])
+        self.assertIsNot(placed.uv_layers, mapped.uv_layers)
+        with self.assertRaises(ValueError):
+            placed.uv_layers['UVMap'].setflags(write=True)
+        external = mapped.uv_layers['UVMap'].copy()
+        readonly_view = external.view()
+        readonly_view.setflags(write=False)
+        mapped.uv_layers['External'] = readonly_view
+        copied = mapped.with_positions(mapped.xyz)
+        self.assertIsNot(copied.uv_layers['External'], readonly_view)
+        external[:] = 99.
+        self.assertFalse(np.any(copied.uv_layers['External'] == 99.))
+        self.assertIs(copied.uv_layers['UVMap'], mapped.uv_layers['UVMap'])
+        detail = copied.with_uv_layer('Detail', copied.uv_layers['UVMap'] * .25)
+        self.assertIs(detail.uv_layers['UVMap'], copied.uv_layers['UVMap'])
+        self.assertEqual(set(detail.uv_layers), {'UVMap', 'External', 'Detail'})
+
     def test_publication_rejects_float32_overflow_and_uses_saved_precision(self):
         uv = PlanarMapping().coordinates(strip())
         uv[0, 0, 0] = 1e40

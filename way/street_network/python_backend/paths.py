@@ -189,8 +189,26 @@ class Path:
     def _integral(self, first, last):
         middle, half = (first + last) * .5, (last - first) * .5
         t = middle[..., None] + half[..., None] * _GAUSS_X
-        speed = np.linalg.norm(self.jet(t)[1], axis=-1)
+        speed = np.linalg.norm(self._velocity(t), axis=-1)
         return half * np.sum(speed * _GAUSS_W, axis=-1)
+
+    def _velocity(self, parameter):
+        """The exact jet derivative without unused positions/accelerations.
+
+        Arc-length quadrature and Newton steps require only speed. Preserve
+        the jet's interval lookup, dtype behavior and arithmetic order. A
+        subclass overriding the full jet keeps that extension point.
+        """
+        if type(self).jet is not Path.jet:
+            return self.jet(parameter)[1]
+        parameter = np.asarray(parameter)
+        at = np.clip(np.searchsorted(self.knots, parameter, side='right') - 1, 0, len(self.chords) - 1)
+        if self.exact:
+            return self.directions[at]
+        length = self.chords[at]
+        u = ((parameter - self.knots[at]) / length)[..., None]
+        _, a, b, c = np.moveaxis(self.coefficients[at], -2, 0)
+        return (a + u * (2. * b + 3. * u * c)) / length[..., None]
 
     def parameter(self, station):
         station = np.asarray(station)
@@ -203,7 +221,7 @@ class Path:
         t = lo + (hi - lo) * (station - self.stations[at]) / (self.stations[at + 1] - self.stations[at])
         for _ in range(4):
             error = self._integral(lo, t) - (station - self.stations[at])
-            speed = np.linalg.norm(self.jet(t)[1], axis=-1)
+            speed = np.linalg.norm(self._velocity(t), axis=-1)
             t = np.clip(t - error / speed, lo, hi)
         return t
 

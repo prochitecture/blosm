@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     args.output.mkdir(parents=True, exist_ok=True)
-    bpy.ops.wm.open_mainfile(filepath=str(args.scene.resolve()))
+    bpy.ops.wm.open_mainfile(filepath=str(args.scene.resolve()), use_scripts=False)
     ui.register()
     bpy.context.preferences.edit.use_global_undo = True
     NetworkScene.update(controller())

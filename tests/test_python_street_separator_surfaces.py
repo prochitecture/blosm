@@ -1,10 +1,13 @@
 """Alternative median charts preserve the complete boundary and height envelope."""
 import unittest
+from unittest.mock import patch
+from dataclasses import replace
 import numpy as np
 import _python_street_package
 from tested_python_streets.patterns import PatternLibrary
 from tested_python_streets.separator_surfaces import FixedRimSeparator, PartitionedSeparatorChart
 from tested_python_streets.mesh import cross
+from tested_python_streets.partition import CompoundPartition
 
 
 def rectangle():
@@ -27,7 +30,17 @@ class PythonFixedRimSeparators(unittest.TestCase):
         rotation = np.array(((np.cos(angle), -np.sin(angle)), (np.sin(angle), np.cos(angle))))
         boundary = boundary @ rotation.T + (.013540461395702724, 1.7)
         saved = boundary.copy()
-        result = PartitionedSeparatorChart(PatternLibrary()).build(boundary)
+        sample = CompoundPartition.sample
+        def with_roundoff(partition, spacing):
+            result = sample(partition, spacing)
+            xy = result.xy.copy()
+            ids = np.asarray(result.boundary_loops[0])
+            xy[ids, 0] = np.nextafter(xy[ids, 0], np.inf)
+            return replace(result, xy=xy)
+        # Some NumPy builds already reproduce all endpoints exactly. Inject
+        # one ulp explicitly so the identity-based restoration is always tested.
+        with patch.object(CompoundPartition, 'sample', with_roundoff):
+            result = PartitionedSeparatorChart(PatternLibrary()).build(boundary)
         mesh = result.mesh
         np.testing.assert_array_equal(mesh.xyz[:len(boundary), :2], saved)
         np.testing.assert_array_equal(boundary, saved)

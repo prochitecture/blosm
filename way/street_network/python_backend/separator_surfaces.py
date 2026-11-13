@@ -17,8 +17,9 @@ class SeparatorStripCuts:
     candidates; the visibility test certifies that each complete chord is inside
     its polygon. A final visibility pass qualifies every resulting local block.
     """
-    def __init__(self, spacing):
+    def __init__(self, spacing, *, initial_visibility=True):
         self.spacing = spacing
+        self.initial_visibility = initial_visibility
 
     def cuts(self, group, context):
         from .decomposition import VisibilitySplitter
@@ -50,7 +51,8 @@ class SeparatorStripCuts:
             for first, last in splitter.split(boundary[list(indices)]):
                 apply(indices[first], indices[last])
 
-        visible_split(pieces[0])
+        if self.initial_visibility:
+            visible_split(pieces[0])
         for indices in tuple(pieces):
             polygon = boundary[list(indices)]
             centered = polygon - polygon.mean(axis=0)
@@ -104,6 +106,15 @@ class PartitionedSeparatorChart:
         if not math.isfinite(self.interior_spacing) or self.interior_spacing <= 0.:
             raise ValueError('Separator interior spacing must be finite and positive')
 
+    def cut_policy(self):
+        return SeparatorStripCuts(self.spacing)
+
+    def block_builders(self, remaining):
+        return (('layered', LayeredQuadChart(self.patterns, spacing=self.interior_spacing,
+                    max_cells=remaining, quality_iterations=100)),
+                ('four-sided', FourSidedQuadChart(self.patterns, max_cells=remaining,
+                    quality_iterations=100)))
+
     def build(self, boundary):
         from .compounds import CompoundGroup, SampledFootprint, RimSegment
         from .partition import CompoundPartitioner
@@ -111,7 +122,7 @@ class PartitionedSeparatorChart:
         footprint = SampledFootprint(Region(owner, boundary),
             tuple(RimSegment('fixed', i, 0., 1.) for i in range(len(boundary))))
         group = CompoundGroup((owner,), (), (footprint,), RegionUnion().build((footprint.region,)))
-        partition = CompoundPartitioner(policy=SeparatorStripCuts(self.spacing)).build(group, None)
+        partition = CompoundPartitioner(policy=self.cut_policy()).build(group, None)
         samples = partition.sample(self.spacing)
         original = {tuple(samples.xy[i]): i for i in samples.boundary_loops[0]}
         restoration = None
@@ -126,9 +137,7 @@ class PartitionedSeparatorChart:
             if remaining < 4:
                 raise ValueError('Separator decomposition exceeds its cell budget')
             child, unfinished = None, []
-            for name, builder in (
-                ('layered', LayeredQuadChart(self.patterns, spacing=self.interior_spacing, max_cells=remaining, quality_iterations=100)),
-                ('four-sided', FourSidedQuadChart(self.patterns, max_cells=remaining, quality_iterations=100))):
+            for name, builder in self.block_builders(remaining):
                 try:
                     child = builder.build(samples.xy[list(rim)])
                     break
@@ -226,10 +235,11 @@ class FixedRimSeparator:
     authoritative. Both chart families construct quads directly. Their normal
     quality/cell budgets remain mandatory; an unavailable chart is diagnostic.
     """
-    def __init__(self, patterns, *, spacing=.7, max_cells=50000):
+    def __init__(self, patterns, *, spacing=.7, max_cells=50000, paired_rim=True):
         if not math.isfinite(spacing) or spacing <= 0. or type(max_cells) is not int or max_cells < 4:
             raise ValueError('Invalid fixed-rim separator chart limits')
         self.patterns, self.spacing, self.max_cells = patterns, spacing, max_cells
+        self.paired_rim = paired_rim
 
     def build(self, boundary, *, datum, height, exaggeration):
         boundary = np.asarray(boundary, dtype=float)
@@ -241,6 +251,13 @@ class FixedRimSeparator:
             raise ValueError('Separator boundary exceeds its plateau envelope')
         failures = []
         from .separator_angular import AngularSeparatorChart
+        early = ()
+        if self.paired_rim:
+            from .chart_strategies import FlatPairedRimStrategy
+            strategy = FlatPairedRimStrategy(self.patterns, spacing=self.spacing, max_cells=self.max_cells)
+            eligibility = strategy.classify(boundary, datum=datum, height=height)
+            if eligibility.eligible:
+                early = ((strategy.name, strategy),)
         builders = (('layered', LayeredQuadChart(self.patterns, spacing=self.spacing,
                          max_cells=self.max_cells, quality_iterations=100)),
                     ('four-sided', FourSidedQuadChart(self.patterns, max_cells=self.max_cells,
@@ -249,7 +266,7 @@ class FixedRimSeparator:
                          interior_spacing=2. * self.spacing, max_cells=self.max_cells)),
                     ('angular', AngularSeparatorChart(self.patterns, spacing=self.spacing,
                          max_cells=self.max_cells)))
-        for name, builder in builders:
+        for name, builder in (*early, *builders):
             try:
                 chart = builder.build(boundary[:, :2])
             except ValueError as error:
@@ -269,6 +286,6 @@ class FixedRimSeparator:
                 quality=mesh.validate(), physical_slopes=mesh.slope_statistics(exaggeration) if exaggeration else
                     dict(maximum=0., percentile_99=0., samples_per_quad=9),
                 boundary_vertices=n, failed_charts=failures, selected_chart=name,
-                interior_spacing=2. * self.spacing if name == 'partitioned' else self.spacing,
+                interior_spacing=2. * self.spacing if name in ('partitioned', 'paired-rim') else self.spacing,
                 construction='fixed-rim direct quad separator chart'))
         raise ValueError('No accepted fixed-rim separator chart: ' + '; '.join(failures))

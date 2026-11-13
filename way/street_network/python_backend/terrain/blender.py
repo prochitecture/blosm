@@ -80,18 +80,57 @@ class TerrainSampler:
             self.signature=hashlib.sha256(xyz.tobytes()+triangles.tobytes()).hexdigest()
             self.top=float(xyz[:,2].max())+10.
             self.reach=float(np.ptp(xyz[:,2]))+20.
-            self.bvh=BVHTree.FromPolygons(xyz.tolist(),triangles.tolist(),all_triangles=True)
+            # A no-op or fully cached fit needs the evaluated signature but no
+            # rays. Avoid constructing a terrain BVH and Python vertex lists
+            # unless a query actually reaches this sampler.
+            self._bvh=None
+            self._xyz,self._triangles=xyz,triangles
         finally:
             evaluated.to_mesh_clear()
         self.count=0
+        self.ray_count=0
+        self._down=Vector((0,0,-1))
+
+    @property
+    def bvh(self):
+        if self._bvh is None:
+            self._bvh=BVHTree.FromPolygons(self._xyz.tolist(),self._triangles.tolist(),all_triangles=True)
+            self._xyz=self._triangles=None
+        return self._bvh
 
     def __call__(self, xy):
+        xy=np.asarray(xy)
         result=np.empty(len(xy))
-        for i,(x,y) in enumerate(xy):
-            hit=self.bvh.ray_cast(Vector((float(x),float(y),self.top)),Vector((0,0,-1)),self.reach)[0]
-            if hit is None:
-                raise ValueError(f'Original terrain has no surface below corridor point ({x:.3f}, {y:.3f}); extend the terrain or revise the street footprint')
-            result[i]=hit.z
+        if not len(xy):
+            return result
+        ray_cast=self.bvh.ray_cast
+        top,reach,down=self.top,self.reach,self._down
+        for start in range(0,len(xy),16384):
+            batch=xy[start:start+16384]
+            inverse=None
+            first=range(len(batch))
+            if len(batch)>=32:
+                # mathutils.Vector already converts each ray origin to float32.
+                # Reuse only bit-identical BVH queries, not proximity-rounded
+                # physical coordinates. Packed keys retain signed-zero bits.
+                query=np.ascontiguousarray(batch,dtype=np.float32)
+                _,first,inverse=np.unique(query.view(np.uint64).ravel(),return_index=True,return_inverse=True)
+                order=np.argsort(first)
+                rank=np.empty(len(order),dtype=np.intp)
+                rank[order]=np.arange(len(order))
+                inverse=rank[inverse]
+                first=first[order]  # Preserve which missing point fails first.
+            heights=np.empty(len(first))
+            # Bounded conversion in NumPy avoids allocating/indexing one
+            # two-value ndarray per Python ray. First-occurrence order and
+            # the actual mathutils/BVH queries are unchanged.
+            for i,(x,y) in enumerate(batch[first].tolist()):
+                hit=ray_cast(Vector((float(x),float(y),top)),down,reach)[0]
+                if hit is None:
+                    raise ValueError(f'Original terrain has no surface below corridor point ({x:.3f}, {y:.3f}); extend the terrain or revise the street footprint')
+                heights[i]=hit.z
+            result[start:start+len(batch)]=heights if inverse is None else heights[inverse]
+            self.ray_count+=len(first)
         self.count+=len(xy)
         return result
 
@@ -151,7 +190,7 @@ def hydrate(update, owned, scale):
 
 
 class ScenePlacement:
-    def __init__(self,controller,network,update,owned,scale):
+    def __init__(self,controller,network,update,owned,scale,*,fit_cache=None):
         self.controller,self.scale,self.raw=controller,scale,update
         self.datums={}; self.group=None; self.report=None
         props=getattr(controller,'blosm_street_terrain',None)
@@ -174,8 +213,10 @@ class ScenePlacement:
         products=dict(self.raw.products)
         fitted=None
         if self.mode=='PROFILE':
-            fitted=fit(refs,components,sampler,self.settings)
+            fitted=fit(refs,components,sampler,self.settings,cache=fit_cache,terrain_token=sampler.signature)
             report.update(fitted.report)
+            if fit_cache is not None:
+                report['constraint_cache']=fit_cache.stats()
         elif self.mode=='DIRECT':
             report.update(protected_bundles=[],bundle_policy='Each vertex is projected independently')
             # A complete footprint preflight makes initial publication atomic.
@@ -228,7 +269,8 @@ class ScenePlacement:
         # On a geometric edit a propagated fit can affect adjacent, unchanged
         # outputs. Publish those too, while committing only raw solver products.
         self.report=dict(report,mode=self.mode,seconds=time.perf_counter()-start,
-                         terrain_samples=sampler.count if sampler else 0)
+                         terrain_samples=sampler.count if sampler else 0,
+                         terrain_unique_rays=sampler.ray_count if sampler else 0)
         self.update=replace(update,products=products,rebuilt=tuple(sorted(rebuilt)))
         self.update.timings['terrain']=self.report
 

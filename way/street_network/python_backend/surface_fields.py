@@ -32,13 +32,25 @@ class BoundaryJetField:
         coefficients, maximum_error, maximum_slope = [], 0., 0.
         for boundary in boundaries:
             for rule in boundary.rules:
+                polynomial = getattr(rule, 'polynomial', None)
+                supplied = polynomial() if polynomial is not None else None
                 for degree in (5, 10, 20):
-                    nodes = .5 * (1. - np.cos(np.linspace(0., np.pi, degree + 1)))
-                    height, gradient = rule.sample(nodes)
-                    c = np.polynomial.polynomial.polyfit(nodes, np.column_stack((height, gradient)), degree)
                     test = np.linspace(0., 1., 2 * degree + 7)
                     h, g = rule.sample(test)
                     actual = np.column_stack((h, g))
+                    if supplied is not None:
+                        c = np.asarray(supplied, dtype=float)
+                        if (c.ndim == 2 and c.shape[1] == 3 and 1 <= len(c) <= degree + 1
+                                and np.isfinite(c).all()):
+                            error = float(np.max(abs(np.polynomial.polynomial.polyval(test, c).T - actual)))
+                            if np.isfinite(error) and error <= fit_tolerance:
+                                break
+                        # A supplied rule never bypasses residual qualification.
+                        # If it is unsuitable, use the unchanged fitted branch.
+                        supplied = None
+                    nodes = .5 * (1. - np.cos(np.linspace(0., np.pi, degree + 1)))
+                    height, gradient = rule.sample(nodes)
+                    c = np.polynomial.polynomial.polyfit(nodes, np.column_stack((height, gradient)), degree)
                     approximate = np.polynomial.polynomial.polyval(test, c).T
                     error = float(np.max(abs(approximate - actual)))
                     if np.isfinite(error) and error <= fit_tolerance:

@@ -5,6 +5,7 @@ Their reuse is independent of the current geometric construction algorithm.
 """
 from collections import OrderedDict
 from dataclasses import dataclass
+import heapq
 import numpy as np
 
 
@@ -238,6 +239,11 @@ class PatternLibrary:
         base = self.grid(min(bottom, top), min(left, right))
         points, faces = list(base.uv.copy()), list(map(tuple, base.quads))
         owners = {}
+        # Lengths never change while an edge is alive. The insertion ticket
+        # reproduces dict/max's first-edge tie break, including remove/reinsert.
+        # Dead heap entries are discarded lazily; no boundary-wide scan is
+        # needed for every requested pair of extra samples.
+        heaps, tickets, sequence = [[], [], [], []], {}, 0
 
         def side_of(a, b):
             if a[1] == b[1] == 0.:
@@ -251,23 +257,34 @@ class PatternLibrary:
             return None
 
         def record(fi):
+            nonlocal sequence
             face = faces[fi]
             for a, b in zip(face, (*face[1:], face[0])):
                 side = side_of(points[a], points[b])
                 if side is not None:
-                    owners[tuple(sorted((a, b)))] = (side, fi)
+                    edge = tuple(sorted((a, b)))
+                    if edge not in owners:
+                        tickets[edge] = sequence
+                        length = float(np.linalg.norm(points[edge[1]] - points[edge[0]]))
+                        heapq.heappush(heaps[side], (-length, sequence, edge))
+                        sequence += 1
+                    owners[edge] = (side, fi)
 
         for fi in range(len(faces)):
             record(fi)
         for side, target in enumerate(counts):
             current = sum(s == side for s, fi in owners.values())
             for _ in range((target - current) // 2):
-                edges = [edge for edge, (s, fi) in owners.items() if s == side]
-                edge = max(edges, key=lambda e: np.linalg.norm(points[e[1]] - points[e[0]]))
+                while True:
+                    _, ticket, edge = heapq.heappop(heaps[side])
+                    if tickets.get(edge) == ticket:
+                        break
                 owner = owners[edge][1]
                 face = faces[owner]
                 for x, y in zip(face, (*face[1:], face[0])):
-                    owners.pop(tuple(sorted((x, y))), None)
+                    removed = tuple(sorted((x, y)))
+                    owners.pop(removed, None)
+                    tickets.pop(removed, None)
                 at = next(i for i in range(4) if tuple(sorted((face[i], face[(i + 1) % 4]))) == edge)
                 a0, a3, b1, b0 = face[at:] + face[:at]
                 a1, a2 = len(points), len(points) + 1

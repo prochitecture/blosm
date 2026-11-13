@@ -1,5 +1,9 @@
 # Street generation performance baseline
 
+For current dev78 measurements and the implementation plan toward the requested
+10x speedup, see [STREETS_PERFORMANCE_PLAN.md](STREETS_PERFORMANCE_PLAN.md).
+The sections below retain the earlier baselines and scheduling investigation.
+
 The controlled follow-up is in
 [STREETS_TIMING_DIAGNOSIS.md](STREETS_TIMING_DIAGNOSIS.md). It reproduces large
 timing differences through Windows CPU placement and execution policy while
