@@ -45,8 +45,8 @@ def mesh_count():
 
 def setup(fixture='karl_marx_allee'):
     entry = next(e for e in catalog() if e['id'] == fixture)
-    # Shared controller/undo checks need an incremental per-feature producer;
-    # PADL simple 3D retains atomic whole-manager publication on this branch.
+    # Keep shared controller coverage independent of building backend changes.
+    # check_padl_progressive_ui.py qualifies both native simple-3D backends.
     settings = configure_osm(args, entry, '2D', True)
     settings.progressiveImport = True
     return settings

@@ -4,9 +4,11 @@ OpenStreetMap now uses the same controller and scheduler. See
 [OSM progressive import](../docs/OSM_PROGRESSIVE_IMPORT.md) for supported modes,
 separate-object behavior, provider hooks, tests and the `buildings_gn` handoff.
 The [OSM street integration requirements](../docs/OSM_PROGRESSIVE_STREETS_REQUIREMENTS.md)
-describe the bulk network contract. Street and newer building backends without
-cooperative rendering hooks retain their native algorithm as one atomic step;
-fine-grained scheduling within those backends remains separate work.
+describe the bulk network contract. Native simple-3D PADL buildings use one
+complete outline/parts group per progressive step for both GN and Python.
+Native streets and legacy two-pass realistic building generation still use
+their atomic manager fallback; scheduling within those backends remains
+separate work.
 
 **Progressive import** is enabled by default for 3D Tiles. Its checkbox appears
 in the import box directly above the data-type selector. Disable it to use

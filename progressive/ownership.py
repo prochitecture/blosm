@@ -58,19 +58,27 @@ class Ownership:
     def rollback(self):
         entries = list(self.pending.values())
         self.pending.clear()
-        for kind in KINDS:
-            for entry_kind, item in entries:
-                if entry_kind != kind or not alive(item):
-                    continue
-                # Assets already used by retained results/user work are shared.
-                if (kind not in ('objects', 'collections', 'scenes') and
-                        item.users > int(item.use_fake_user)):
-                    if PENDING in item:
-                        del item[PENDING]
-                    if TRANSIENT in item:
-                        del item[TRANSIENT]
-                    continue
-                getattr(bpy.data, kind).remove(item, do_unlink=True)
+        # Remove consumers first, then revisit their dependencies. A single
+        # pass leaks child node groups and persistence Texts when a later
+        # removal releases their final user. Never purge unrelated orphans.
+        while entries:
+            retained = []
+            for kind, item in entries:
+                if alive(item):
+                    if (kind not in ('objects', 'collections', 'scenes') and
+                            item.users > int(item.use_fake_user)):
+                        retained.append((kind, item))
+                    else:
+                        getattr(bpy.data, kind).remove(item, do_unlink=True)
+            if len(retained) == len(entries):
+                break
+            entries = retained
+        # Remaining assets are shared with retained results or user work.
+        for _, item in entries:
+            if PENDING in item:
+                del item[PENDING]
+            if TRANSIENT in item:
+                del item[TRANSIENT]
 
 
 @bpy.app.handlers.persistent

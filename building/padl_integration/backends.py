@@ -1,7 +1,7 @@
 """Backend strategies share inputs, identity, PADL evaluation and terrain rules."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from ...padl import services
 from ...padl.api import create_input_object
@@ -23,7 +23,7 @@ class GenerationResult:
 
 class BuildingBackend(ABC):
     @contextmanager
-    def batch(self, library, role):
+    def batch(self, library, role, *, progressive=False):
         yield
 
     @abstractmethod
@@ -31,26 +31,98 @@ class BuildingBackend(ABC):
         """Return an output and per-footprint diagnostics, retaining the input."""
 
 
+class _ProgressiveGraph:
+    """Revalidate shared assets after external edits, without hashing each turn."""
+    def __init__(self, library, role, tree):
+        self.library, self.role = library, role
+        self.dirty = self.busy = False
+        self._remember(tree)
+        self.handler = self._updated
+
+    def _remember(self, tree):
+        import bpy
+        groups, pending = {}, [tree]
+        while pending:
+            group = pending.pop()
+            pointer = group.as_pointer()
+            if pointer in groups:
+                continue
+            groups[pointer] = group
+            pending.extend(node.node_tree for node in group.nodes
+                           if getattr(node, 'node_tree', None) is not None)
+        self.groups = tuple(groups.values())
+        self.documents = tuple((group, key, value, value.as_string())
+                               for group in self.groups for key, value in group.items()
+                               if isinstance(value, bpy.types.Text))
+
+    def _updated(self, scene, graph):
+        session = getattr(getattr(self.library, 'app', None), 'osm_session', None)
+        if self.busy or (session is not None and session.in_step):
+            return
+        # Blender can report the affected object rather than the edited nested
+        # node group. Conservatively recheck after any external depsgraph work.
+        if graph.updates:
+            self.dirty = True
+
+    def checked_tree(self, tree):
+        from ...progressive.ownership import alive
+        if any(not alive(group) for group in self.groups):
+            raise PadlError('A building Geometry Nodes group was deleted during the import', code='missing_asset')
+        # Text edits do not necessarily trigger a dependency-graph notification.
+        for group, key, text, content in self.documents:
+            if (not alive(text) or group.get(key) != text or text.as_string() != content):
+                raise PadlError('A building Geometry Nodes document changed during the import', code='asset_conflict')
+        if self.dirty:
+            tree = self.library.tree(self.role)
+            self._remember(tree)
+            self.dirty = False
+        return tree
+
+
 class GeometryNodesBackend(BuildingBackend):
     @contextmanager
-    def batch(self, library, role):
+    def batch(self, library, role, *, progressive=False):
+        import bpy
         from .gn_runtime import StatusReader
         tree = library.tree(role)
-        with StatusReader(tree) as reader:
+        # Reuse verification until an external edit invalidates it. Progressive
+        # turns retain no temporary reader in the scene or undo snapshots.
+        with nullcontext() if progressive else StatusReader(tree) as reader:
             self._batch_tree, self._batch_reader = tree, reader
+            self._batch_guard = guard = _ProgressiveGraph(library, role, tree) if progressive else None
+            if guard is not None:
+                bpy.app.handlers.depsgraph_update_post.append(guard.handler)
             try:
                 yield
             finally:
+                if guard is not None and guard.handler in bpy.app.handlers.depsgraph_update_post:
+                    bpy.app.handlers.depsgraph_update_post.remove(guard.handler)
                 self._batch_tree = self._batch_reader = None
+                self._batch_guard = None
 
     def generate(self, owner, program, *, library, role, terrain, collection, output_object=None):
         from .gn_runtime import attach, read_status
-        tree = getattr(self, '_batch_tree', None) or library.tree(role)
+        tree = getattr(self, '_batch_tree', None)
+        if tree is None:
+            tree = library.tree(role)
+        else:
+            from ...progressive.ownership import alive
+            if not alive(tree):
+                raise PadlError('The building Geometry Nodes group was deleted during the import', code='missing_asset')
+        guard = getattr(self, '_batch_guard', None)
+        if guard is not None:
+            tree = self._batch_tree = guard.checked_tree(tree)
         if tree.get('padl_program_sha256') != program.fingerprint:
             raise PadlError('This PADL document needs a matching precompiled GN program', code='program_mismatch')
-        modifier = attach(owner, tree, terrain, collection)
-        reader = getattr(self, '_batch_reader', None)
-        statuses = reader.read(owner, modifier) if reader else read_status(owner, modifier)
+        if guard is not None:
+            guard.busy = True
+        try:
+            modifier = attach(owner, tree, terrain, collection)
+            reader = getattr(self, '_batch_reader', None)
+            statuses = reader.read(owner, modifier) if reader else read_status(owner, modifier)
+        finally:
+            if guard is not None:
+                guard.busy = False
         return GenerationResult(owner, owner, statuses)
 
 
@@ -98,9 +170,9 @@ class BuildingGenerationService:
         self.backend = self.backends[backend]() if isinstance(backend, str) else backend
         self.role = role
 
-    def batch(self):
+    def batch(self, *, progressive=False):
         """Scope verified assets and temporary inspection helpers to one import."""
-        return self.backend.batch(self.library, self.role)
+        return self.backend.batch(self.library, self.role, progressive=progressive)
 
     def generate(self, footprints, *, collection, terrain=None, seed=0, namespace='osm', name='Buildings'):
         import bpy

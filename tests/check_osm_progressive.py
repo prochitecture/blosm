@@ -87,14 +87,9 @@ class OsmProgressiveChecks(unittest.TestCase):
                 self.assertTrue(selected.select_get())
             session.finish(silent=True)
             self.assertFalse(session.errors, session.errors)
-            if mode == '3Dsimple' and hasattr(settings, 'buildingBackend'):
-                # Native PADL publication retains its whole-manager fallback.
-                self.assertEqual(session.committed_units, 1)
-                self.assertEqual(len(meshes()), 3)
-            else:
-                self.assertEqual(session.committed_units, 3)
-                self.assertIn(1, counts)
-                self.assertIn(2, counts)
+            self.assertEqual(session.committed_units, 3)
+            self.assertIn(1, counts)
+            self.assertIn(2, counts)
             self.assertTrue(settings.singleObject, 'Saved blocking preference changed')
             assert_geometry(self, baseline, geometry(meshes()))
             self.assertIn('lat', bpy.context.scene)

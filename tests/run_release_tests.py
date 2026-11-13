@@ -130,7 +130,7 @@ def main():
                     if name == 'standalone':
                         command = [str(args.python), '-B']
                     else:
-                        command = [str(args.blender)] + ([] if name in ('ui', 'osm_progressive_ui') else ['--background'])
+                        command = [str(args.blender)] + ([] if name in ('ui', 'osm_progressive_ui', 'padl_progressive_ui') else ['--background'])
                         if name in ('concurrent', 'ui', 'overlay'):
                             # Blender's extension policy governs localhost and
                             # the mocked imagery download path as well.

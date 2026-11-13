@@ -165,6 +165,9 @@ def group_buildings(footprints, single_object):
     footprints = tuple(footprints)
     if single_object:
         return (footprints,) if footprints else ()
-    return tuple(tuple(f for f in footprints if f.footprint_id == building.footprint_id or
-                       f.parent_id == building.footprint_id)
-                 for building in footprints if FaceType.is_building(building.face_type))
+    groups = {f.footprint_id: [] for f in footprints if FaceType.is_building(f.face_type)}
+    for footprint in footprints:
+        key = footprint.parent_id or footprint.footprint_id
+        if key in groups:
+            groups[key].append(footprint)
+    return tuple(tuple(group) for group in groups.values())

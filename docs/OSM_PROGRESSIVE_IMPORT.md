@@ -140,20 +140,20 @@ when resolving conflicts. In particular:
   adding inner yields. A connected component can be an atomic commit while its
   numerical construction yields many times.
 
-This release implementation does not copy or change those branch algorithms.
-The synthetic bulk/override/dependency tests qualify the extension contract;
-actual progressive PADL and street qualification belongs to their integration
-after evaluation. A clean source merge is not that qualification.
+The release implementation supplies the extension contract without copying the
+branch algorithms. The native PADL integration below implements that contract;
+the street integration remains separate work.
 
 ### buildings_gn merge qualification (13 November 2026)
 
 The merge of `release` at `e5fe4ac` into `buildings_gn` at `bcc2fa6`
 preserves native PADL Python/GN generation, complete outline/part groups, the
 revised realistic building-part algorithm, renderer-owned preprocessing and
-two-pass realistic rendering. PADL simple 3D, two-pass realistic buildings and
-native streets currently use the atomic manager fallback. Their inner work is
-not yet cooperatively scheduled; cancellation cannot interrupt that native call.
-Per-feature 2D producers exercise the shared progressive UI and undo tests.
+two-pass realistic rendering. At merge time PADL simple 3D, two-pass realistic
+buildings and native streets used the atomic manager fallback. The PADL
+integration below replaces that fallback for simple 3D. Two-pass realistic
+buildings and native streets still run atomically; cancellation cannot interrupt
+those native calls.
 
 The merge adapts the branch's BMesh finalization for 2D GN buildings, separate
 curves and forest areas, and passes the renderer to realistic footprint
@@ -182,6 +182,50 @@ street suites that require `bpy`/`numpy`; it is not a passing full-suite claim.
 Shared scheduler, transport, extension and performance checks are run separately
 with their required environment, including localhost permission for HTTP fixtures.
 
+### Native PADL progressive buildings (13 November 2026)
+
+`building/padl_integration/manager.py` implements `render_steps(session)` for
+both `geometry_nodes` and `python`. After resolving outline/part ownership, each
+complete building group is passed to `session.unit()`. An outline and its owned
+parts are never split between commits. GN owners, Python editable inputs and
+generated volumes, persistence Texts, generation statuses and dependencies are
+published together. The existing progressive controller provides cancellation,
+viewport redraw, Edit Mode pausing and grouped undo. Progressive mode always
+uses separate buildings; the stored blocking single-object preference is retained.
+
+Blocking imports drain the same generation code in one ownership scope and
+retain batch status-reader reuse. Progressive GN imports verify the shared graph
+for the batch and create the temporary status reader only inside a synchronous
+building call. External dependency-graph updates trigger revalidation before the
+next building; deleted GN dependencies and changed embedded program Texts stop
+the import with a partial-result error. No temporary status reader survives a UI boundary or enters an
+undo snapshot. Loaded generator dependencies remain shared by completed owners.
+The report Text and app result/status attributes are updated after each building,
+so cancellation and failures retain the report for completed work. Renamed or
+deleted accepted owners are handled by RNA identity/liveness rather than names;
+the cumulative report still records buildings the user later deletes.
+
+Failures before the first accepted building reclaim pending nested GN groups and
+their persistence Texts. Shared ownership cleanup revisits dependencies released
+by removing their consumers, without purging unrelated orphan or user data.
+
+Footprint ownership preparation, initial asset loading, a complete building's
+Python generation or GN evaluation, and its status read remain synchronous.
+The viewport becomes interactive between building groups; this is not a hard
+latency bound for a single complex building. Terrain projection uses the existing
+backend and shared session validity checks. Native streets and legacy two-pass
+realistic generation are outside this integration.
+
+Qualification outputs are under
+`C:/dev/workspace/artifacts/osm_progressive_import/padl_progressive/`.
+The Karl Marx Allee fixture produces 138 complete groups from 188 accepted
+footprints. Both backends match their blocking outputs and reports. In the
+isolated dataset run, first progressive results appeared at about 2.27 seconds
+for GN and 0.43 seconds for Python; total generation was about 38.11 and 1.22
+seconds respectively. These headless scheduler measurements include initial
+asset preparation and are observations from one run, not viewport latency
+guarantees or a backend speed comparison.
+
 The separate `blosm_build` repository uses explicit runtime file inventories.
 Its common inventory includes `app/osm_import.py` and `progressive/ownership.py`;
 the Pro inventory also includes `building2/bake_job.py` and
@@ -196,6 +240,15 @@ official release package.
 
 The release catalog now contains:
 
+- `padl_progressive`: both native backends, evaluated blocking/progressive
+  geometry parity, complete outline/part commits, retained editable inputs and
+  reports, cancellation and allocation rollback including cold GN dependencies;
+- `padl_progressive_ui`: actual operator/timer execution for both backends,
+  uninterrupted and user-edited Undo/Redo, cancellation, accepted-object renaming
+  and deletion, destination deletion and report persistence through history;
+- `padl_progressive_datasets`: full Karl Marx Allee evaluated-output and report
+  parity for both backends, translated/sloped terrain, shared GN terrain helpers
+  and partial cancellation; records observed callback and first-result timings;
 - `osm_progressive`: real extract parity, local parsing, missing-member POST and
   companion reuse, captured settings, per-object GN, resource/transaction failures,
   terrain validity, forests, realistic materials and real uncached export;
