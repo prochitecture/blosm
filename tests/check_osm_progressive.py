@@ -168,15 +168,29 @@ class OsmProgressiveChecks(unittest.TestCase):
     def test_original_errors_reach_both_import_reports(self):
         prefs = bpy.context.preferences.addons[PACKAGE].preferences
         saved_directory = prefs.dataDir
-        for failure in ('data_directory', 'osm_file', 'setup_script'):
+        saved_assets = prefs.assetsDir
+        failures = ['data_directory', 'invalid_data_directory', 'osm_file', 'setup_script', 'corrupt_osm']
+        if PROFILE != 'base':
+            failures += ['assets_directory', 'invalid_assets_directory']
+        for failure in failures:
             with self.subTest(failure=failure):
                 settings = self.prepare()
                 if failure == 'data_directory':
                     prefs.dataDir = ''
+                elif failure == 'invalid_data_directory':
+                    prefs.dataDir = str(args.artifacts/'missing_original_data')
+                elif failure in ('assets_directory', 'invalid_assets_directory'):
+                    settings.mode = '3Drealistic'
+                    settings.assetsDir = '' if failure == 'assets_directory' else str(args.artifacts/'missing_original_assets')
+                    prefs.assetsDir = ''
                 elif failure == 'osm_file':
                     settings.osmFilepath = str(args.artifacts/'missing_original.osm')
-                else:
+                elif failure == 'setup_script':
                     settings.setupScript = str(args.artifacts/'missing_original_setup.py')
+                else:
+                    corrupt = args.artifacts/'corrupt_original.osm'
+                    corrupt.write_text('<osm><node')
+                    settings.osmFilepath = str(corrupt)
                 try:
                     with self.assertRaises(RuntimeError) as blocking:
                         bpy.ops.blosm.import_data()
@@ -192,9 +206,36 @@ class OsmProgressiveChecks(unittest.TestCase):
                     notify.assert_called_once_with('ERROR', blocking_message)
                     self.assertEqual(result['message'], blocking_message)
                     self.assertIn(original, result['message'])
+                    if failure == 'corrupt_osm':
+                        self.assertFalse(result['preliminary_failure'])
+                        self.assertIn('OSM import failed: 0 completed, 1 errors.', result['message'])
+                    else:
+                        self.assertTrue(result['preliminary_failure'])
+                        self.assertEqual(result['message'], original)
+                        self.assertNotIn('OSM import failed:', result['message'])
                     self.assertIsNone(session.finish())
                 finally:
                     prefs.dataDir = saved_directory
+                    prefs.assetsDir = saved_assets
+
+    def test_first_turn_checks_prerequisites_without_initializing(self):
+        settings = self.prepare()
+        settings.progressiveImport = True
+        session = self.session()
+        try:
+            with patch.object(runtime.app, 'initOsm') as initialize, \
+                 patch.object(runtime, 'DownloadTransport') as download:
+                session.job.step(max_steps=1)
+            self.assertIsNone(session.job.error)
+            self.assertFalse(session.job.done)
+            self.assertFalse(session.owns_app)
+            self.assertFalse(session.initialized)
+            self.assertFalse(session.ownership.pending)
+            initialize.assert_not_called()
+            download.assert_not_called()
+        finally:
+            session.cancel()
+            session.finish(silent=True)
 
     def test_missing_relation_members_post_and_companion_reuse(self):
         source = args.artifacts/'missing_members.osm'

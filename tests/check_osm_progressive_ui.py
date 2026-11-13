@@ -5,10 +5,12 @@ import json
 import sys
 import time
 import traceback
+from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bpy
 import addon_utils
 from release_support import arguments, enable, configure_osm, catalog, PACKAGE
+from release_target import PROFILE
 
 args = arguments()
 enable(args)
@@ -87,28 +89,67 @@ def cancel():
 def scenario():
     prefs = bpy.context.preferences.addons[PACKAGE].preferences
     saved_directory = prefs.dataDir
+    saved_assets = prefs.assetsDir
     try:
-        for failure in ('data_directory', 'osm_file', 'setup_script'):
+        failures = ['data_directory', 'invalid_data_directory', 'osm_file', 'setup_script', 'corrupt_osm']
+        if PROFILE != 'base':
+            failures += ['assets_directory', 'invalid_assets_directory']
+        for failure in failures:
             settings = setup('rectangle')
             if failure == 'data_directory':
                 prefs.dataDir = ''
+            elif failure == 'invalid_data_directory':
+                prefs.dataDir = str(args.artifacts/'missing_original_data')
+            elif failure in ('assets_directory', 'invalid_assets_directory'):
+                settings.mode = '3Drealistic'
+                settings.assetsDir = '' if failure == 'assets_directory' else str(args.artifacts/'missing_original_assets')
+                prefs.assetsDir = ''
             elif failure == 'osm_file':
                 settings.osmFilepath = str(args.artifacts/'missing_original.osm')
-            else:
+            elif failure == 'setup_script':
                 settings.setupScript = str(args.artifacts/'missing_original_setup.py')
+            else:
+                corrupt = args.artifacts/'corrupt_original.osm'
+                corrupt.write_text('<osm><node')
+                settings.osmFilepath = str(corrupt)
             before = len(popups)
-            start()
+            if failure == 'corrupt_osm':
+                start()
+            else:
+                with patch.object(driver, 'start', wraps=driver.start) as schedule, \
+                     patch.object(driver, 'redraw', wraps=driver.redraw) as redraw:
+                    try:
+                        bpy.ops.blosm.import_data('EXEC_DEFAULT', True)
+                    except RuntimeError as exc:
+                        report = str(exc)
+                    else:
+                        raise AssertionError('Invalid prerequisites did not reject the import')
+                schedule.assert_not_called()
+                redraw.assert_not_called()
+                assert driver.active is None
+                assert not bpy.app.timers.is_registered(driver._tick)
             while driver.active:
                 yield
             result = osm_runtime.last_result
             assert result['outcome'] == 'failed' and result['errors']
-            assert len(popups) == before+1
-            assert popups[-1] == ('ERROR', result['message'])
-            assert result['errors'][0] in popups[-1][1]
+            if failure == 'corrupt_osm':
+                assert len(popups) == before+1
+                assert popups[-1] == ('ERROR', result['message'])
+                assert result['errors'][0] in popups[-1][1]
+                assert not result['preliminary_failure']
+                assert 'OSM import failed: 0 completed,' in popups[-1][1]
+            else:
+                assert len(popups) == before
+                assert result['preliminary_failure']
+                assert result['message'] == result['errors'][0]
+                assert result['message'] in report
             prefs.dataDir = saved_directory
-        checks.append('original data-folder, OSM-file and setup errors appear in one progressive result popup')
+            prefs.assetsDir = saved_assets
+        checks.append('invalid prerequisites report immediately without starting the progress panel, timer or undo checkpoint')
+        checks.append('parsing failures retain the import summary and one result popup')
     finally:
         prefs.dataDir = saved_directory
+        prefs.assetsDir = saved_assets
 
     setup()
     start()
