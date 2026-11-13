@@ -6,6 +6,7 @@ Undo/file loading/add-on disable cancels outstanding work before Blender
 invalidates scene references.
 """
 from contextlib import contextmanager
+from math import isfinite
 import textwrap
 import bpy
 from bpy.app.handlers import persistent
@@ -108,6 +109,7 @@ class Controller:
         self.adapter = adapter
         self.window = window
         self.paused = False
+        self.next_interval = 0.03
 
     @property
     def status(self):
@@ -115,6 +117,9 @@ class Controller:
                 else self.adapter.status)
 
     def tick(self):
+        # Fast processing is opt-in for a bounded, read-only work phase. Every
+        # pause, scene commit and ordinary adapter keeps the normal UI interval.
+        self.next_interval = 0.03
         adapter = self.adapter
         if self.window not in list(bpy.context.window_manager.windows):
             self.close(silent=True)
@@ -135,6 +140,11 @@ class Controller:
             adapter.job.step()
             if adapter.revision != revision:
                 self.checkpoint()
+            elif not adapter.job.done and active is self:
+                interval = getattr(adapter, 'processing_interval', 0.03)
+                if (isinstance(interval, (int, float)) and not isinstance(interval, bool)
+                        and (isinstance(interval, int) or isfinite(interval))):
+                    self.next_interval = max(0.005, min(0.03, interval))
         if adapter.job.done:
             self.close()
         redraw()
@@ -183,14 +193,15 @@ class Controller:
 def _tick():
     if active is None:
         return None
+    controller = active
     try:
-        active.tick()
+        controller.tick()
     except Exception as exc:
-        controller = active
-        if controller is not None:
-            controller.adapter.job.error = exc
-            controller.close()
-    return 0.03 if active is not None else None
+        current = active
+        if current is not None:
+            current.adapter.job.error = exc
+            current.close()
+    return controller.next_interval if active is controller else None
 
 
 def _reap():

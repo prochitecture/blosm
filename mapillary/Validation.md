@@ -401,6 +401,95 @@ recovery file. The benchmark now sets its temporary directory to its artifact
 folder. The corrected repeat is in `timer_optimized_isolated/`. Saved source
 scenes and existing user Blender sessions were unchanged.
 
+## First-estimate and first-camera latency, 2026-11-13
+
+Reference `release` remained `e5fe4ac8b0e3a66e56ac9019dd90f99a8b434702`, with
+no missing commits and a clean development checkout at `843c77c` before edits.
+The previous importer rebuilt the entire dictionary and traversed unrelated
+features after counting, then forwarded many tiny replay checkpoints. This
+delayed the first metadata request by another 10.7 s in the baseline below.
+
+The new per-tile `ImageTile` reader stores dictionary-value and selected-feature
+byte offsets in compact uint32 arrays. It validates selected features' referenced
+values while counting and replays only selected spans into bounded metadata
+batches. Unreferenced scalar contents are deliberately skipped; malformed outer
+framing and referenced values remain errors. Fixed single-point parsing,
+conservative tile-coordinate rejection with the original geographic check as
+final authority, and skipping the already-validated dictionary tail reduce count
+CPU time. Exact geographic boundary, buffered-coordinate and maximum-extent
+regressions cover the conservative rejection. No full decoded tile list or
+whole-area prefetch was added.
+
+Counting still yields approximately 2 ms chunks under the unchanged 8 ms Job
+budget. A reusable optional Controller `processing_interval` hint reduces the
+timer wait to 5 ms only during this read-only phase. The controller defaults to
+30 ms at every tick, clamps finite hints to 5–30 ms, and keeps 30 ms for pauses
+and scene revisions. Mapillary resets its hint in `finally` on normal exit,
+failure and cancellation. Other adapters retain the default schedule. This
+raises counting CPU utilization without enlarging non-preemptible work turns.
+
+`tests/benchmark_mapillary_startup.py --complete` uses the actual Controller,
+Global Undo, the same cached 12,015,652-byte Berlin tile and immediate synthetic
+metadata. `--revision 843c77c` loads the committed baseline read-only. Comparison
+with the production implementation, without experimental timer overrides:
+
+| Milestone | Previous version | Optimized |
+| --- | ---: | ---: |
+| First usable estimate | 12.30 s | 4.33 s |
+| First metadata request | 22.96 s | 4.33 s |
+| First camera created | 23.62 s | 4.35 s |
+| All 750 cameras created | 45.68 s | 5.96 s |
+
+The optimized run's maximum Job turn was 8.46 ms and maximum observer heartbeat
+gap 53.83 ms. Both runs completed with the same 750 IDs and no errors. Observer
+milestones recorded at turn boundaries can differ slightly from the internal
+request timestamp. These timings exclude network/terrain and are individual
+local runs, not guaranteed startup times. Intermediate experiments are retained
+alongside the final reports, including the old-interval and 5 ms trial runs.
+
+Standalone comparison against the committed decoder confirms exact parity of
+all 750 selected record dictionaries and their ordering. Counting took 0.964 s
+and selected replay 0.014 s; the retained offset arrays used 3,985,768 bytes for
+497,471 dictionary values and 750 selected features. Whole-reader caps are
+1,048,576 values/keys and selected spans, 256 image layers, and 16 MiB of offset
+array elements, plus the existing 32 MiB raw-tile cap. These exclude Python
+allocation overhead, keys, ID sets, Blender data and undo memory.
+
+Validation passed:
+
+- 30 standalone tests, including cancellation during dictionary preparation and
+  selected-index construction, lazy selected-value validation, integer ID
+  preservation, multiple layers, late/interleaved features, geometry boundaries
+  and explicit index/resource caps.
+- 51 background Blender checks, including 5,000-camera imports with and without
+  terrain, parity, cancellation, reader cleanup on success/failure and the hint
+  reset. The final 96-camera regression additionally checks the 5 ms counting
+  hint and its restoration after cancellation.
+- Ten real HTTP/UI fixture scenarios, including grouped undo/redo, user edits,
+  terrain, pause/resume, cancellation, deletion and addon disable.
+- Ten native Controller interval/lifecycle groups, including absent/invalid/
+  clamped hints, revision checkpoints, actual scene/view-layer/Edit Mode pauses,
+  completion, cancellation, exceptions and window loss.
+- All 16 existing 3D Tiles integration/lifecycle checks after the shared
+  Controller extension.
+
+A fresh real API test over the same Berlin subarea imported 750 cameras in each
+mode, all with metadata, matching IDs and poses, and no errors or persisted
+credentials. Progressive startup reached its first estimate at 6.22 s and first
+camera at 7.33 s, completing at 14.15 s including network time. Its maximum
+active heartbeat gap was 46.76 ms and maximum Job turn 8.84 ms. Blocking startup
+was 5.22 s to estimate and 6.47 s to first camera, completing at 15.99 s. These
+separate live runs are not a controlled comparison of import modes. Both kept
+camera height at Z=2 m, including 46 negative provider altitudes.
+
+Evidence is under `artifacts/mapillary_import/startup_optimization/`: `baseline/`,
+`production/`, `reader_parity.json`, `background/`, `background_final/`, `ui/`,
+`interval/`, `threed_tiles/` and `live/`. All UI runs explicitly used artifact-local
+temporary directories in addition to the isolated user-resource overrides.
+Large native terrain snapshot construction and network/rate-limit delays remain
+outside these decoder improvements. The existing bounded coverage window still
+finishes downloading before its first tile is counted.
+
 ## Remaining limits
 
 - The live test validates current fields and 32-image requests with this client

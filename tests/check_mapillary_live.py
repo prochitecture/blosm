@@ -51,7 +51,22 @@ state={'task':None,'started':None,'blocking':None,'turns':[],'heartbeats':[],'la
 
 
 def create():
-    return module.MapillaryImport(bpy.context,args.bounds,projection,origin,True,token,max_images=2000)
+    task=module.MapillaryImport(bpy.context,args.bounds,projection,origin,True,token,max_images=2000)
+    started=time.monotonic()
+    task.test_startup_seconds={}
+    original_step,original_commit=task.job.step,task.commit
+    def step(*a,**kw):
+        try: return original_step(*a,**kw)
+        finally:
+            if task.progress.percent(False) is not None:
+                task.test_startup_seconds.setdefault('first_estimate',time.monotonic()-started)
+    def commit(*a,**kw):
+        result=original_commit(*a,**kw)
+        if task.count:
+            task.test_startup_seconds.setdefault('first_camera',time.monotonic()-started)
+        return result
+    task.job.step,task.commit=step,commit
+    return task
 
 
 def snapshot(task):
@@ -98,7 +113,8 @@ def summarize(task,elapsed):
                         'candidates':task.progress.candidates,'processed':task.progress.processed,
                         'estimated_total':task.progress.estimated_total,'status':task.status},
             'fatal_error':sanitize(task.job.error,headers=redaction_headers) if task.job.error else None,
-            'elapsed':elapsed,'metrics':task.metrics,'sources_and_models':dict(fields),
+            'elapsed':elapsed,'startup_seconds':task.test_startup_seconds,
+            'metrics':task.metrics,'sources_and_models':dict(fields),
             'with_metadata':sum(bool(o['mapillary_metadata_available']) for o in objects),
             'vertical_placement':{'minimum_z':min(heights,default=None),'maximum_z':max(heights,default=None),
                                   'negative_provider_altitudes':negative_provider_altitudes,

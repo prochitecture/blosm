@@ -93,6 +93,15 @@ The top-level progressive package is independent of 3D Tiles:
   undo checkpoints and lifecycle handlers. Adapters supply job, scene, view_layer,
   revision, status, cancel and finish. No HTTP or provider logic lives here.
 
+Adapters may expose an optional `processing_interval` in seconds for a bounded,
+read-only processing phase. After a turn with unchanged revision, the controller
+accepts finite integer/float hints clamped to 5–30 ms; absent or invalid hints use
+30 ms. Every tick resets to the default before lifecycle and pause checks.
+Paused imports and turns that change the scene revision always keep 30 ms.
+The Job's existing 8 ms budget is unchanged. Mapillary requests 5 ms only while
+counting/indexing a downloaded tile, restoring the default on success, failure
+and cancellation. Other adapters retain their existing scheduling.
+
 threed_tiles.manager.BaseManager.iterRender is the 3D Tiles producer. It yields
 download URLs while retaining traversal, bounding-volume/LOD decisions, transforms,
 session query parameters, and per-tile errors. The blocking runner drives the same

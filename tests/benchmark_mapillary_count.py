@@ -39,8 +39,7 @@ class Transport:
     def close(self):self.pending=None
 bounds=baseline['bounds']
 origin=((bounds[1]+bounds[3])/2,(bounds[0]+bounds[2])/2)
-task=adapter.MapillaryImport(bpy.context,bounds,Projection(lat=origin[0],lon=origin[1]),origin,False,
-                             'offline-fixture-token',transport=Transport())
+Import=adapter.MapillaryImport
 if args.mode=='baseline':
     def source(path):
         return subprocess.check_output(['git','show','9dd2509:'+path],cwd=ROOT,text=True)
@@ -48,11 +47,14 @@ if args.mode=='baseline':
     exec(compile(source('mapillary/tiles.py'),'baseline_tiles.py','exec'),old_tiles.__dict__)
     tree=ast.parse(source('mapillary/progressive.py'))
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='MapillaryImport')
-    method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='count_tile')
     namespace=dict(adapter.__dict__)
     namespace['image_points']=old_tiles.image_points
-    exec(compile(ast.Module(body=[method],type_ignores=[]),'baseline_count.py','exec'),namespace)
-    task.count_tile=types.MethodType(namespace['count_tile'],task)
+    # Load the matching producer as well: the current producer can reuse a
+    # prepared reader, which the historical count method did not accept.
+    exec(compile(ast.Module(body=[cls],type_ignores=[]),'baseline_count.py','exec'),namespace)
+    Import=namespace['MapillaryImport']
+task=Import(bpy.context,bounds,Projection(lat=origin[0],lon=origin[1]),origin,False,
+            'offline-fixture-token',transport=Transport())
 started=previous=None
 gaps=[]
 turns=[]

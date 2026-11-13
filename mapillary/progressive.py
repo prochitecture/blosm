@@ -17,7 +17,7 @@ from ..progressive.blender import notify_result, preserve_context
 from . import pose
 from .placement import GroundSurface
 from .progress import ImageProgress
-from .tiles import MAX_TILE_BYTES, contains, identifier, image_points, image_ids, tile_coordinates, validate_bounds
+from .tiles import MAX_TILE_BYTES, ImageTile, contains, identifier, tile_coordinates, validate_bounds
 
 TILE_URL = 'https://tiles.mapillary.com/maps/vtp/mly1_computed_public/2/{z}/{x}/{y}'
 GRAPH_URL = 'https://graph.mapillary.com/images'
@@ -49,6 +49,7 @@ class MapillaryImport:
         self.ground = GroundSurface(context)
         self.terrain_misses = 0
         self.count = self.revision = self.approximate = 0
+        self._counting = False
         self.errors = Counter()
         self.details = []
         self.seen = set()
@@ -58,7 +59,8 @@ class MapillaryImport:
                         'max_decode_turn': 0., 'max_metadata_parse': 0., 'max_camera_commit': 0.,
                         'peak_tile_bytes': 0, 'peak_metadata_records': 0}
         self.metrics['peak_dedup_ids'] = 0
-        self.metrics.update(count_seconds=0., max_count_turn=0., peak_counted_ids=0)
+        self.metrics.update(count_seconds=0., max_count_turn=0., peak_counted_ids=0,
+                            peak_tile_index_bytes=0)
         offset = pose.number(self.scene.get('height_offset'))
         self.height_source = 'scene' if offset is not None else 'absolute_provider_altitude'
         if offset is None:
@@ -73,6 +75,12 @@ class MapillaryImport:
             max_requests=workers, max_bytes=MAX_TILE_BYTES,
             max_buffer_bytes=workers*MAX_TILE_BYTES)
         self.job = Job(self.steps(), self.transport, validate=self.validate)
+
+    @property
+    def processing_interval(self):
+        # Job's work budget is unchanged. Only a pure count/index phase requests
+        # shorter waits; camera commits, network waits and pauses keep 30 ms.
+        return .005 if self._counting else .03
 
     def validate(self):
         self.ground.validate()
@@ -123,51 +131,54 @@ class MapillaryImport:
                 self.metrics['peak_tile_bytes'] = max(self.metrics['peak_tile_bytes'], sum(len(b) for _, b in raw))
                 while raw:
                     tile, content = raw.pop()
-                    # Count only this tile, then replay it for bounded metadata
-                    # batches. Keep the existing worker-sized download windows.
-                    try:
-                        yield from self.count_tile(content,tile)
-                    except ValueError as error:
-                        self.failure('coverage_decode', error)
-                        del content
-                        continue
                     records = []
-                    iterator = image_points(content, tile, self.bounds)
-                    processed = 0
-                    checkpoint = time.monotonic()
+                    # Count once, then reuse compact dictionary/feature offsets
+                    # for the bounded record stream. No decoded tile list is kept.
+                    reader = None
                     try:
-                        while True:
-                            started = time.monotonic()
-                            try:
-                                record = next(iterator)
-                            except StopIteration:
-                                break
-                            elapsed = time.monotonic()-started
-                            self.metrics['decode_seconds'] += elapsed
-                            self.metrics['max_decode_turn'] = max(self.metrics['max_decode_turn'], elapsed)
-                            processed += 1
-                            if record is not None and contains(self.bounds, *record['coverage_geometry']):
-                                identity = record['id']
-                                if identity not in self.seen:
-                                    if len(self.seen) >= self.max_images:
-                                        raise RuntimeError('Mapillary image limit reached; select a smaller area')
-                                    self.seen.add(identity)
-                                    self.metrics['peak_dedup_ids'] = len(self.seen)
-                                    records.append(record)
-                                    if len(records) == METADATA_BATCH:
-                                        yield self.metadata_download(records)
-                                        records = []
-                            # A dense city tile contains many points outside a
-                            # small ROI. Keep traversal cooperative without an
-                            # entire UI timer turn per few dozen rejected points.
-                            if record is None or processed % 16 == 0 or time.monotonic()-checkpoint >= .002:
-                                yield None
-                                checkpoint = time.monotonic()
-                    except ValueError as error:
-                        self.failure('coverage_decode', error)
+                        try:
+                            reader = ImageTile(content,tile,self.bounds)
+                            yield from self.count_tile(content,tile,reader=reader)
+                        except ValueError as error:
+                            self.failure('coverage_decode',error)
+                            continue
+                        iterator = reader.image_points()
+                        checkpoint = time.monotonic()
+                        try:
+                            while True:
+                                started = time.monotonic()
+                                try:
+                                    record = next(iterator)
+                                except StopIteration:
+                                    break
+                                elapsed = time.monotonic()-started
+                                self.metrics['decode_seconds'] += elapsed
+                                self.metrics['max_decode_turn'] = max(self.metrics['max_decode_turn'],elapsed)
+                                if record is not None:
+                                    identity = record['id']
+                                    if identity not in self.seen:
+                                        if len(self.seen) >= self.max_images:
+                                            raise RuntimeError('Mapillary image limit reached; select a smaller area')
+                                        self.seen.add(identity)
+                                        self.metrics['peak_dedup_ids'] = len(self.seen)
+                                        records.append(record)
+                                        if len(records) == METADATA_BATCH:
+                                            yield self.metadata_download(records)
+                                            records = []
+                                # Replaying a selected point is usually tiny.
+                                # Forward time-based checkpoints instead of
+                                # under-filling a timer turn with empty commands.
+                                if time.monotonic()-checkpoint >= .002:
+                                    yield None
+                                    checkpoint = time.monotonic()
+                        except ValueError as error:
+                            self.failure('coverage_decode',error)
+                        finally:
+                            iterator.close()
                     finally:
-                        iterator.close()
-                        del iterator, content
+                        if reader is not None:
+                            reader.close()
+                        del reader, content
                     if records:
                         yield self.metadata_download(records)
                     records = None
@@ -183,13 +194,17 @@ class MapillaryImport:
             # unexpected fatal exception can be redacted before reporting it.
             self.token = ''
 
-    def count_tile(self, content, tile):
+    def count_tile(self, content, tile, reader=None):
         # Only IDs are retained, never a full decoded tile/metadata record list.
         # Publish a sample only after a complete successful scan, so a corrupt
         # tile cannot masquerade as empty or distort the extrapolated density.
         new_ids = set()
-        iterator = image_ids(content,tile,self.bounds)
+        owns_reader = reader is None
+        if owns_reader:
+            reader = ImageTile(content,tile,self.bounds)
+        iterator = reader.image_ids()
         checkpoint = time.monotonic()
+        self._counting = True
         try:
             while True:
                 started = time.monotonic()
@@ -217,11 +232,15 @@ class MapillaryImport:
                     self.counted_ids.add(new_ids.pop())
                 yield None
             self.metrics['peak_counted_ids'] = max(self.metrics['peak_counted_ids'],len(self.counted_ids))
+            self.metrics['peak_tile_index_bytes'] = max(self.metrics['peak_tile_index_bytes'],reader.index_bytes)
             self.progress.counted(tile,len(self.counted_ids))
             yield None
         finally:
+            self._counting = False
             iterator.close()
             new_ids.clear()
+            if owns_reader:
+                reader.close()
 
     def metadata_download(self, records):
         url = self.graph_url + '?' + urlencode({'image_ids': ','.join(r['id'] for r in records),

@@ -31,6 +31,17 @@ settings.minLon,settings.minLat,settings.maxLon,settings.maxLat = BOUNDS
 scene['height_offset'] = 20.
 origin=(60.17,24.94)
 checks=[]
+readers=[]
+OriginalImageTile=adapter.ImageTile
+
+
+class ObservedImageTile(OriginalImageTile):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        readers.append(self)
+
+
+adapter.ImageTile=ObservedImageTile
 
 
 def check(label, condition):
@@ -136,11 +147,13 @@ cancel_count=task(5000)
 while not cancel_count.metrics['count_seconds'] and not cancel_count.job.done:
     cancel_count.job.step(max_steps=1)
 check('counting checkpoints precede metadata and camera creation',cancel_count.count==0
-      and cancel_count.progress.counted_tiles==0 and cancel_count.collection is None)
+      and cancel_count.progress.counted_tiles==0 and cancel_count.collection is None
+      and cancel_count.processing_interval==.005)
 cancel_count.cancel()
 check('cancellation during counting releases IDs and never displays 100 percent',
       cancel_count.job.cancelled and cancel_count.transport.closed and not cancel_count.counted_ids
-      and not cancel_count.seen and '100%' not in cancel_count.status)
+      and not cancel_count.seen and '100%' not in cancel_count.status
+      and cancel_count.processing_interval==.03)
 
 filtered_transport=MemoryTransport(8)
 filtered_transport.entries[str(BASE_ID)]['computed_geometry']['coordinates']=[25.,61.]
@@ -352,6 +365,10 @@ check('ground sampling does not create extra terrain geometry',len(dense_mesh.ve
       and len(dense_mesh.polygons)==len(faces) and len(dense_terrain.modifiers)==0)
 check('terrain snapshots released after completed and cancelled imports',
       ground_large.ground.tree is None and singular.ground.tree is None and interrupted.ground.tree is None)
+check('tile readers release bytes and indices after success cancellation and failures',
+      readers and all(reader.closed and reader.data is None and reader.index_bytes==0 for reader in readers))
+check('compact tile offset indices stay within their explicit cap',
+      0<large.metrics['peak_tile_index_bytes']<=16*1024*1024)
 report={'checks':checks,'scale':scale,'ground_scale':ground_scale,
         'small_max_turn':max(turns),'blender':bpy.app.version_string}
 (args.artifacts/'background.json').write_text(json.dumps(report,indent=2))

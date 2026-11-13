@@ -35,13 +35,19 @@ The aggregate completion message uses "camera objects created".
 Tile fetching keeps the same bounded worker-sized windows; there is no initial
 download of all tiles. Before importing a downloaded tile, a cooperative first
 pass counts its unique, in-bounds image IDs. A second pass streams its records
-into the existing 32-entry metadata/camera batches. Only bounded ID sets are
-retained for counting, not whole-tile decoded records or camera metadata.
-Both passes test each point's coordinates before decoding its attributes;
-points outside the selected bounds do not allocate property dictionaries. The
-counting pass retains only image IDs from selected features. Dictionary and
-geometry validation, selected-feature tag validation and resource caps remain
-in force; irrelevant out-of-bounds feature attributes are skipped.
+into the existing 32-entry metadata/camera batches. The per-tile `ImageTile`
+reader retains compact byte offsets for dictionary values and selected features,
+so the import pass reuses the count's selection instead of rebuilding dictionaries
+and scanning all features again. It retains no whole-tile decoded record list or
+camera metadata. These offsets and the raw tile are released after replay, on
+cancellation and on failure.
+
+Points outside the selected bounds do not allocate property dictionaries.
+Dictionary scalars are decoded only when a selected feature references them;
+counting validates all referenced attributes, while retaining only the ID.
+Outer protobuf framing, point geometry, selected-feature tags/values and resource
+caps remain checked. Unreferenced scalar contents and out-of-bounds attributes
+are intentionally skipped.
 
 The estimated total is the unique candidate count multiplied by the ratio of
 selected area to successfully counted area. Each tile contributes only its
@@ -58,8 +64,11 @@ completion can still report per-resource errors or incomplete coverage.
 
 Counting adds a tile scan before that tile's first cameras appear. Its reduced
 decoder and roughly 2 ms processing chunks avoid spending UI timer intervals
-on tiny checkpoint operations. Network latency and dense tiles still delay the
-first estimate; an empty sample cannot predict image density. Checkpoints keep
+on tiny checkpoint operations. During this read-only counting phase, the shared
+controller uses a 5 ms timer interval while keeping its 8 ms processing budget.
+Camera commits and pauses keep the normal 30 ms interval. Network latency and
+dense tiles still delay the first estimate; an empty sample cannot predict image
+density. Checkpoints keep
 the scan cooperative, but an individual parsing/Blender call can exceed the
 scheduler's soft budget. See `Validation.md` for measured count-phase timings.
 
@@ -121,7 +130,8 @@ sanitized diagnostics are reused.
 
 The MVT reader respects the layer's actual extent, top-left origin and Y-down
 coordinates, including buffered points outside tile borders. It first scans
-dictionaries, then streams image features, yielding checkpoints throughout.
+dictionaries into compact offsets, then streams image features, yielding
+checkpoints throughout. The count pass indexes selected features for replay.
 There is no full-area decoded feature list. Coverage entries are clipped against
 the selected bounds and deduplicated by image ID. The chosen metadata position
 is clipped again; discovery uses computed coverage, not a union of computed and
@@ -137,14 +147,17 @@ including during pauses. Deduplication state is capped and released on cleanup.
 | Coverage area | At most 4096 tiles; larger selections rejected before downloads |
 | Downloaded/decoded response | 32 MiB per resource, enforced by transport |
 | JSON metadata parsing | 256 KiB and 32 entities per batch |
-| MVT dictionaries | 1,048,576 keys and values each; unused layers skipped before dictionary allocation |
+| MVT dictionaries | 1,048,576 keys and values each across the active tile; unused layers skipped before dictionary indexing |
+| MVT replay indices | 1,048,576 selected feature spans; value/feature offset arrays together at most 16 MiB, excluding allocation overhead |
+| MVT image layers | 256 per tile |
 | MVT feature or dictionary string | 64 KiB |
 | Counted/imported image ID sets | Each capped at 100,000 IDs; per-tile temporary IDs share the counted-ID ceiling |
 
 The ID limit is a bookkeeping ceiling, not a recommendation to create 100,000
 cameras with undo enabled. Four workers reserve at most 128 MiB of raw tile bytes
 and another 128 MiB in the HTTP window; an active consumer, dictionaries, copies,
-Blender data and undo add overhead. This is not a total process-RSS guarantee.
+up to 16 MiB of compact tile indices, Blender data and undo add overhead. This is
+not a total process-RSS guarantee.
 See `Validation.md` for measured practical limits.
 
 Metadata request/absent-entity failures fall back to available coverage data and
