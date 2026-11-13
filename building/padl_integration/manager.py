@@ -150,7 +150,10 @@ class PadlBuildingManager(Manager):
         text.clear()
         text.write(json.dumps(self.report.as_dict(), indent=2) + '\n')
         for result in self.results:
-            if alive(result.owner):
+            # Assigning even the same ID property tags an accepted GN object
+            # for another update. Attach new/recreated reports without touching
+            # all previous owners on every progressive turn.
+            if alive(result.owner) and result.owner.get('blosm_building_report') != text:
                 result.owner['blosm_building_report'] = text
         self._publish_results()
 

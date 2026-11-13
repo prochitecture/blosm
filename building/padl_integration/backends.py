@@ -51,6 +51,7 @@ class _ProgressiveGraph:
             pending.extend(node.node_tree for node in group.nodes
                            if getattr(node, 'node_tree', None) is not None)
         self.groups = tuple(groups.values())
+        self.group_ids = frozenset(groups)
         self.documents = tuple((group, key, value, value.as_string())
                                for group in self.groups for key, value in group.items()
                                if isinstance(value, bpy.types.Text))
@@ -59,9 +60,11 @@ class _ProgressiveGraph:
         session = getattr(getattr(self.library, 'app', None), 'osm_session', None)
         if self.busy or (session is not None and session.in_step):
             return
-        # Blender can report the affected object rather than the edited nested
-        # node group. Conservatively recheck after any external depsgraph work.
-        if graph.updates:
+        # Publishing a building also produces deferred Object/Mesh/Collection
+        # updates after the timer returns. Those do not change the generator.
+        # Blender reports edited root/nested NodeTrees by their original ID,
+        # even when all is_updated_* flags are false (e.g. socket/node edits).
+        if any(update.id.original.as_pointer() in self.group_ids for update in graph.updates):
             self.dirty = True
 
     def checked_tree(self, tree):

@@ -18,12 +18,23 @@ args = arguments()
 enable(args)
 driver = importlib.import_module(PACKAGE + '.progressive.blender')
 runtime = importlib.import_module(PACKAGE + '.app.osm_import')
+building_assets = importlib.import_module(PACKAGE + '.building.padl_integration.assets')
 read_footprints = importlib.import_module(PACKAGE + '.padl.persistence').read_footprints
 checks, popups, heartbeats, progress_runs = [], [], [], []
 cancel_durations = []
 driver.show_result = lambda level, message: popups.append((level, message))
 started = time.monotonic()
 current_progress = None
+asset_checks = []
+original_tree = building_assets.BuildingProgramLibrary.tree
+
+
+def verified_tree(library, role):
+    asset_checks.append(role)
+    return original_tree(library, role)
+
+
+building_assets.BuildingProgramLibrary.tree = verified_tree
 
 
 class PadlTestUserEdit(bpy.types.Operator):
@@ -97,7 +108,7 @@ def start(backend, case):
     global current_progress
     assert bpy.ops.blosm.import_data('EXEC_DEFAULT', True) == {'FINISHED'}
     assert driver.active is not None
-    current_progress = dict(backend=backend, case=case, commits=[])
+    current_progress = dict(backend=backend, case=case, commits=[], asset_check_start=len(asset_checks))
     progress_runs.append(current_progress)
 
 
@@ -133,6 +144,11 @@ def wait_finished(outcome='success'):
         assert not result['errors'], result
         assert result['committed'] == 3, result
         assert current_progress['commits'] == [1, 2, 3], current_progress
+        # Real UI redraws and undo checkpoints run between these commits. A
+        # headless loop cannot expose deferred graph updates from publication.
+        checks = len(asset_checks) - current_progress['asset_check_start']
+        assert checks == (1 if current_progress['backend'] == 'geometry_nodes' else 0), (
+            'Generator revalidated without an asset edit', current_progress, checks)
     return result
 
 

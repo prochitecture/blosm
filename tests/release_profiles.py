@@ -16,6 +16,7 @@ NEW = {
     'base': 'check_release_base.py', 'pro': 'check_release_pro.py',
 }
 EXISTING = {
+    'padl_progressive_performance': ('benchmark_padl_progressive.py', 'padl_performance.json'),
     'padl_progressive_ui': ('check_padl_progressive_ui.py', 'padl_ui_checks.json'),
     'osm_progressive_ui': ('check_osm_progressive_ui.py', 'osm_ui_checks.json'),
     'direct': ('check_direct_gltf_import.py', 'correctness.json'),
@@ -29,7 +30,8 @@ CORE = ['preflight', 'standalone', 'direct', 'operator', 'progressive', 'concurr
         'osm', 'roofs', 'gpx', 'geometry_nodes', 'buildify', 'terrain', 'overlay',
         'validation', 'baking', 'export', 'pml']
 PRO_ONLY = frozenset(('baking', 'export', 'pml'))
-SUITES = tuple(CORE + ['package', 'base', 'pro', 'ui', 'osm_progressive_ui', 'padl_progressive_ui'])
+SUITES = tuple(CORE + ['package', 'base', 'pro', 'ui', 'osm_progressive_ui',
+                      'padl_progressive_ui', 'padl_progressive_performance'])
 
 # Feature boundaries, not a second copy of the builder's exact file inventory.
 # Shared properties/APE utilities remain valid in Base. Imagery and GN are common.

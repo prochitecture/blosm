@@ -196,10 +196,13 @@ uses separate buildings; the stored blocking single-object preference is retaine
 Blocking imports drain the same generation code in one ownership scope and
 retain batch status-reader reuse. Progressive GN imports verify the shared graph
 for the batch and create the temporary status reader only inside a synchronous
-building call. External dependency-graph updates trigger revalidation before the
-next building; deleted GN dependencies and changed embedded program Texts stop
-the import with a partial-result error. No temporary status reader survives a UI boundary or enters an
-undo snapshot. Loaded generator dependencies remain shared by completed owners.
+building call. Updates to the original root or nested generator NodeTree IDs
+trigger revalidation before the next building. Deferred scene/object/mesh updates
+from publication and normal viewport work do not invalidate the generator.
+NodeTree updates matter even when their geometry/shading/transform flags are all
+false. Deleted GN dependencies and changed embedded program Texts stop the import
+with a partial-result error. No temporary status reader survives a UI boundary
+or enters an undo snapshot. Loaded generator dependencies remain shared by completed owners.
 The report Text and app result/status attributes are updated after each building,
 so cancellation and failures retain the report for completed work. Renamed or
 deleted accepted owners are handled by RNA identity/liveness rather than names;
@@ -226,6 +229,23 @@ seconds respectively. These headless scheduler measurements include initial
 asset preparation and are observations from one run, not viewport latency
 guarantees or a backend speed comparison.
 
+The GUI performance investigation found that the original broad graph-update
+guard revalidated the entire shared asset after each building's deferred scene
+updates. On the first 20 Karl Marx Allee groups it took 48.09 seconds, including
+44.49 seconds in 20 asset validations. Restricting invalidation to the actual
+generator IDs reduced that same GUI run to 5.31 seconds with one validation;
+the final registered benchmark repeated it in 5.48 seconds (about 9x faster).
+The full 138-group GUI import completed in 72.88 seconds, including 32.57 seconds
+of status evaluation and 34.53 seconds in undo checkpoints. Those costs remain;
+the speedup above describes the measured 20-group comparison, not every dataset.
+Per-building status evaluation and undo checkpoints remain enabled. Report links
+are only assigned when needed, avoiding writes to unchanged owner metadata.
+The GUI suite now asserts that uninterrupted import, ordinary scene edits and
+accepted-object renaming/deletion do not revalidate an unchanged generator;
+root/nested graph, interface, document and deletion checks protect invalidation.
+Profiles and event probes are under
+`C:/dev/workspace/artifacts/osm_progressive_import/padl_progressive_performance/`.
+
 The separate `blosm_build` repository uses explicit runtime file inventories.
 Its common inventory includes `app/osm_import.py` and `progressive/ownership.py`;
 the Pro inventory also includes `building2/bake_job.py` and
@@ -249,6 +269,11 @@ The release catalog now contains:
 - `padl_progressive_datasets`: full Karl Marx Allee evaluated-output and report
   parity for both backends, translated/sloped terrain, shared GN terrain helpers
   and partial cancellation; records observed callback and first-result timings;
+- `padl_progressive_performance` (opt-in GUI benchmark): times actual timer
+  execution, asset validation, status evaluation and undo checkpoints. The
+  default stops after 20 Karl Marx Allee groups; `--extended` completes all 138.
+  Set `BLOSM_PADL_BENCHMARK_MODE=blocking` in the launch environment for the
+  synchronous separate-object comparison. It records `padl_performance.json`;
 - `osm_progressive`: real extract parity, local parsing, missing-member POST and
   companion reuse, captured settings, per-object GN, resource/transaction failures,
   terrain validity, forests, realistic materials and real uncached export;

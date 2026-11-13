@@ -343,10 +343,17 @@ class PadlProgressiveChecks(unittest.TestCase):
                            if getattr(node, 'node_tree', None) is not None)
         nested = next(group for group in groups.values() if group != tree)
         changed_node, changed_text, original_text = None, None, None
+        changed_default = None
         try:
             if edit in ('root', 'nested'):
                 target = tree if edit == 'root' else nested
                 changed_node = (target, target.nodes.new('ShaderNodeMath'))
+            elif edit == 'interface':
+                socket = next(item for item in tree.interface.items_tree
+                              if item.item_type == 'SOCKET' and item.in_out == 'INPUT'
+                              and item.name == 'Seed')
+                changed_default = socket, socket.default_value
+                socket.default_value += 1
             elif edit == 'document':
                 changed_text = tree['padl_document']
                 original_text = changed_text.as_string()
@@ -359,7 +366,7 @@ class PadlProgressiveChecks(unittest.TestCase):
             # Deletion is checked independently before the importer evaluates
             # a graph with missing helpers; forcing that invalid graph to
             # evaluate can stall Blender itself. Text edits need no notification.
-            if edit in ('root', 'nested'):
+            if edit in ('root', 'nested', 'interface'):
                 bpy.context.view_layer.update()
             print('GN asset edit:', edit, 'evaluation complete', flush=True)
             for _ in range(20000):
@@ -387,6 +394,8 @@ class PadlProgressiveChecks(unittest.TestCase):
             if changed_text is not None:
                 changed_text.clear()
                 changed_text.write(original_text)
+            if changed_default is not None:
+                changed_default[0].default_value = changed_default[1]
             if edit.startswith('delete_'):
                 # A deleted helper leaves a deliberately invalid published
                 # graph. Remove this test's remaining closure before reuse.
@@ -395,6 +404,9 @@ class PadlProgressiveChecks(unittest.TestCase):
 
     def test_progressive_gn_rejects_edited_root_graph(self):
         self.assert_gn_edit_stops_import('root')
+
+    def test_progressive_gn_rejects_changed_interface_default(self):
+        self.assert_gn_edit_stops_import('interface')
 
     def test_progressive_gn_unedited_batch_reuses_asset_verification(self):
         self.prepare('geometry_nodes')
