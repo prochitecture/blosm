@@ -39,6 +39,34 @@ class InputEvent:
     alt: bool = False
 
 
+class ClickDrag:
+    """Capture a pointer press and distinguish a click from a deliberate drag.
+
+    Coordinates and threshold use the same units (normally logical pixels).
+    Once crossed, the threshold stays crossed even if the pointer returns to
+    its starting position. Checking release also handles coalesced move events.
+    Modifier keys belong to the press, so releasing Shift early is harmless.
+    """
+    def __init__(self, press, threshold):
+        self.press = press
+        self.threshold = max(0., threshold)
+        self.last = (press.x, press.y)
+        self.dragging = False
+
+    def move(self, x, y):
+        if not self.dragging:
+            if max(abs(x-self.press.x), abs(y-self.press.y)) <= self.threshold:
+                return None
+            self.dragging = True
+        dx, dy = x-self.last[0], y-self.last[1]
+        self.last = (x, y)
+        return dx, dy
+
+    def release(self, x, y):
+        self.move(x, y)
+        return not self.dragging
+
+
 def shell_layout(rect):
     """Responsive canvas/toolbar/card example shared by current consumers."""
     pad = min(12., rect.width/10, rect.height/10)

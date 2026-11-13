@@ -29,6 +29,8 @@ class Session:
     def __init__(self,context,surface):
         if bpy.app.background or context.window is None or context.area is None or context.area.type!='VIEW_3D':
             raise RuntimeError('Open this viewer from a 3D Viewport')
+        if surface.requires_object_mode and context.mode!='OBJECT':
+            raise RuntimeError('Return to Object Mode before opening this viewer')
         self.window,self.screen,self.area = context.window,context.window.screen,context.area
         self.space = self.area.spaces.active
         if self.space.region_quadviews:
@@ -47,15 +49,41 @@ class Session:
 
     def valid(self):
         try:
-            return (self.window in list(bpy.context.window_manager.windows)
+            owner_valid = (self.window in list(bpy.context.window_manager.windows)
                 and self.window.screen==self.screen and self.area in list(self.screen.areas)
                 and self.area.type=='VIEW_3D' and self.area.spaces.active==self.space
                 and not self.space.region_quadviews and self.region in list(self.area.regions)
-                and self.window.scene==self.scene and self.window.view_layer==self.layer
-                and (not self.surface.requires_object_mode or self.layer.objects.active is None
-                     or self.layer.objects.active.mode=='OBJECT'))
+                and self.window.scene==self.scene and self.window.view_layer==self.layer)
+            if not owner_valid:
+                return False
+            if self.surface.requires_object_mode:
+                # Validate the owner's real context mode, including changes
+                # made by menus/operators rather than the surface's shortcuts.
+                with self.context() as context:
+                    return context.mode=='OBJECT'
+            return True
         except (ReferenceError,RuntimeError):
             return False
+
+    def select_object(self, x, y, *, toggle=False):
+        """Native Object Mode picking at logical WINDOW-region coordinates.
+
+        Respect Blender visibility/selectability and screen-space occlusion.
+        Surfaces decide which gesture requests selection; the host only owns
+        context/pixel conversion. Selection uses its normal undo entry and
+        does not replace this session's feature target or move its viewpoint.
+        """
+        if self.closed or self.frame is None or not self.valid():
+            return
+        if not self.frame.available.contains(x,y):
+            return
+        with self.context() as context:
+            if context.mode!='OBJECT':
+                return
+            scale = self.frame.scale
+            bpy.ops.view3d.select('EXEC_DEFAULT', True,
+                location=(round(x*scale),round(y*scale)), object=True,
+                toggle=toggle, deselect_all=not toggle)
 
     def ticket(self,key): return AssetTicket(self.id,self.generation,str(key))
 

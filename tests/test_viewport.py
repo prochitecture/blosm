@@ -17,6 +17,26 @@ pano=module('panorama_math_test','mapillary/panorama_math.py')
 
 
 class ViewportTests(unittest.TestCase):
+    def test_click_jitter_preserves_press_modifiers(self):
+        press=ui.InputEvent('LEFTMOUSE','PRESS',100,200,shift=True)
+        gesture=ui.ClickDrag(press,3)
+        self.assertIsNone(gesture.move(102,199))
+        self.assertIsNone(gesture.move(100,203))
+        self.assertTrue(gesture.release(101,202))
+        self.assertTrue(gesture.press.shift)
+
+    def test_drag_threshold_and_return_to_origin(self):
+        gesture=ui.ClickDrag(ui.InputEvent('LEFTMOUSE','PRESS',10,20),3)
+        self.assertEqual(gesture.move(14,20),(4,0))
+        self.assertEqual(gesture.move(15,22),(1,2))
+        self.assertEqual(gesture.move(10,20),(-5,-2))
+        self.assertFalse(gesture.release(10,20))
+
+    def test_release_without_move_and_logical_scale(self):
+        gesture=ui.ClickDrag(ui.InputEvent('LEFTMOUSE','PRESS',10,20),3/2)
+        self.assertIsNone(gesture.move(11,20))
+        self.assertFalse(gesture.release(12,20))
+
     def test_direction_landmarks(self):
         for direction,expected in [((0,0,-1),(.5,.5)),((1,0,0),(.75,.5)),((-1,0,0),(.25,.5)),
                                    ((0,1,0),(.5,1)),((0,-1,0),(.5,0))]:

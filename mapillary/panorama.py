@@ -6,7 +6,7 @@ from mathutils import Quaternion, Vector
 from gpu_extras.batch import batch_for_shader
 from .. import viewport
 from ..viewport.session import Surface
-from ..viewport.ui import Button, Slider, Container, Router, Rect, HANDLED, PASS_THROUGH, shell_layout
+from ..viewport.ui import Button, Slider, Container, Router, Rect, ClickDrag, HANDLED, PASS_THROUGH, shell_layout
 from ..viewport.assets import ImageRef
 from ..viewport.draw import DISPLAY_RGB_GLSL
 from ..progressive import blender as runtime
@@ -205,7 +205,7 @@ class Panorama(Surface):
             self.status='Unsupported panorama dimensions/orientation'
             return
         self.image_ref=ImageRef(image)
-        self.status='Drag to look around · Wheel to zoom · Esc to exit'
+        self.status='Click to select · Drag to look · Wheel to zoom · Esc to exit'
         self.ready=True
         self.apply_view()
 
@@ -250,20 +250,38 @@ class Panorama(Surface):
             self.apply_view()
 
     def handle(self,event):
+        # Native Tab/mode-pie bindings take precedence over overlay keyboard
+        # focus. An actual mode change closes the session on the next event/
+        # tick; a dismissed mode pie or unavailable mode leaves it open.
+        if event.type=='TAB':
+            return PASS_THROUGH
         # A canvas drag owns its release even when crossing a toolbar button.
         if self.drag is not None and event.type=='LEFTMOUSE' and event.value=='RELEASE':
+            gesture=self.drag
             self.drag=None
+            if (gesture.release(event.x,event.y)
+                    and self.session.frame.available.contains(event.x,event.y)
+                    and not self.toolbar.contains(event.x,event.y)
+                    and self.root.hit(event.x,event.y) is None):
+                press=gesture.press
+                self.session.select_object(press.x,press.y,toggle=press.shift)
             return HANDLED
         if self.drag is not None and event.type=='MOUSEMOVE':
-            x,y=self.drag
-            self.drag=(event.x,event.y)
-            self.look=(self.look @ Quaternion((0,1,0),-(event.x-x)*.004)
-                       @ Quaternion((1,0,0),(event.y-y)*.004)).normalized()
-            self.apply_view()
+            delta=self.drag.move(event.x,event.y)
+            if delta is not None and self.ready:
+                dx,dy=delta
+                self.look=(self.look @ Quaternion((0,1,0),-dx*.004)
+                           @ Quaternion((1,0,0),dy*.004)).normalized()
+                self.apply_view()
             return HANDLED
         if self.router.handle(event)==HANDLED: return HANDLED
         if event.type=='LEFTMOUSE':
-            self.drag=(event.x,event.y) if event.value=='PRESS' and self.ready else None
+            if self.toolbar.contains(event.x,event.y):return HANDLED
+            if event.value=='PRESS':
+                # Match Blender's mouse drag threshold in physical pixels,
+                # while the shared input/UI API uses logical coordinates.
+                threshold=bpy.context.preferences.inputs.drag_threshold_mouse/self.session.frame.scale
+                self.drag=ClickDrag(event,threshold)
             return HANDLED
         if event.type in {'WHEELUPMOUSE','WHEELDOWNMOUSE'}:
             self.fov=max(math.radians(20),min(math.radians(110),self.fov*(.9 if event.type=='WHEELUPMOUSE' else 1/.9)))
@@ -272,7 +290,7 @@ class Panorama(Surface):
         # Navigation that would move the eye is owned by this surface. Ordinary
         # modelling keys exit first and continue through Blender's keymap.
         if event.type in {'MIDDLEMOUSE','TRACKPADPAN','TRACKPADZOOM','NDOF_MOTION'}: return HANDLED
-        if event.value=='PRESS' and event.type in {'G','R','S','TAB','NUMPAD_0','NUMPAD_1','NUMPAD_3','NUMPAD_7'}:
+        if event.value=='PRESS' and event.type in {'G','R','S','NUMPAD_0','NUMPAD_1','NUMPAD_3','NUMPAD_7'}:
             self.session.request_close()
         return PASS_THROUGH
 

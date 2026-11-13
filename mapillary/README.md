@@ -67,10 +67,23 @@ with no background handlers or separate import/download job.
 ### View a panorama
 
 Select an imported spherical Mapillary camera and click **View Mapillary panorama**.
+Click to select any visible, selectable Blender object; **Shift-click** extends
+the selection or toggles an object out. Click empty space to deselect; Shift-click
+empty space preserves selection. Selection keeps the current panorama open,
+including when another camera becomes active. Reduce **Photo opacity** to see
+the objects through the photograph.
+
 Drag with the left mouse button to look around, use the wheel to zoom, and adjust
 **Photo opacity** to reveal the Blender scene. **Esc** or **Exit panorama** removes
 the overlay and keeps the final viewpoint, orientation and field of view.
 The imported camera, scene rendering camera and render settings are unchanged.
+Click/drag detection uses Blender's mouse drag threshold; small pointer movements
+do not rotate the view. Controls handle their own clicks. **Tab** and the mode pie
+retain Blender's bindings. Leaving Object Mode, through shortcuts, menus or Python
+operators, closes the panorama on the next input event or lifecycle tick; the
+final viewpoint is retained. Transforms also exit before proceeding. Starting a
+panorama outside Object Mode is rejected. Selection follows Blender's visibility,
+selectability and occlusion rules, and remains after exiting panorama mode.
 
 The first view downloads and packs the usual 2048-pixel preview; later views reuse
 the image. If an import is running, the viewer queues its request and remains

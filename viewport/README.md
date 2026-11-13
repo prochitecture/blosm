@@ -39,6 +39,8 @@ Subclass `viewport.session.Surface`. Its default hooks are no-ops:
 | `detach(reason)` | Release owned resources; called once, including failed partial attachment |
 
 Set `requires_object_mode=True` for an adapter that depends on Object Mode.
+Such a session rejects entry in another mode and closes when its owner's actual
+context mode changes, including mode changes made by menus and Python operators.
 Expose `capturing` when a canvas/widget drag owns input outside its rectangle.
 Temporary view state and feature-specific target validation belong to the
 adapter. Public `session.context()` provides a fresh validated owner override;
@@ -73,6 +75,20 @@ and tested with ordinary Python. Layout is deliberately small: assign rectangles
 in `layout()`, show/hide optional children at meaningful widths, and use nested
 containers where useful. There is no fixed list of feature modes, HTML renderer,
 text-input implementation or general constraint solver.
+
+`ui.ClickDrag(press_event, threshold)` distinguishes click jitter from deliberate
+dragging, retaining the press's modifiers and considering coalesced releases.
+`move(x,y)` returns a drag delta or `None`; `release(x,y)` returns whether this
+was a click. All coordinates/thresholds use logical pixels. Once a gesture drags,
+returning to its origin does not turn it into a click. The consumer owns capture
+and cancellation. Mapillary uses the mouse drag threshold divided by frame scale.
+
+`session.select_object(x, y, toggle=False)` offers native Object Mode picking at
+logical WINDOW-region coordinates. It converts to pixels and applies the owner
+context, preserving native visibility/selectability/occlusion and undo behavior.
+With `toggle=False`, clicking empty space deselects; `toggle=True` supplies normal
+Shift-click behavior. The caller controls the gesture, UI hit testing and feature
+target, so selecting an object does not implicitly replace the surface's target.
 
 [example.py](example.py) demonstrates a custom canvas, toolbar, opacity slider
 and optional side card that collapses in a narrow viewport. Pass an existing
@@ -134,8 +150,13 @@ projection to preserve that FOV. Opacity is session-local, initially inherited
 from an existing photo background if one exists.
 
 Esc or Exit panorama retains the final eye position, rotation and FOV in normal
-perspective navigation. Camera objects, scene camera, render dimensions, selection
-and cursor are unchanged. Failed startup can restore the pre-entry view. Lifecycle
+perspective navigation. Click selects Blender objects; Shift-click extends/toggles
+selection; drag looks around once the mouse threshold is crossed. Selection keeps
+the current photo/capture pose active and remains after exit. Tab/mode-pie bindings
+go to Blender; leaving Object Mode ends the session at the next event or lifecycle
+tick. The generic UI router still offers Tab focus navigation to other consumers.
+Camera poses, scene camera, render dimensions and cursor are unchanged. Failed
+startup can restore the pre-entry view. Lifecycle
 teardown never writes a snapshot into the incoming scene or undo state.
 
 The imported camera already includes the basic EXIF rotation. The adapter first
@@ -157,7 +178,8 @@ between captures and all smooth transitions are subsequent work.
 ## Validation and handoff
 
 Tests live under [tests](../tests): `test_viewport.py`, `check_panorama_ui.py`,
-`check_panorama_loading.py` and `check_panorama_real.py`. Use the isolated Blender
+`check_panorama_selection.py`, `check_panorama_loading.py` and
+`check_panorama_real.py`. Use the isolated Blender
 profile/environment required by workspace `AGENTS.md`; UI tests need
 `--enable-event-simulate`. Only an opt-in real HTTP test uses `--online-mode` and
 `--token-file`. All outputs go to the supplied `--artifacts` directory.

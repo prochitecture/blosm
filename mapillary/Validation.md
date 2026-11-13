@@ -1,5 +1,52 @@
 # Mapillary import validation
 
+## Panorama object selection and mode exit — 2026-11-13
+
+Added native Blender object picking on click and Shift-click, with left-drag
+panorama navigation retained. The mouse drag threshold distinguishes jitter from
+intentional looking. Selection changes the active Blender object while keeping
+the original photo/capture target. Controls and their toolbar block picking
+through the overlay. The common viewport host provides `select_object` with
+logical-to-pixel conversion; pure `ui.ClickDrag` is reusable by other surfaces.
+
+Object-Mode-dependent sessions now check the owner's actual context mode and
+reject entry outside Object Mode. Native Tab/mode-pie input bypasses panorama
+widget focus. Mode changes through shortcuts, menus or Python operators close
+the panorama on the next event/lifecycle tick (the idle poll is at most 250 ms),
+keeping the final view. An owned acquisition job is cancelled on mode exit.
+
+Validation in fresh isolated profiles, with cached synthetic 2:1 images and no
+Mapillary token/network access:
+
+- **24 native input/selection/mode checks passed on Blender 5.2.0 LTS and 4.5.0**.
+  Real queued mouse events select meshes and another Mapillary camera; small
+  jitter keeps the view fixed; Shift-click extends/toggles selection and preserves
+  it over empty space; plain empty clicks clear it. Dragging changes orientation
+  with the eye fixed. Slider and blank-toolbar clicks do not select through the
+  overlay. Native Tab enters Edit Mode even after slider focus. Actual operator
+  changes to Sculpt, Weight Paint, Vertex Paint, Texture Paint and Pose modes
+  close the viewer, and opening outside Object Mode is rejected. Capture pose,
+  render camera and final viewing orientation are checked separately.
+- **14 existing native panorama checks passed** on Blender 5.2, covering GPU
+  projection, EXIF/pitch/roll, fixed eye/FOV, editor resizing, capture release,
+  rename/deletion, and retained exit orientation.
+- **19 loading/lifecycle checks passed** on Blender 5.2. This includes the prior
+  17 cases plus changing mode while photo bytes are pending: the viewer closes,
+  its owned transport is cancelled, and no photo is published. The test also
+  retains coverage for unrelated-job ownership, undo/redo and the provider-free
+  shared viewport example.
+- **9 pure viewport/gesture tests and all 44 Mapillary unit tests passed**.
+  Gesture checks include jitter, modifiers retained from press, returning to the
+  press point after dragging, missing/coalesced move events and logical scaling.
+
+Evidence: `artifacts/mapillary_import/panorama_selection/`, including
+`ui_52_final/selection.json`, `ui_45_final/selection.json`, the selected-camera
+screenshots, `panorama_regression/ui.json`, and `loading/loading.json`.
+Reproduce with `tests/check_panorama_selection.py --artifacts <directory>` in an
+isolated UI Blender launched with factory startup, disabled autoexec and
+`--enable-event-simulate`, plus all five chat-specific user-resource overrides.
+This change does not add panorama/photo transitions or extra optical models.
+
 ## Camera visibility filters — 2026-11-13
 
 Added inclusive UTC capture-date bounds, optional undated captures, and

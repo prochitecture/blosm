@@ -194,6 +194,19 @@ def tick():
                 phase(13)
             elif p==13 and state['frames']>4:
                 check('real Escape event exits without rotation reset',viewport.current() is None and area.spaces.active.region_3d.view_rotation.rotation_difference(state['final_rotation']).angle<1e-5)
+                start('9100000000000006');phase(14)
+            elif p==14 and transports[-1].is_photo:
+                state['mode_transport']=transports[-1]
+                mesh=bpy.data.objects['Cube']
+                mesh.select_set(True)
+                bpy.context.view_layer.objects.active=mesh
+                bpy.ops.object.mode_set(mode='EDIT')
+                phase(15)
+            elif p==15 and state['frames']>4:
+                check('mode change closes a panorama waiting for photo bytes',viewport.current() is None and state['session'].closed)
+                check('mode exit cancels owned download without publishing a photo',runtime.active is None
+                      and state['mode_transport'].closed and photo.cached_image('9100000000000006') is None)
+                bpy.ops.object.mode_set(mode='OBJECT')
                 finish();return None
         return .1
     except Exception:

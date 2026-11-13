@@ -629,6 +629,14 @@ camera, change its lens, replace its `PANO` type, set the scene rendering camera
 or change render resolution merely to look around. The original flat-photo
 action can keep its existing behavior for non-panoramic images.
 
+Clicking selects ordinary Blender objects, including other cameras, while
+Shift-click uses Blender's extended/toggled selection. The press-to-drag threshold
+separates selection from looking around. Explicit selection changes are retained;
+the displayed panorama continues to use its own capture target. Native Tab/mode
+pie shortcuts remain available. A switch out of Object Mode closes the panorama
+through the common session's owner-mode check, retaining the final view and
+releasing any owned download. These interactions are implemented in version 1.
+
 Esc and the close button remove the panorama and return ordinary Blender
 navigation while keeping the final viewport orientation. The user continues
 looking in the direction chosen inside the panorama. This changes the viewport
@@ -992,7 +1000,7 @@ temporary output. Do not use the normal installed addon/profile for validation.
 | Smooth transitions | Panorama and ordinary-photo endpoints, time-based easing, source retained until target ready, latest pending request, two-image budgets, aspect/opacity correctness, exit mid-transition and no per-frame scene mutation |
 | Responsive layout | Live width/height/aspect changes, narrow/wide layouts, Blender sidebars, UI/display scaling, resize during drag/loading, preserved panorama/map state and no hidden click targets |
 | Session lifecycle | Repeated open/close, Esc/button, replacement, area/editor/window removal, scene/layer change, undo/redo, file load, disable, failed partial startup |
-| Context preservation | Esc/button retain the final panorama viewing orientation in a normal perspective viewport; temporary display/input settings are cleaned up; camera pose, scene camera, render settings, selection, active object/collection and cursor remain unchanged |
+| Context preservation | Esc/button/mode exit retain the final panorama viewing orientation; temporary display/input settings are cleaned up; camera pose, scene camera, render settings, active collection and cursor remain unchanged; deliberate selection/active-object changes are retained |
 | Exit policies | Failed startup rolls back partial changes; lifecycle teardown never overwrites an incoming/undo-restored context; no old camera-view restoration overrides the retained final orientation |
 | Graphics | Alpha 0/0.5/1, reference colors, straight/premultiplied edges, clipping, resize, UI scales, GPU-state restoration and the supported graphics backend(s) |
 | Panorama math | Cardinal directions, seam/poles, zero/nonzero pitch and roll, original and downloaded EXIF orientation, mirrored/unsupported layouts, object scaling, heading-only provenance |
