@@ -85,7 +85,8 @@ def basic():
     manual.hide_set(True)
     s = settings()
     s.ordinary = s.fisheye = s.other = False
-    s.date_from = s.date_to = '2023-11-14'
+    s.year_from=s.year_to='2023'
+    s.month_from=s.month_to='11'
     apply()
     check('date/type filter hides existing nonmatching cameras', parity(t))
     check('ordinary scene camera and render flags are unchanged', not scene.camera.hide_get()
@@ -127,14 +128,15 @@ def basic():
     apply()
     previous = s.applied
     before = {o.name:o.hide_get() for o in t.collection.objects}
-    s.date_from = '2024-02-30'
+    s.year_from=s.year_to='2024'
+    s.month_from,s.month_to='03','02'
     try:
         result = apply()
     except RuntimeError:  # Blender raises for an ERROR report in Python calls.
         result = {'CANCELLED'}
-    check('invalid date is rejected atomically', result=={'CANCELLED'} and s.applied==previous
+    check('reversed month range is rejected atomically', result=={'CANCELLED'} and s.applied==previous
           and before=={o.name:o.hide_get() for o in t.collection.objects})
-    s.date_from = ''
+    s.year_from=s.year_to='ANY'
     # Pending GUI edits must not change the predicate for new cameras.
     s.ordinary, s.panoramic = True, False
     pending = task(reverse=False)

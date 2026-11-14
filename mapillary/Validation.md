@@ -1,5 +1,50 @@
 # Mapillary import validation
 
+## Calendar dropdown date filters — 2026-11-14
+
+Replaced the visible text fields with From/To year, month and day dropdowns.
+Year choices are No limit plus 2014 through the current UTC year. No limit hides
+the associated month/day controls while retaining their choices. Day lists follow
+the selected month/year; leap dates and month changes clamp invalid selections.
+Defaults are January 1 / December 31, with To following month end until another
+day is chosen. The existing exact inclusive UTC predicate and applied-snapshot
+format are reused by existing cameras and both progressive/blocking imports.
+
+Dynamic enum numbers are stable (actual years/day numbers), and their strings
+remain cached for Blender's borrowed references. Legacy text settings migrate
+on load/deferred registration with exact day precision. Applied snapshots and
+camera visibility remain untouched during migration. Legacy dates outside the
+offered year list retain their saved predicate until explicit Apply. A new
+deferred migration handler is removed on unregister; normal panel drawing does
+not scan camera objects or mutate saved settings.
+
+Validation:
+
+- **30 native calendar checks passed on Blender 5.2 and 4.5**: defaults,
+  conditional month/day drawing, No limit selected again, retained hidden choices,
+  UTC year rollover and stable enum identity/string lifetime, February 28/29,
+  30-day clamping, default month-end following, explicit days, inclusive filtering,
+  undated captures, reversed-range atomic rejection, open bounds, exact legacy
+  migration, type-only legacy state, save/load migration and native Undo/Redo.
+  The actual default-width sidebar was inspected with all three date selectors
+  and with both year controls set to No limit; year/month/day labels are readable.
+- **24 existing native filter/progressive UI checks passed** on Blender 5.2,
+  including changing filters during an active import, incoming-camera parity,
+  cancellation and undo around intervening edits.
+- **17 background filter checks passed** with 1,000 incoming / 1,383 total
+  cameras. **27 panorama visibility checks passed**, including applying/resetting
+  filters while the source camera is temporarily hidden.
+- **All 47 standalone Mapillary tests passed**, including three added calendar
+  boundary/validation tests covering leap month ends and exact inclusive days.
+
+Evidence: `artifacts/mapillary_import/filter_calendar_ui/`: final
+`native_52_final/calendar.json`, `native_45_final/calendar.json`, screenshots
+`calendar_dates.png` / `calendar_no_limit.png`, `background_days/filters.json`,
+`progressive/filters.json`, and `visibility/visibility.json`. These checks used
+only factory-startup, script-disabled isolated Blender profiles and offline
+fixtures. Reproduce the new cases with `tests/check_mapillary_calendar.py
+--artifacts <directory>` in UI Blender with event simulation enabled.
+
 ## Panorama source-camera visibility — 2026-11-14
 
 The active panorama's source camera is hidden in its owning view layer and

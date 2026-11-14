@@ -2,17 +2,82 @@
 
     Draft GUI values become active only on Apply. The applied snapshot lives in
     the .blend, alongside object references for visibility owned by this filter.
-    No handlers, downloads, name-based ownership or scene-wide draw-time scans.
+    No downloads, name-based ownership or scene-wide draw-time scans. Calendar
+    migration uses a load handler and one deferred registration/appended-scene pass.
 """
 from functools import lru_cache
+from calendar import monthrange
+from datetime import date, datetime, timezone
 import json
 
 import bpy
-from bpy.props import BoolProperty, CollectionProperty, PointerProperty, StringProperty
+from bpy.app.handlers import persistent
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 
-from .filter_data import CameraFilter, CATEGORIES
+from .filter_data import ANY_YEAR, FIRST_YEAR, CameraFilter, CATEGORIES, month_date
 from .tiles import identifier
 from ..viewport.visibility import hidden_get, underlying_changes
+
+MONTHS=tuple((f'{i:02}',label,'',i) for i,label in enumerate((
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'),1))
+
+
+def utc_year():
+    return datetime.now(timezone.utc).year
+
+
+@lru_cache(maxsize=None)
+def years_for(year):
+    # Blender borrows callback strings. Retain every generated list for this
+    # process, including when a long-running Blender crosses New Year's Day.
+    return [(ANY_YEAR,'No limit','No date boundary',0)]+[
+        (str(value),str(value),'',value) for value in range(FIRST_YEAR,year+1)]
+
+
+def year_items(_settings,_context):
+    return years_for(utc_year())
+
+
+def day_count(settings,side):
+    year=getattr(settings,'year_'+side)
+    # Hidden day choices retain their value when No limit is selected.
+    if year==ANY_YEAR or not year.isdecimal():return 31
+    return monthrange(int(year),int(getattr(settings,'month_'+side)))[1]
+
+
+@lru_cache(maxsize=None)
+def days_for(count):
+    return tuple((f'{value:02}',str(value),'',value) for value in range(1,count+1))
+
+
+def from_day_items(settings,_context):return days_for(day_count(settings,'from'))
+def to_day_items(settings,_context):return days_for(day_count(settings,'to'))
+
+
+def calendar_changed(settings,_context):
+    settings.calendar_version=2
+    if settings.adjusting_calendar:return
+    settings.adjusting_calendar=True
+    try:
+        for side,default in (('from',1),('to',31)):
+            if getattr(settings,'year_'+side)==ANY_YEAR:continue
+            maximum=day_count(settings,side)
+            # Read the stored enum number before resolving its identifier: the
+            # previous month may have supplied a day absent from the new list.
+            raw=settings.get('day_'+side,default)
+            chosen=maximum if side=='to' and settings.to_month_end else max(1,min(int(raw),maximum))
+            setattr(settings,'day_'+side,f'{chosen:02}')
+    finally:settings.adjusting_calendar=False
+
+
+def from_day_changed(settings,context):
+    calendar_changed(settings,context)
+
+
+def to_day_changed(settings,context):
+    if not settings.adjusting_calendar:settings.to_month_end=False
+    calendar_changed(settings,context)
 
 
 def is_imported_camera(obj):
@@ -27,9 +92,57 @@ def is_imported_camera(obj):
 
 
 def draft(settings):
-    return dict(date_from=settings.date_from.strip(), date_to=settings.date_to.strip(),
+    return dict(date_from=month_date(settings.year_from,settings.month_from,day=settings.day_from),
+                date_to=month_date(settings.year_to,settings.month_to,day=settings.day_to,end=True),
                 categories=[key for key in CATEGORIES if getattr(settings, key)],
                 include_undated=settings.include_undated)
+
+
+def migrate_settings(settings):
+    """Populate calendar drafts without changing any applied visibility/filter.
+
+    Applied snapshots keep their exact predicate until the next explicit Apply.
+    Legacy draft bounds outside the new year list remain represented by
+    No limit; the applied saved range is still retained and labelled in the UI.
+    """
+    if settings.calendar_version>=2:
+        return
+    if settings.calendar_version==0:
+        settings.adjusting_calendar=True
+        try:
+            for side,legacy in (('from',settings.date_from),('to',settings.date_to)):
+                text=legacy.strip()
+                try:bound=date.fromisoformat(text)
+                except ValueError:continue
+                if bound.isoformat()==text and FIRST_YEAR<=bound.year<=utc_year():
+                    setattr(settings,'year_'+side,str(bound.year))
+                    setattr(settings,'month_'+side,f'{bound.month:02}')
+                    setattr(settings,'day_'+side,f'{bound.day:02}')
+                    if side=='to':settings.to_month_end=False
+        finally:settings.adjusting_calendar=False
+    calendar_changed(settings,None)
+    snapshot=json.loads(settings.applied) if settings.applied else {}
+    current=draft(settings)
+    settings.legacy_applied=bool(snapshot and any(current[key]!=snapshot.get(key,'')
+        for key in ('date_from','date_to')))
+    settings.calendar_version=2
+
+
+@persistent
+def migrate_all(*_):
+    for scene in bpy.data.scenes:
+        for layer in scene.view_layers:
+            migrate_settings(layer.blosm_mapillary_filters)
+
+
+def migrate_once():
+    migrate_all()
+    return None
+
+
+def schedule_migration():
+    if not bpy.app.timers.is_registered(migrate_once):
+        bpy.app.timers.register(migrate_once,first_interval=0.)
 
 
 def encode(options):
@@ -150,8 +263,25 @@ class BLOSM_PG_FilterHiddenCamera(bpy.types.PropertyGroup):
 
 class BLOSM_PG_MapillaryFilters(bpy.types.PropertyGroup):
     expanded: BoolProperty(name='Camera filters', default=False)
-    date_from: StringProperty(name='From', description='Capture date, YYYY-MM-DD (UTC, inclusive); blank for no lower bound', maxlen=10)
-    date_to: StringProperty(name='To', description='Capture date, YYYY-MM-DD (UTC, inclusive); blank for no upper bound', maxlen=10)
+    year_from: EnumProperty(name='From',description='First capture year; No limit leaves the lower boundary open',
+        items=year_items,default=0,update=calendar_changed)
+    year_to: EnumProperty(name='To',description='Last capture year; No limit leaves the upper boundary open',
+        items=year_items,default=0,update=calendar_changed)
+    month_from: EnumProperty(name='From month',description='Month of the first inclusive capture date (UTC)',
+        items=MONTHS,default='01',update=calendar_changed)
+    month_to: EnumProperty(name='To month',description='Month of the last inclusive capture date (UTC)',
+        items=MONTHS,default='12',update=calendar_changed)
+    day_from: EnumProperty(name='From day',description='First capture day, inclusive (UTC)',
+        items=from_day_items,default=1,update=from_day_changed)
+    day_to: EnumProperty(name='To day',description='Last capture day, inclusive (UTC)',
+        items=to_day_items,default=31,update=to_day_changed)
+    to_month_end: BoolProperty(default=True,options={'HIDDEN'})
+    adjusting_calendar: BoolProperty(default=False,options={'HIDDEN','SKIP_SAVE'})
+    # Retained only for migrating .blend files from the previous text-field UI.
+    date_from: StringProperty(options={'HIDDEN'})
+    date_to: StringProperty(options={'HIDDEN'})
+    calendar_version: IntProperty(default=0,options={'HIDDEN'})
+    legacy_applied: BoolProperty(default=False,options={'HIDDEN'})
     include_undated: BoolProperty(name='Include undated', default=False,
         description='Include missing or invalid capture dates when a date range is set')
     ordinary: BoolProperty(name='Ordinary', default=True, description='Perspective photographs')
@@ -174,14 +304,16 @@ class BLOSM_OT_ApplyMapillaryFilters(bpy.types.Operator):
 
     def execute(self, context):
         settings = context.view_layer.blosm_mapillary_filters
-        options = draft(settings)
         try:
+            options = draft(settings)
             spec = CameraFilter.build(**options)
         except ValueError as error:
             self.report({'ERROR'}, str(error))
             return {'CANCELLED'}
         matched, excluded = apply_existing(context.view_layer, spec)
         settings.applied = encode(options)
+        settings.calendar_version=2
+        settings.legacy_applied=False
         self.report({'INFO'}, '%d cameras match; %d excluded by filters' % (matched, excluded))
         return {'FINISHED'}
 
@@ -201,6 +333,14 @@ class BLOSM_OT_ResetMapillaryFilters(bpy.types.Operator):
         apply_existing(context.view_layer, CameraFilter.build())
         settings.applied = ''
         settings.date_from = settings.date_to = ''
+        settings.year_from=settings.year_to=ANY_YEAR
+        settings.to_month_end=True
+        settings.month_from,settings.month_to='01','12'
+        settings.adjusting_calendar=True
+        try:settings.day_from,settings.day_to='01','31'
+        finally:settings.adjusting_calendar=False
+        settings.legacy_applied=False
+        settings.calendar_version=2
         settings.include_undated = False
         for key in CATEGORIES:
             setattr(settings, key, True)
@@ -209,6 +349,10 @@ class BLOSM_OT_ResetMapillaryFilters(bpy.types.Operator):
 
 def draw(layout, context):
     settings = context.view_layer.blosm_mapillary_filters
+    if settings.calendar_version<2 and (settings.date_from or settings.date_to or settings.applied):
+        # Covers old scenes appended after registration without mutating IDs
+        # inside panel drawing. Normal file loads migrate via load_post.
+        schedule_migration()
     if (context.scene.blosm.dataType != 'mapillary' and not settings.applied
             and not is_imported_camera(context.view_layer.objects.active)):
         return
@@ -217,11 +361,20 @@ def draw(layout, context):
              icon='TRIA_DOWN' if settings.expanded else 'TRIA_RIGHT')
     if not settings.expanded:
         return
-    box.label(text='Capture date · YYYY-MM-DD (UTC)')
-    box.prop(settings, 'date_from')
-    box.prop(settings, 'date_to')
+    box.label(text='Capture date (UTC)')
+    for side,label in (('from','From'),('to','To')):
+        row=box.split(factor=.17,align=True)
+        row.label(text=label+':')
+        if getattr(settings,'year_'+side)!=ANY_YEAR:
+            fields=row.split(factor=.31,align=True)
+            fields.prop(settings,'year_'+side,text='')
+            rest=fields.split(factor=.69,align=True)
+            rest.prop(settings,'month_'+side,text='')
+            rest.prop(settings,'day_'+side,text='')
+        else:
+            row.prop(settings,'year_'+side,text='')
     row = box.row()
-    row.enabled = bool(settings.date_from.strip() or settings.date_to.strip())
+    row.enabled = settings.year_from!=ANY_YEAR or settings.year_to!=ANY_YEAR
     row.prop(settings, 'include_undated')
     box.label(text='Photo type')
     column = box.column(align=True)
@@ -231,8 +384,10 @@ def draw(layout, context):
     row.operator('blosm.apply_mapillary_filters', icon='FILTER')
     row.operator('blosm.reset_mapillary_filters', text='Reset', icon='LOOP_BACK')
     if settings.applied:
-        box.label(text=('Changes not applied' if encode(draft(settings)) != settings.applied
+        box.label(text=('Saved date range active' if settings.legacy_applied else
+                        'Changes not applied' if encode(draft(settings)) != settings.applied
                         else 'Applied to this view layer'))
+        if settings.legacy_applied:box.label(text='Apply to use these dates')
     else:
         box.label(text='Existing and incoming cameras')
 
@@ -245,9 +400,13 @@ def register():
     for cls in CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.ViewLayer.blosm_mapillary_filters = PointerProperty(type=BLOSM_PG_MapillaryFilters)
+    bpy.app.handlers.load_post.append(migrate_all)
+    schedule_migration()
 
 
 def unregister():
+    if migrate_all in bpy.app.handlers.load_post:bpy.app.handlers.load_post.remove(migrate_all)
+    if bpy.app.timers.is_registered(migrate_once):bpy.app.timers.unregister(migrate_once)
     del bpy.types.ViewLayer.blosm_mapillary_filters
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

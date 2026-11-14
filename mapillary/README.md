@@ -18,10 +18,18 @@ Open **Camera filters** in the Blosm panel with **Mapillary cameras** selected
 as the import type (the controls also appear for an active Mapillary camera or
 an applied filter). Set the desired values and click **Apply filters**:
 
-- **From / To**: inclusive capture dates in `YYYY-MM-DD` format, interpreted in
-  UTC. Either field can be blank. Invalid dates or reversed bounds are rejected
-  before visibility changes. **Include undated** includes missing/invalid capture
-  timestamps when a date range is specified; without a range all dates qualify.
+- **From / To**: year, month and day dropdowns for inclusive UTC capture dates.
+  Year options are **No limit**, then 2014 through the current UTC year, updated
+  automatically. No limit hides that boundary's month/day controls and leaves it
+  open-ended. Selecting a year shows the remembered month/day values.
+- **Calendar days**: January 1 is the initial From date; December 31 is the
+  initial To date. Day lists follow the selected month and year, including leap
+  years. Invalid days are clamped when the month/year changes. To initially follows
+  month end; after choosing a different day, that choice is retained while
+  valid. Reset restores both No limit choices and these calendar defaults.
+- **Include undated**: available when either boundary is set. It includes missing
+  or invalid capture timestamps; with both boundaries unbounded all dates qualify.
+  Apply rejects reversed ranges before changing visibility.
 - **Ordinary**: perspective photographs.
 - **Panoramic**: spherical/equirectangular panoramas.
 - **Fisheye**: photographs identified as fisheye by the provider.
@@ -47,6 +55,10 @@ selection of cameras that remain visible and unrelated objects is preserved.
 Apply/Reset support undo; settings and visibility ownership survive `.blend`
 save/reload. An undo during progressive import stops that import through the
 existing controller. Renaming/deleting cameras does not invalidate the filter.
+Existing saved text-date settings migrate to the dropdowns with exact day
+precision. Applied snapshots stay unchanged until Apply. A legacy bound outside
+the offered year list stays active and is labelled as a saved range until the
+user explicitly applies new choices.
 
 The visibility flags remain normal Blender flags: manually unhiding a filtered
 camera overrides it until the next Apply. A manual hide made while the filter

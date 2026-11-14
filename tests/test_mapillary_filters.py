@@ -5,10 +5,37 @@ import unittest
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from mapillary.filter_data import CameraFilter, photo_category, capture_timestamp, date_bound, DAY_MS
+from mapillary.filter_data import CameraFilter, photo_category, capture_timestamp, date_bound, month_date, DAY_MS
 
 
 class FilterTests(unittest.TestCase):
+    def test_whole_month_boundaries_and_leap_years(self):
+        self.assertEqual(month_date('2024','02'),'2024-02-01')
+        self.assertEqual(month_date('2024','02',end=True),'2024-02-29')
+        self.assertEqual(month_date('2023','02',end=True),'2023-02-28')
+        self.assertEqual(month_date('2026','12',end=True),'2026-12-31')
+        self.assertEqual(month_date('ANY','invalid'), '')
+        spec=CameraFilter.build(month_date('2024','02'),month_date('2024','02',end=True))
+        start=date_bound('2024-02-01','From');end=date_bound('2024-03-01','To')
+        for stamp,expected in ((start-1,False),(start,True),(end-1,True),(end,False)):
+            self.assertEqual(spec.matches(stamp,'perspective'),expected)
+
+    def test_invalid_calendar_choices_and_reversed_months(self):
+        for year,month in (('2013','01'),('no year','01'),('2024','00'),('2024','13'),('2024','2')):
+            with self.assertRaises(ValueError):month_date(year,month)
+        with self.assertRaises(ValueError):
+            CameraFilter.build(month_date('2024','03'),month_date('2024','02',end=True))
+
+    def test_explicit_day_bounds_are_inclusive_and_calendar_valid(self):
+        self.assertEqual(month_date('2024','02',day='29'),'2024-02-29')
+        self.assertEqual(month_date('ANY','02',day='31'),'')
+        for year,month,day in (('2023','02','29'),('2024','04','31'),('2024','02','00'),('2024','01','1')):
+            with self.assertRaises(ValueError):month_date(year,month,day=day)
+        spec=CameraFilter.build(month_date('2024','02',day='14'),month_date('2024','02',day='15'))
+        start=date_bound('2024-02-14','From');end=date_bound('2024-02-16','To')
+        for stamp,expected in ((start-1,False),(start,True),(end-1,True),(end,False)):
+            self.assertEqual(spec.matches(stamp,'perspective'),expected)
+
     def test_inclusive_utc_days(self):
         start = date_bound('2024-02-29', 'From')
         spec = CameraFilter.build('2024-02-29', '2024-02-29')

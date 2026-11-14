@@ -1,5 +1,6 @@
 """Capture-date and photo-model predicates, independent of Blender and HTTP."""
 from dataclasses import dataclass
+from calendar import monthrange
 from datetime import date
 from decimal import Decimal, InvalidOperation
 import re
@@ -9,6 +10,31 @@ EPOCH = date(1970, 1, 1)
 MIN_MS = (date.min - EPOCH).days * DAY_MS
 MAX_MS = ((date.max - EPOCH).days + 1) * DAY_MS
 CATEGORIES = ('ordinary', 'panoramic', 'fisheye', 'other')
+FIRST_YEAR = 2014
+ANY_YEAR = 'ANY'
+
+
+def month_date(year, month, *, day=None, end=False):
+    """Convert calendar selectors to an inclusive UTC date boundary.
+
+    Hidden month/day values are ignored when the year is unbounded. Keep the existing
+    date-string predicate format, including legacy applied day-level snapshots.
+    """
+    if year == ANY_YEAR:
+        return ''
+    if not isinstance(year,str) or not re.fullmatch(r'[0-9]{4}',year) or not FIRST_YEAR <= int(year) <= 9999:
+        raise ValueError('Choose a year from 2014 onward, or No limit')
+    if not isinstance(month,str) or not re.fullmatch(r'[0-9]{2}',month) or not 1 <= int(month) <= 12:
+        raise ValueError('Choose a valid month')
+    year,month=int(year),int(month)
+    maximum=monthrange(year,month)[1]
+    if day is None:
+        chosen=maximum if end else 1
+    elif isinstance(day,str) and re.fullmatch(r'[0-9]{2}',day) and 1<=int(day)<=maximum:
+        chosen=int(day)
+    else:
+        raise ValueError('Choose a valid day for the selected month and year')
+    return date(year,month,chosen).isoformat()
 
 
 def date_bound(text, label):
