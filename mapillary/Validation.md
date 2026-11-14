@@ -1,5 +1,38 @@
 # Mapillary import validation
 
+## Panorama source-camera visibility — 2026-11-14
+
+The active panorama's source camera is hidden in its owning view layer and
+restored on teardown. Existing hiding and filters are preserved; other cameras
+remain selectable. The shared `viewport.visibility.TemporaryHide` lease uses
+object-pointer recovery records for undo/history, suspends temporary hiding for
+normal saves, resumes afterward (including the save-failure callback/fallback),
+and releases visibility on errors, mode exit, replacement and addon disable.
+Camera filters update the lease's underlying visibility so a filter applied or
+reset during viewing takes effect correctly after exit.
+
+Validation: **27 native visibility cases passed on Blender 5.2 and 4.5**,
+covering view-layer isolation, rendering/global flags and pose, rename/delete,
+original hidden state and selection, replacement, preserving a newly selected
+camera, mode/error/startup cleanup, batched filters, save suspension/resumption,
+raw saved-scene inspection without cleanup handlers, file loading, historical
+Undo/Redo after a viewer has already closed, live Undo/Redo with a camera rename,
+and addon disable/re-enable. The save-completion/failure callback is also tested
+directly; no deliberate filesystem write failure is required.
+
+Regressions passed on Blender 5.2: **19 loading/lifecycle cases, 24 native object
+selection/mode cases, 24 upright navigation/zoom cases, 17 camera-filter cases
+with 1,000 incoming cameras, and all 44 Mapillary unit tests**. The filter fixture
+contains 1,383 cameras in total; this is a correctness repeat, not a new maximum
+scale claim. All native tests use the chat's isolated profile and offline images.
+
+Artifacts: `artifacts/mapillary_import/panorama_visibility/`, including
+`native_52_final/visibility.json`, `native_45/visibility.json`, saved test scenes,
+`loading/loading.json`, `selection/selection.json`, `controls/controls.json`,
+and `filters/filters.json`. Reproduce with
+`tests/check_panorama_visibility.py --artifacts <directory>` in an isolated UI
+process using factory startup, disabled autoexec and event simulation.
+
 ## Upright panorama controls — 2026-11-14
 
 Reviewed pinned Pannellum, Photo Sphere Viewer and Marzipano implementations;

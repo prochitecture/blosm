@@ -640,6 +640,13 @@ pie shortcuts remain available. A switch out of Object Mode closes the panorama
 through the common session's owner-mode check, retaining the final view and
 releasing any owned download. These interactions are implemented in version 1.
 
+Temporarily hide the capture's camera object in the owner view layer while the
+panorama is open; keep other objects selectable. The implemented shared
+`visibility.TemporaryHide` lease restores its underlying visibility on teardown,
+including startup errors, replacement and mode/lifecycle exit. Save handlers omit
+the transient hide from files, and object-pointer records recover historical
+undo snapshots. Camera filters coordinate underlying flags through that service.
+
 Esc and the close button remove the panorama and return ordinary Blender
 navigation while keeping the final viewport orientation. The user continues
 looking in the direction chosen inside the panorama. This changes the viewport

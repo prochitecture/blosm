@@ -67,6 +67,12 @@ with no background handlers or separate import/download job.
 ### View a panorama
 
 Select an imported spherical Mapillary camera and click **View Mapillary panorama**.
+Its camera object is temporarily hidden in the current view layer so its wireframe
+does not obscure the photograph. Leaving panorama mode restores its visibility.
+Other objects and cameras remain available. Prior manual hiding and filters are
+respected, including filter changes made during viewing. Saving, undo/redo, mode
+changes, errors and addon disable also clean up the temporary hide; saving an
+open panorama does not save its source camera as temporarily hidden.
 Click to select any visible, selectable Blender object; **Shift-click** extends
 the selection or toggles an object out. Click empty space to deselect; Shift-click
 empty space preserves selection. Selection keeps the current panorama open,

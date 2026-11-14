@@ -12,6 +12,7 @@ from bpy.props import BoolProperty, CollectionProperty, PointerProperty, StringP
 
 from .filter_data import CameraFilter, CATEGORIES
 from .tiles import identifier
+from ..viewport.visibility import hidden_get, underlying_changes
 
 
 def is_imported_camera(obj):
@@ -70,6 +71,7 @@ def set_visibility(view_layer, changes):
     """
     if not changes:
         return
+    changes=underlying_changes(view_layer,changes)
     area = next((a for a in bpy.context.screen.areas if a.type == 'VIEW_3D'
                  and not a.spaces.active.local_view), None) if bpy.context.screen else None
     if len(changes) < 32 or area is None or bpy.context.mode != 'OBJECT':
@@ -132,7 +134,7 @@ def apply_existing(view_layer, spec):
                 del owned[pointer]
         else:
             hidden += 1
-            if not obj.hide_get(view_layer=view_layer):
+            if not hidden_get(obj,view_layer):
                 changes[obj] = True
                 owned[pointer] = obj
     set_visibility(view_layer, changes)

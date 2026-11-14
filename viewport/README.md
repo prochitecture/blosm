@@ -107,6 +107,27 @@ displayed automatically by the addon.
 
 ## Drawing and borrowed images
 
+`visibility.TemporaryHide(obj, view_layer)` temporarily hides a source object.
+Keep the returned lease and call `release()` during surface teardown, including
+partial startup failure. It restores the underlying visibility, preserving a
+pre-existing hide and avoiding selection changes when another object became
+active. Panorama uses it only for its own camera in the owning view layer.
+
+The service keeps recovery records with object pointers in undo snapshots. Undo,
+redo and loading clear stale temporary hiding after the live session is closed.
+Save handlers suspend the hide and omit its records from a normal `.blend` file,
+then resume the live view; the save-failure callback and a one-shot fallback also
+resume it. Disabling the addon releases leases and removes the handlers/timer.
+The service does not change render visibility or the global viewport-disable flag.
+
+Visibility clients that may affect a leased object should read the underlying
+flag through `visibility.hidden_get(obj, layer)`. Before applying a dictionary of
+visibility changes, pass it through `visibility.underlying_changes(layer, changes)`.
+This updates the lease's baseline while keeping its actual temporary hide in
+place. Camera filters use this contract for both ordinary and batched updates.
+Call `lease.enforce()` during validation if a surface must keep the object hidden
+despite unrelated direct flag changes. No scene scan is performed per frame.
+
 The host creates `draw.Painter` while a graphics context is available. It provides:
 
 * `rect(rect, color)` and `text(text, x, y, max_width=..., size=...)`.
@@ -192,7 +213,7 @@ between captures and all smooth transitions are subsequent work.
 
 Tests live under [tests](../tests): `test_viewport.py`, `check_panorama_ui.py`,
 `check_panorama_selection.py`, `check_panorama_controls.py`,
-`test_panorama_navigation.py`, `check_panorama_loading.py` and
+`check_panorama_visibility.py`, `test_panorama_navigation.py`, `check_panorama_loading.py` and
 `check_panorama_real.py`. Use the isolated Blender
 profile/environment required by workspace `AGENTS.md`; UI tests need
 `--enable-event-simulate`. Only an opt-in real HTTP test uses `--online-mode` and

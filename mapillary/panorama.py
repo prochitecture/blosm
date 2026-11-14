@@ -9,6 +9,7 @@ from ..viewport.session import Surface
 from ..viewport.ui import Button, Slider, Container, Router, Rect, ClickDrag, HANDLED, PASS_THROUGH, shell_layout
 from ..viewport.assets import ImageRef
 from ..viewport.navigation import PanoramaControls
+from ..viewport.visibility import TemporaryHide
 from ..viewport.draw import DISPLAY_RGB_GLSL
 from ..progressive import blender as runtime
 from ..downloads.diagnostics import redact_text
@@ -93,6 +94,7 @@ class Panorama(Surface):
         self.last_shape=None
         self.image_ticket=None
         self.expected_view=None
+        self.visibility=None
 
     @property
     def capturing(self): return self.drag is not None or self.router.capture is not None
@@ -129,6 +131,7 @@ class Panorama(Surface):
         self.look=Matrix(self.navigation.matrix()).to_quaternion()
         rv=space.region_3d
         self.snapshot=(rv.view_perspective,rv.view_rotation.copy(),rv.view_location.copy(),rv.view_distance,space.lens)
+        self.visibility=TemporaryHide(self.obj,session.layer)
         self.shader=shader_create()
         self.batch=batch_for_shader(self.shader,'TRI_FAN',{'pos':((-1,-1),(1,-1),(1,1),(-1,1))})
         photo.clear_pending()  # supersede an older queued flat-photo action
@@ -152,6 +155,7 @@ class Panorama(Surface):
                 raise RuntimeError('The panorama camera was removed')
             if str(self.obj.get('mapillary_image_id'))!=self.identity or self.obj.matrix_world!=self.pose:
                 raise RuntimeError('The panorama camera changed; reopen its viewer')
+            if self.visibility is not None:self.visibility.enforce()
         except ReferenceError:
             raise RuntimeError('The panorama camera was removed') from None
 
@@ -370,6 +374,9 @@ class Panorama(Surface):
                              max_width=frame.available.width-24)
 
     def detach(self,reason):
+        # Restore even when cancellation or GPU cleanup below fails, and before
+        # Blender's undo/load handlers replace the IDs containing our records.
+        if self.visibility is not None:self.visibility.release()
         self.cancel_gesture()
         if self.controller is not None and runtime.active is self.controller:
             self.controller.close(silent=True)

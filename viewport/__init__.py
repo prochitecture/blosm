@@ -13,6 +13,8 @@ def current():
 
 
 def register():
+    from . import visibility
+    visibility.register()
     from .session import register as register_session
     register_session()
 
@@ -20,3 +22,5 @@ def register():
 def unregister():
     from .session import unregister as unregister_session
     unregister_session()
+    from . import visibility
+    visibility.unregister()
