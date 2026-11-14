@@ -34,6 +34,7 @@ Subclass `viewport.session.Surface`. Its default hooks are no-ops:
 | `layout(frame)` | Allocate logical rectangles; called when available size or UI scale changes |
 | `handle(event)` | Return `ui.HANDLED` or `ui.PASS_THROUGH`; never block on IO |
 | `tick(budget_seconds)` | Bounded preparation; return next polling interval, clamped to 50–250 ms; default 200 ms |
+| `animate(elapsed_seconds)` | Optional per-frame main-thread update while `animating` is true; elapsed wall time is capped at 100 ms |
 | `draw(frame, painter)` | Draw prepared resources; no decoding, network, IDs or undo writes |
 | `cancel_gesture()` | Release canvas/widget capture on resizing or focus loss |
 | `detach(reason)` | Release owned resources; called once, including failed partial attachment |
@@ -55,6 +56,14 @@ sanitized before they are raised into this layer.
 Closed modal instances finish on the next input event; graphics, assets, loading
 subscriptions and the registry are cleaned immediately. The lightweight global
 lifecycle timer stops at its next tick. No perpetual redraw is performed at idle.
+
+For transient animation, expose `animating=True` while frames are needed and
+call `session.request_animation()` once when beginning it (for example from a
+wheel event). The existing session timer aims for 60 Hz until the flag becomes
+false. Ordinary `tick()` polling retains its own cadence and bounded-work budget.
+Do scene/viewport updates in `animate()`, never in the draw callback. Teardown
+stops frame callbacks; explicit close keeps the adapter's currently displayed
+state. See `PanoramaControls` and its easing in [navigation.py](navigation.py).
 
 ## Layout, controls and composition
 
@@ -143,10 +152,14 @@ are per helper, not global. Do not add one helper per card.
 ## Panorama-specific behavior
 
 The Mapillary adapter owns image interpretation, pose validation, spherical shader
-and the fixed-eye perspective view. The host knows none of those details. Dragging
-uses local quaternion rotations (no forced horizon leveling); wheel zoom controls
-vertical FOV from 20 to 110 degrees. Resizing recalibrates the actual viewport
-projection to preserve that FOV. Opacity is session-local, initially inherited
+and the fixed-eye perspective view. The host knows none of those details. Upright
+heading/pitch controls clamp pitch to ±89° and reconstruct a roll-free view.
+Grabbing uses current FOV and viewport size; wheel/Numpad zoom eases within the
+normal 30–90° vertical range and 120° horizontal cap. Resize recalibrates the
+native projection and enforces the effective bounds. View leveling is kept
+separate from the capture pose used for texture alignment. See
+[research and behavior](../mapillary/PanoramaControls.md).
+Opacity is session-local, initially inherited
 from an existing photo background if one exists.
 
 Esc or Exit panorama retains the final eye position, rotation and FOV in normal
@@ -178,7 +191,8 @@ between captures and all smooth transitions are subsequent work.
 ## Validation and handoff
 
 Tests live under [tests](../tests): `test_viewport.py`, `check_panorama_ui.py`,
-`check_panorama_selection.py`, `check_panorama_loading.py` and
+`check_panorama_selection.py`, `check_panorama_controls.py`,
+`test_panorama_navigation.py`, `check_panorama_loading.py` and
 `check_panorama_real.py`. Use the isolated Blender
 profile/environment required by workspace `AGENTS.md`; UI tests need
 `--enable-event-simulate`. Only an opt-in real HTTP test uses `--online-mode` and

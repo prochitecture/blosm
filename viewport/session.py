@@ -1,6 +1,7 @@
 """One owned viewport session, independent of scene-import transactions."""
 from contextlib import contextmanager
 import itertools
+import time
 import bpy
 from bpy.app.handlers import persistent
 from .ui import Frame, Rect, InputEvent, HANDLED, PASS_THROUGH
@@ -16,10 +17,12 @@ class Surface:
     """Override only the hooks needed by the consumer. No provider dispatch."""
     requires_object_mode = False
     close_label = 'Close view'
+    animating = False
     def attach(self,session): self.session = session
     def layout(self,frame): pass
     def handle(self,event): return PASS_THROUGH
     def tick(self,budget_seconds): return .2
+    def animate(self,seconds): pass
     def draw(self,frame,painter): pass
     def detach(self,reason): pass
     def cancel_gesture(self): pass
@@ -41,6 +44,7 @@ class Session:
         self.generation,self.layout_revision = 0,0
         self.frame,self._layout_key,self.painter,self.handler = None,None,None,None
         self.closed,self.attached,self.error = False,False,None
+        self.next_poll,self.animation_time,self.in_tick = 0.,time.monotonic(),False
 
     @contextmanager
     def context(self):
@@ -94,6 +98,20 @@ class Session:
         if not self.closed:
             try: self.area.tag_redraw()
             except ReferenceError: pass
+
+    def request_animation(self):
+        """Wake the existing session timer; never create a second frame loop.
+
+        Call once when starting an animation. The surface's animating flag and
+        animate(elapsed) hook drive frames; its ordinary tick retains its cadence.
+        """
+        if self.closed or active is not self:
+            return
+        self.animation_time = time.monotonic()
+        if self.in_tick:
+            return
+        if bpy.app.timers.is_registered(_tick): bpy.app.timers.unregister(_tick)
+        bpy.app.timers.register(_tick,first_interval=0.)
 
     def update_layout(self):
         scale = max(.5,bpy.context.preferences.system.ui_scale)
@@ -215,6 +233,7 @@ def open(context,surface):
 def _tick():
     current=active
     if current is None: return None
+    current.in_tick=True
     try:
         if not current.valid(): current.close('OWNER_CHANGED')
         elif current.error:
@@ -223,13 +242,23 @@ def _tick():
         else:
             with current.context():
                 current.update_layout()
-                delay=current.surface.tick(.004)
-            if not current.closed: return max(.05,min(.25,float(delay or .2)))
+                now=time.monotonic()
+                if current.surface.animating:
+                    current.surface.animate(max(0.,min(.1,now-current.animation_time)))
+                current.animation_time=now
+                if not current.closed and now>=current.next_poll:
+                    delay=current.surface.tick(.004)
+                    current.next_poll=time.monotonic()+max(.05,min(.25,float(delay or .2)))
+            if not current.closed:
+                if current.surface.animating: return 1/60
+                return max(.001,min(.25,current.next_poll-time.monotonic()))
     except Exception as exc:
         # Surface contract: provider exceptions must be sanitized before raising.
         current.error=str(exc) or 'The viewport session stopped'
         current.close('ERROR')
         report_error(current.error)
+    finally:
+        current.in_tick=False
     return .05 if active is not None else None
 
 

@@ -1,5 +1,53 @@
 # Mapillary import validation
 
+## Upright panorama controls — 2026-11-14
+
+Reviewed pinned Pannellum, Photo Sphere Viewer and Marzipano implementations;
+[research, primary-source links, formulas and behavior](PanoramaControls.md).
+Replaced accumulating local rotations with world-upright heading/bounded pitch,
+FOV/viewport-scaled grabbing, bounded zoom targets and time-based zoom easing.
+Capture rotation remains the shader's reference. Shared session animation frames
+reuse its one timer while ordinary preparation retains its polling cadence.
+Unexpected external viewport navigation suppresses photo drawing and exits.
+
+Validation used only this chat's isolated Blender profile and artifact folders:
+
+- **8 numerical navigation tests passed**, including 10,000 randomized gestures
+  with positive world-up and orthonormal camera axes after every gesture, pole
+  reversal, full turns, resolution/FOV scaling, both projection bounds,
+  frame-rate-independent monotone easing and stopping a zoom tail.
+- **24 native control checks passed on both Blender 5.2.0 LTS and 4.5.0**.
+  Opening a capture with downward local up retains its forward direction while
+  leveling the view. Huge/repeated mixed drags stay upright. Native wheel bursts
+  reach the limits without overshooting; actual Blender projection agrees with
+  effective FOV. Focus loss, resize, picking, exit during zoom, external navigation
+  and mode change stop animation safely and retain the appropriate final view.
+  The original capture transform and render camera remain unchanged.
+- During one wheel step, **27 animation callbacks / 2 preparation polls** on 5.2
+  and **26 / 2** on 4.5. Median frame intervals were about **20.8 ms / 16.0 ms**
+  on this workstation. These are scheduling measurements, not guaranteed rates.
+- Existing native regressions passed on Blender 5.2: **14 panorama/GPU/resize
+  checks, 24 object-selection/mode checks, 19 loading/lifecycle checks**. The
+  selection regression now checks the slower FOV-scaled grab direction rather
+  than the superseded fixed angular speed. **9 viewport tests and all 44
+  Mapillary unit tests passed** as well.
+- A **cached real Mapillary panorama** (`1079237249490765`) passed on 5.2/OpenGL
+  with an RTX 4050. Its upright street scene was inspected visually. First usable
+  view was 0.72 s in this run. Across 120 dragged updates, median interval was
+  20.2 ms (p95 24.3 ms); median input work 0.139 ms and draw submission 0.201 ms.
+  Twenty repeated open/close cycles retained the image count and private commit;
+  working set grew by 8 KiB. This run reused the packed image and performed no
+  HTTP request or credential read. The earlier live-HTTP qualification retains
+  its original scope.
+
+Evidence: `artifacts/mapillary_import/panorama_controls/`, including
+`native_52/controls.json`, `native_45/controls.json`,
+`panorama_regression/ui.json`, `selection_regression/selection.json`,
+`loading_regression/loading.json`, and `real_cached/real.json` plus screenshots.
+Generated scenes/reports remain outside the repository. Source pose quality and
+the 2048-pixel preview still limit alignment/detail; navigation does not correct
+incorrect provider metadata or add new optical models/transitions.
+
 ## Panorama object selection and mode exit — 2026-11-13
 
 Added native Blender object picking on click and Shift-click, with left-drag

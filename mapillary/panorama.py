@@ -2,12 +2,13 @@
 import math
 import bpy
 import gpu
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Vector
 from gpu_extras.batch import batch_for_shader
 from .. import viewport
 from ..viewport.session import Surface
 from ..viewport.ui import Button, Slider, Container, Router, Rect, ClickDrag, HANDLED, PASS_THROUGH, shell_layout
 from ..viewport.assets import ImageRef
+from ..viewport.navigation import PanoramaControls
 from ..viewport.draw import DISPLAY_RGB_GLSL
 from ..progressive import blender as runtime
 from ..downloads.diagnostics import redact_text
@@ -87,13 +88,26 @@ class Panorama(Surface):
         self.failed=False
         self.ready=False
         self.opacity=1.
-        self.fov=math.radians(60.)
+        self.navigation=None
         self.snapshot=None
         self.last_shape=None
         self.image_ticket=None
+        self.expected_view=None
 
     @property
     def capturing(self): return self.drag is not None or self.router.capture is not None
+
+    @property
+    def fov(self): return self.navigation.fov
+
+    @property
+    def animating(self): return self.ready and self.navigation.animating
+
+    def animate(self,seconds):
+        if not self.owns_view():
+            self.session.request_close('VIEW_CHANGED')
+            return
+        if self.navigation.advance(seconds): self.apply_view()
 
     def attach(self,session):
         super().attach(session)
@@ -110,7 +124,9 @@ class Panorama(Surface):
             raise RuntimeError('A mirrored or singular camera transform cannot define a panorama')
         self.rotation=self.pose.to_quaternion().normalized()
         self.position=self.pose.translation.copy()
-        self.look=self.rotation.copy()
+        self.navigation=PanoramaControls(self.rotation @ Vector((0,0,-1)),self.rotation @ Vector((1,0,0)))
+        self.navigation.resize(session.region.width,session.region.height)
+        self.look=Matrix(self.navigation.matrix()).to_quaternion()
         rv=space.region_3d
         self.snapshot=(rv.view_perspective,rv.view_rotation.copy(),rv.view_location.copy(),rv.view_distance,space.lens)
         self.shader=shader_create()
@@ -151,10 +167,14 @@ class Panorama(Surface):
 
     def cancel_gesture(self):
         self.drag=None
+        if self.navigation is not None:self.navigation.stop_zoom()
         if hasattr(self,'router'): self.router.reset_capture()
 
     def tick(self,budget_seconds):
         self.validate()
+        if self.ready and not self.owns_view():
+            self.session.request_close('VIEW_CHANGED')
+            return .2
         if self.image_ref is not None:
             if not self.image_ref.image.has_data: raise RuntimeError('The panorama image was removed')
             return .2
@@ -223,7 +243,16 @@ class Panorama(Surface):
         wanted=1/math.tan(self.fov/2)
         if actual>0: space.lens=max(1.,min(250.,space.lens*wanted/actual))
         rv.update()
+        self.expected_view=self.view_state()
         self.session.invalidate()
+
+    def view_state(self):
+        space=self.session.space
+        rv=space.region_3d
+        return (rv.view_perspective,rv.view_rotation.copy(),rv.view_location.copy(),rv.view_distance,space.lens)
+
+    def owns_view(self):
+        return self.expected_view is None or self.view_state()==self.expected_view
 
     def layout(self,frame):
         if frame is None:return
@@ -246,10 +275,22 @@ class Panorama(Surface):
         self.credit.rect=Rect(frame.available.x+12,frame.available.y+frame.available.height-36,min(205,frame.available.width-24),28)
         shape=(frame.region.width,frame.region.height)
         if self.ready and shape!=self.last_shape:
+            if not self.owns_view():
+                self.session.request_close('VIEW_CHANGED')
+                return
             self.last_shape=shape
+            self.navigation.resize(*shape)
+            self.apply_view()
+
+    def drag_look(self,x,y):
+        if self.ready and self.navigation.drag(x,y):
+            self.look=Matrix(self.navigation.matrix()).to_quaternion()
             self.apply_view()
 
     def handle(self,event):
+        if self.ready and not self.owns_view():
+            self.session.request_close('VIEW_CHANGED')
+            return PASS_THROUGH
         # Native Tab/mode-pie bindings take precedence over overlay keyboard
         # focus. An actual mode change closes the session on the next event/
         # tick; a dismissed mode pie or unavailable mode leaves it open.
@@ -259,6 +300,9 @@ class Panorama(Surface):
         if self.drag is not None and event.type=='LEFTMOUSE' and event.value=='RELEASE':
             gesture=self.drag
             self.drag=None
+            # Use the final position too if Blender coalesced the last move.
+            delta=gesture.move(event.x,event.y)
+            if delta is not None:self.drag_look(*delta)
             if (gesture.release(event.x,event.y)
                     and self.session.frame.available.contains(event.x,event.y)
                     and not self.toolbar.contains(event.x,event.y)
@@ -268,34 +312,40 @@ class Panorama(Surface):
             return HANDLED
         if self.drag is not None and event.type=='MOUSEMOVE':
             delta=self.drag.move(event.x,event.y)
-            if delta is not None and self.ready:
-                dx,dy=delta
-                self.look=(self.look @ Quaternion((0,1,0),-dx*.004)
-                           @ Quaternion((1,0,0),dy*.004)).normalized()
-                self.apply_view()
+            if delta is not None:self.drag_look(*delta)
             return HANDLED
         if self.router.handle(event)==HANDLED: return HANDLED
         if event.type=='LEFTMOUSE':
             if self.toolbar.contains(event.x,event.y):return HANDLED
             if event.value=='PRESS':
+                # Picking starts against the currently displayed projection.
+                # Stop a zoom tail rather than moving geometry under a click.
+                self.navigation.stop_zoom()
                 # Match Blender's mouse drag threshold in physical pixels,
                 # while the shared input/UI API uses logical coordinates.
                 threshold=bpy.context.preferences.inputs.drag_threshold_mouse/self.session.frame.scale
                 self.drag=ClickDrag(event,threshold)
             return HANDLED
-        if event.type in {'WHEELUPMOUSE','WHEELDOWNMOUSE'}:
-            self.fov=max(math.radians(20),min(math.radians(110),self.fov*(.9 if event.type=='WHEELUPMOUSE' else 1/.9)))
-            if self.ready:self.apply_view()
+        if event.type in {'WHEELUPMOUSE','WHEELDOWNMOUSE','NUMPAD_PLUS','NUMPAD_MINUS'}:
+            if self.ready and event.value=='PRESS':
+                was_animating=self.animating
+                self.navigation.wheel(1 if event.type in {'WHEELUPMOUSE','NUMPAD_PLUS'} else -1)
+                if self.animating and not was_animating:self.session.request_animation()
             return HANDLED
         # Navigation that would move the eye is owned by this surface. Ordinary
         # modelling keys exit first and continue through Blender's keymap.
         if event.type in {'MIDDLEMOUSE','TRACKPADPAN','TRACKPADZOOM','NDOF_MOTION'}: return HANDLED
-        if event.value=='PRESS' and event.type in {'G','R','S','NUMPAD_0','NUMPAD_1','NUMPAD_3','NUMPAD_7'}:
+        if event.value=='PRESS' and event.type in {'G','R','S','NUMPAD_0','NUMPAD_1','NUMPAD_2',
+                'NUMPAD_3','NUMPAD_4','NUMPAD_5','NUMPAD_6','NUMPAD_7','NUMPAD_8',
+                'NUMPAD_PERIOD','HOME','ACCENT_GRAVE'}:
             self.session.request_close()
+        if event.type=='F' and event.value=='PRESS' and event.shift:self.session.request_close()
         return PASS_THROUGH
 
     def draw(self,frame,painter):
-        if self.image_ref is not None:
+        # A native gizmo/operator can bypass our input handler. Never draw the
+        # photograph using that unowned projection; the next event/tick exits.
+        if self.image_ref is not None and self.owns_view():
             rv=self.session.space.region_3d
             # Rotation-only capture inverse prevents scale from distorting rays.
             world_to_capture=self.rotation.inverted().to_matrix().to_4x4()

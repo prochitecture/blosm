@@ -190,7 +190,8 @@ def tick():
                 native_event('LEFTMOUSE','RELEASE',(where[0]+60,where[1]))
             elif step==9:
                 check('native drag rotates without selecting or moving geometry',not selected()
-                      and state['surface'].look.rotation_difference(state['before_drag']).angle>.1
+                      and state['surface'].look.rotation_difference(state['before_drag']).angle>.01
+                      and state['surface'].navigation.yaw<0
                       and mesh.matrix_world==mesh_pose)
                 check('drag keeps viewpoint at the panorama eye',
                       (area.spaces.active.region_3d.view_matrix.inverted().translation-obj.location).length<1e-4)

@@ -85,6 +85,16 @@ final viewpoint is retained. Transforms also exit before proceeding. Starting a
 panorama outside Object Mode is rejected. Selection follows Blender's visibility,
 selectability and occlusion rules, and remains after exiting panorama mode.
 
+Navigation keeps world up vertical: pitch stops at ±89° and dragging cannot
+accumulate roll. Drag to grab the image, with movement scaled by current field
+of view and viewport dimensions. Wheel/Numpad Plus/Minus zoom smoothly through
+the normal 30–90° vertical FOV range, also capped at 120° horizontally. Resizing
+can narrow that range. Selection presses, focus loss and resize stop zoom tails;
+exit keeps the displayed view. Other native view/orbit/walk actions exit before
+proceeding; externally changed projections are excluded from panorama drawing.
+The imported capture pose still controls image alignment and is not rewritten.
+See [browser-viewer research and control details](PanoramaControls.md).
+
 The first view downloads and packs the usual 2048-pixel preview; later views reuse
 the image. If an import is running, the viewer queues its request and remains
 closable. Failed downloads show a retry control. Opacity is session-local; it

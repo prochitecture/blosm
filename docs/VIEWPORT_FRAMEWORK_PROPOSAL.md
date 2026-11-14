@@ -624,7 +624,10 @@ ratio. Preserve image ID and attribution. Reject unsupported or ambiguous image
 layouts with a useful message rather than guessing a projection.
 
 Enter a perspective viewport at the capture position. Dragging changes a separate
-look orientation; the wheel changes viewing FOV. Do not rotate the imported
+upright heading/pitch view (pitch limited to ±89°); FOV/viewport-scaled dragging
+cannot accumulate roll. Wheel zoom eases within bounded projection limits. See
+[the implemented controls and browser-viewer research](../mapillary/PanoramaControls.md).
+Do not rotate the imported
 camera, change its lens, replace its `PANO` type, set the scene rendering camera
 or change render resolution merely to look around. The original flat-photo
 action can keep its existing behavior for non-panoramic images.
@@ -1033,7 +1036,8 @@ explicitly documented until tested.
 The architecture above does not depend on these choices, so they should not
 block the shared foundation:
 
-* Exact panorama mouse sensitivity, FOV range and horizon/roll policy.
+* Panorama mouse sensitivity, FOV range and horizon/roll policy are implemented;
+  see [the browser-viewer research and control decisions](../mapillary/PanoramaControls.md).
 * Whether immersive-view opacity is persisted after a completed gesture.
 * Whether higher-resolution Mapillary retrieval is included after the initial
   preview is validated; it requires new cache and memory limits.
