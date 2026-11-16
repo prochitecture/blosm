@@ -1,5 +1,30 @@
 # Mapillary import validation
 
+## Sidebar registration correction — 2026-11-16
+
+Reproduced a startup regression through `addon_utils.enable`: the viewport's
+temporary-visibility recovery accessed `bpy.data.scenes` during restricted addon
+registration, raising `AttributeError: '_RestrictData' object has no attribute
+'scenes'` before the Blosm panels registered. Direct `addon.register()` tests
+had bypassed Blender's normal restriction. Initial recovery now uses a one-shot
+timer after registration. Unregister cancels that timer and still restores live
+and stale visibility records before removing the RNA properties.
+
+Normal activation/disable/reactivation passed 40 assertions in background
+Blender 5.2 and 41 assertions each in UI Blender 5.2 and 4.5. These cover actual
+preference/runtime enable flags, Object Mode sidebar panel registration,
+immediate disable before the first timer, deferred stale-record recovery,
+preservation of live temporary hiding, and removal of handlers/timers/properties.
+Both UI screenshots show the Blosm sidebar tab. Existing panorama visibility,
+filter interaction, save/load and history checks also passed (27 assertions,
+Blender 5.2).
+
+Evidence: `artifacts/mapillary_import/registration/`, including
+`reproduction_52.json`, `background_52/activation.json`, `ui_52/activation.json`,
+`ui_45/activation.json`, sidebar screenshots and `visibility_52/visibility.json`.
+All runs used the chat's isolated profile with factory startup and disabled
+autoexec; the user's normal Blender configuration was unchanged.
+
 ## Calendar dropdown date filters — 2026-11-14
 
 Replaced the visible text fields with From/To year, month and day dropdowns.

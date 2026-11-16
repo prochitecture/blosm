@@ -123,6 +123,13 @@ def recover(*_):
                 records.remove(index)
 
 
+def _recover_timer():
+    # addon_utils.enable restricts bpy.data/context while register() runs.
+    # Recover saved records only after Blender restores access to scene data.
+    recover()
+    return None
+
+
 def _resume_timer():
     for lease in tuple(_leases.values()):
         if lease.suspended:
@@ -159,10 +166,11 @@ def register():
     bpy.utils.register_class(BLOSM_PG_TemporaryHidden)
     bpy.types.ViewLayer.blosm_temporary_hidden=CollectionProperty(type=BLOSM_PG_TemporaryHidden,options={'HIDDEN'})
     for group,callback in handlers():group.append(callback)
-    recover()
+    bpy.app.timers.register(_recover_timer,first_interval=0.)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(_recover_timer):bpy.app.timers.unregister(_recover_timer)
     for lease in tuple(_leases.values()):lease.release()
     recover()
     for group,callback in handlers():

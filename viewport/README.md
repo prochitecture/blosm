@@ -211,7 +211,15 @@ between captures and all smooth transitions are subsequent work.
 
 ## Validation and handoff
 
-Tests live under [tests](../tests): `test_viewport.py`, `check_panorama_ui.py`,
+Addon registration must not access scene data: Blender's normal activation runs
+inside `RestrictBlend`. Saved temporary-visibility recovery runs on a one-shot
+timer after registration; load/undo/redo handlers recover later snapshots.
+Unregister cancels pending recovery before removing its RNA properties. Validate
+startup with `check_addon_activation.py`, which uses `addon_utils.enable` and
+`disable`; calling the addon's `register()` directly misses this restriction.
+
+Tests live under [tests](../tests): `check_addon_activation.py`, `test_viewport.py`,
+`check_panorama_ui.py`,
 `check_panorama_selection.py`, `check_panorama_controls.py`,
 `check_panorama_visibility.py`, `test_panorama_navigation.py`, `check_panorama_loading.py` and
 `check_panorama_real.py`. Use the isolated Blender
