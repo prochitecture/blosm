@@ -14,7 +14,7 @@ sys.dont_write_bytecode = True
 from release_support import REPO, DEFAULT_ARTIFACTS, catalog, osm_path, real_fixture
 from release_process import owned_process
 
-from release_profiles import NEW, EXISTING, CORE, SUITES, select_suites, inspect_candidate
+from release_profiles import NEW, EXISTING, CORE, SUITES, GUI_SUITES, select_suites, inspect_candidate
 
 
 def main():
@@ -116,7 +116,7 @@ def main():
                         extra += ['--candidate-zip', str(args.candidate_zip)]
                     if args.extended:
                         extra.append('--extended')
-                if args.helsinki and name in ('direct', 'progressive', 'concurrent'):
+                if args.helsinki and name in ('direct', 'progressive', 'concurrent', 'tile_transforms'):
                     if len(list(args.helsinki.glob('*.b3dm'))) < 3:
                         raise FileNotFoundError('Helsinki fixture must contain at least three B3DM files')
                     extra += ['--helsinki', str(args.helsinki)]
@@ -134,10 +134,8 @@ def main():
                     if name == 'standalone':
                         command = [str(args.python), '-B']
                     else:
-                        command = [str(args.blender)] + ([] if name in (
-                            'ui', 'osm_progressive_ui', 'padl_progressive_ui', 'padl_progressive_performance')
-                            else ['--background'])
-                        if name in ('concurrent', 'ui', 'overlay'):
+                        command = [str(args.blender)] + ([] if name in GUI_SUITES else ['--background'])
+                        if name in ('concurrent', 'ui', 'overlay', 'cesium_ion_ui'):
                             # Blender's extension policy governs localhost and
                             # the mocked imagery download path as well.
                             command.append('--online-mode')

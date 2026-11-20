@@ -73,6 +73,9 @@ def main():
     prefs.dataDir = ''
     addon.blenderApp.app.setDataDir(bpy.context, str(root), package)
     assert not Path(addon.blenderApp.app.dataDir).resolve().is_relative_to(root)
+    data_dir = args.artifacts / 'data'
+    data_dir.mkdir(exist_ok=True)
+    prefs.dataDir = str(data_dir)
     setup_file = args.artifacts / 'custom_setup.py'
     setup_file.write_text('from ..app.blender import app\ndef setup(*args):\n    return app\n', encoding='utf-8')
     assert module('util.setup_script').load_setup_script(setup_file)() is addon.blenderApp.app
@@ -102,6 +105,7 @@ def main():
             bpy.data.objects.remove(obj, do_unlink=True)
         settings = bpy.context.scene.blosm
         settings.dataType, settings.osmSource, settings.mode = 'osm', 'file', mode
+        settings.progressiveImport = False
         settings.buildingBackend = backend
         settings.singleObject = single
         settings.osmFilepath = str(osm_file)

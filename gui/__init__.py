@@ -25,6 +25,7 @@ from ..defs import Keys
 from .asset_libraries import classes as asset_library_classes
 from ..way.street_network.backends import registry as street_backends, migrate_saved_selection
 from ..progressive import blender as progressiveImport
+from ..threed_tiles.attribution import BlosmImportAttribution, get_copyright
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
@@ -384,10 +385,10 @@ class BLOSM_PT_Copyright(bpy.types.Panel):
     
     @classmethod
     def poll(cls, context):
-        return context.scene.blosm.copyright
+        return bool(get_copyright(context.scene.blosm))
     
     def draw(self, context):
-        self.layout.label(text = context.scene.blosm.copyright)
+        self.layout.label(text = get_copyright(context.scene.blosm))
 
 
 class BLOSM_PT_Extent(bpy.types.Panel):
@@ -684,13 +685,18 @@ class BLOSM_PT_Settings(bpy.types.Panel):
         
         box = layout.box()
         
-        box.row().prop(addon, "threedTilesSource", text="Source")
+        split = box.split(factor=0.35)
+        split.label(text="Source:")
+        split.prop(addon, "threedTilesSource", text='')
         
         if addon.threedTilesSource == "custom":
             box.label(text="Paste URL of root tile here:")
             box.prop(addon, "threedTilesUrl")
             box.prop(addon, "geometricError")
         else:
+            split = box.split(factor=0.35)
+            split.label(text="Access via:")
+            split.prop(addon, "google3dTilesAccessVia", text='')
             box.label(text="Level of details:")
             box.prop(addon, "lodOf3dTiles", text='')
         
@@ -1135,6 +1141,16 @@ class BlosmProperties(bpy.types.PropertyGroup):
         default = "google"   
     )
     
+    google3dTilesAccessVia: bpy.props.EnumProperty(
+        name = "Access via",
+        items = (
+            ("google", "Google", "Access Google 3D Tiles directly using your Google 3D Tiles key"),
+            ("cesium_ion", "Cesium ion", "Import Google 3D Tiles using your Cesium ion access token")
+        ),
+        description = "Service used to access Google 3D Tiles",
+        default = "google"
+    )
+
     threedTilesUrl: bpy.props.StringProperty(
         name = '',
         description = "URL of the root tile"
@@ -1191,12 +1207,13 @@ class BlosmProperties(bpy.types.PropertyGroup):
         options = {'HIDDEN'}
     )
     
-    copyright: bpy.props.StringProperty(
-        name = "Copyright message",
-        description = "Copyright for the imported content",
-        default = ''
+    importAttributions: bpy.props.CollectionProperty(
+        type = BlosmImportAttribution,
+        name = "Import attributions",
+        description = "Copyright and provider credits associated with imported collections",
+        options = {'HIDDEN'}
     )
-    
+
     replaceMaterialsWith: bpy.props.EnumProperty(
         name = "Replace materials with",
         items = (
@@ -1381,6 +1398,7 @@ class BlosmProperties(bpy.types.PropertyGroup):
 
 _classes = (
     *asset_library_classes,
+    BlosmImportAttribution,
     BLOSM_UL_DefaultLevels,
     BlosmDefaultLevelsEntry,
     BLOSM_OT_ReloadAssetPackageList,
@@ -1411,7 +1429,7 @@ def register():
 def unregister():
     if bpy.app.timers.is_registered(_onRegister280):
         bpy.app.timers.unregister(_onRegister280)
-    for c in _classes:
-        bpy.utils.unregister_class(c)
     del bpy.types.Scene.blosm
+    for c in reversed(_classes):
+        bpy.utils.unregister_class(c)
     bpy.app.handlers.load_post.remove(_onFileLoaded)

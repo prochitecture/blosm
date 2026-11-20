@@ -19,20 +19,28 @@ NEW = {
 EXISTING = {
     'padl_progressive_performance': ('benchmark_padl_progressive.py', 'padl_performance.json'),
     'padl_progressive_ui': ('check_padl_progressive_ui.py', 'padl_ui_checks.json'),
+    'tile_transforms': ('check_tile_transforms.py', 'results.json'),
     'osm_progressive_ui': ('check_osm_progressive_ui.py', 'osm_ui_checks.json'),
     'direct': ('check_direct_gltf_import.py', 'correctness.json'),
     'operator': ('check_direct_gltf_operator.py', 'operator_check.json'),
     'progressive': ('check_progressive_import.py', 'checks.json'),
     'concurrent': ('check_concurrent_tiles.py', 'concurrent_checks.json'),
+    'cesium_ion': ('check_cesium_ion.py', 'results.json'),
+    'attribution': ('check_attribution.py', 'results.json'),
     'ui': ('check_progressive_ui.py', 'ui_checks.json'),
+    'cesium_ion_ui': ('check_cesium_ion_ui.py', 'results.json'),
+    'attribution_ui': ('check_attribution_ui.py', 'results.json'),
 }
 CORE = ['preflight', 'standalone', 'direct', 'operator', 'progressive', 'concurrent', 'osm_progressive',
         'padl_progressive', 'padl_progressive_datasets', 'padl_status_scene',
+        'cesium_ion', 'attribution', 'tile_transforms',
         'osm', 'roofs', 'gpx', 'geometry_nodes', 'buildify', 'terrain', 'overlay',
         'validation', 'baking', 'export', 'pml']
 PRO_ONLY = frozenset(('baking', 'export', 'pml'))
-SUITES = tuple(CORE + ['package', 'base', 'pro', 'ui', 'osm_progressive_ui',
-                      'padl_progressive_ui', 'padl_progressive_performance'])
+GUI_SUITES = ('ui', 'osm_progressive_ui', 'padl_progressive_ui',
+              'padl_progressive_performance', 'cesium_ion_ui', 'attribution_ui')
+RELEASE_UI_SUITES = ('ui', 'cesium_ion_ui', 'attribution_ui')
+SUITES = tuple(CORE + ['package', 'base', 'pro', *GUI_SUITES])
 
 # Feature boundaries, not a second copy of the builder's exact file inventory.
 # Shared properties/APE utilities remain valid in Base. Imagery and GN are common.
