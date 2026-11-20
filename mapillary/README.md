@@ -101,11 +101,14 @@ the overlay and keeps the final viewpoint, orientation and field of view.
 The imported camera, scene rendering camera and render settings are unchanged.
 Click/drag detection uses Blender's mouse drag threshold; small pointer movements
 do not rotate the view. Controls handle their own clicks. **Tab** and the mode pie
-retain Blender's bindings. Leaving Object Mode, through shortcuts, menus or Python
-operators, closes the panorama on the next input event or lifecycle tick; the
-final viewpoint is retained. Transforms also exit before proceeding. Starting a
-panorama outside Object Mode is rejected. Selection follows Blender's visibility,
-selectability and occlusion rules, and remains after exiting panorama mode.
+retain Blender's bindings. Switching to Edit, Sculpt, Paint, Pose or other modes
+keeps the panorama open and its source camera hidden. In those modes, left-mouse
+input and transform keys go to Blender's tools; middle-mouse dragging looks around
+the panorama. Returning to Object Mode restores left-drag look and object picking.
+Mode changes cancel a captured gesture/zoom tail without resetting the view.
+The panel action starts from an active Mapillary camera in Object Mode. Selection
+follows Blender's visibility, selectability and occlusion rules and remains after
+exiting panorama mode. Object Mode transform shortcuts still exit before proceeding.
 
 Navigation keeps world up vertical: pitch stops at ±89° and dragging cannot
 accumulate roll. Drag to grab the image, with movement scaled by current field
@@ -119,8 +122,12 @@ See [browser-viewer research and control details](PanoramaControls.md).
 
 The first view downloads and packs the usual 2048-pixel preview; later views reuse
 the image. If an import is running, the viewer queues its request and remains
-closable. Failed downloads show a retry control. Opacity is session-local; it
-starts from an existing flat-photo background's opacity when available.
+closable. Failed downloads show a retry control. An unfinished photo download
+pauses scene publication outside Object Mode and resumes on returning; the viewer
+stays open. **Photo opacity** is a shared scene setting, initially **30%**, used by
+ordinary, fisheye and panoramic photos. Changing either the panel or panorama
+slider updates the shared value, which is saved in the `.blend` file and reused
+when switching cameras. Cached photographs remain viewable in other modes.
 Controls adapt to viewport size and sidebars. Mirrored/ambiguous image layouts,
 quad view, locked views and Local View are currently unsupported.
 
@@ -135,13 +142,15 @@ Select an imported Mapillary camera and click **View Mapillary photo** in the
 Blosm panel. The button appears only for the active Mapillary camera in the
 current scene, regardless of the panel's selected import type. It sets the
 scene's rendering camera and switches the 3D View into that camera. The photo
-fills the camera frame as an opaque front background; the scene's render
+fills the camera frame as a front background at the shared opacity; the scene's render
 resolution/aspect is set to the photo dimensions with square pixels. Camera
 position, rotation and lens remain unchanged. Background photos are viewport
 references, not rendered geometry or a compositor background.
 Use **Photo opacity** below the button to see the scene through the photo:
-1 is opaque and 0 is fully transparent. Each camera retains its opacity when
-its photo is reopened, including after saving the `.blend` file.
+**100%** is opaque and **0%** is fully transparent. The initial value is **30%**.
+This setting is shared by every Mapillary camera type in the scene, including the
+panorama overlay, and survives saving/reopening the `.blend` file. User-created
+camera backgrounds retain their own alpha settings.
 
 The first click downloads a preview of up to 2048 pixels from Mapillary. Later
 clicks reuse the image in Blender's image data, identified by the Mapillary image

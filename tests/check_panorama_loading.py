@@ -203,10 +203,18 @@ def tick():
                 bpy.ops.object.mode_set(mode='EDIT')
                 phase(15)
             elif p==15 and state['frames']>4:
-                check('mode change closes a panorama waiting for photo bytes',viewport.current() is None and state['session'].closed)
-                check('mode exit cancels owned download without publishing a photo',runtime.active is None
-                      and state['mode_transport'].closed and photo.cached_image('9100000000000006') is None)
+                check('mode change retains a panorama waiting for photo bytes',viewport.current() is state['session']
+                      and not state['session'].closed)
+                check('shared photo task pauses publication in Edit Mode',runtime.active is not None
+                      and runtime.active.paused and not state['mode_transport'].closed
+                      and photo.cached_image('9100000000000006') is None)
+                state['mode_transport'].release=True
                 bpy.ops.object.mode_set(mode='OBJECT')
+                phase(16)
+            elif p==16 and state['surface'].ready:
+                check('return to Object Mode resumes the same download and panorama',viewport.current() is state['session']
+                      and runtime.active is None and state['mode_transport'].closed
+                      and photo.cached_image('9100000000000006') is not None)
                 finish();return None
         return .1
     except Exception:

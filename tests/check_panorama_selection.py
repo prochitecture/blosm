@@ -1,4 +1,4 @@
-"""Native click/drag selection and mode-exit checks with a cached panorama.
+"""Native click/drag selection and mode-switch checks with a cached panorama.
 
 Run only in an isolated Blender UI process, with factory startup, disabled
 autoexec, --enable-event-simulate, and this chat's five user-resource paths.
@@ -30,6 +30,8 @@ addon=importlib.import_module(ROOT.name)
 addon.register()
 viewport=importlib.import_module(ROOT.name+'.viewport')
 pano=importlib.import_module(ROOT.name+'.mapillary.panorama')
+photo=importlib.import_module(ROOT.name+'.mapillary.photo')
+ui=importlib.import_module(ROOT.name+'.viewport.ui')
 runtime=importlib.import_module(ROOT.name+'.progressive.blender')
 runtime.show_result=lambda *_:None
 window=bpy.context.window
@@ -146,6 +148,7 @@ def tick():
             if step==0:
                 native_event('ESC');native_event('ESC','RELEASE')
             elif step==1:
+                check('shared photo opacity defaults to 30 percent',bpy.context.scene.blosm.mapillaryPhotoOpacity==30.)
                 open_view()
                 state['look']=state['surface'].look.copy()
             elif step==2:
@@ -201,48 +204,58 @@ def tick():
                 native_event('LEFTMOUSE','RELEASE',(where[0]*state['session'].frame.scale,where[1]*state['session'].frame.scale))
             elif step==10:
                 check('overlay slider handles clicks without selecting objects',not selected() and abs(state['surface'].opacity-.5)<.02)
+                check('panorama slider updates the shared percentage',abs(bpy.context.scene.blosm.mapillaryPhotoOpacity-50)<2)
+                bpy.context.scene.blosm.mapillaryPhotoOpacity=27.
+                check('ordinary photo percentage updates a live panorama',abs(state['surface'].opacity-.27)<1e-6)
                 click(mesh)
             elif step==11:
                 check('mesh can be selected after looking around',bpy.context.object==mesh and selected()=={mesh})
                 state['final_look']=area.spaces.active.region_3d.view_rotation.copy()
                 native_event('TAB');native_event('TAB','RELEASE')
             elif step==12:
-                check('native Tab exits panorama and enters Edit Mode',viewport.current() is None
-                      and state['session'].closed and bpy.context.mode=='EDIT_MESH')
-                check('mode exit retains final viewport orientation',area.spaces.active.region_3d.view_rotation.rotation_difference(state['final_look']).angle<1e-5)
-                bpy.ops.object.mode_set(mode='OBJECT')
-                open_view()
+                check('native Tab enters Edit Mode while keeping panorama',viewport.current() is state['session']
+                      and not state['session'].closed and bpy.context.mode=='EDIT_MESH')
+                check('mode change retains final viewport orientation',area.spaces.active.region_3d.view_rotation.rotation_difference(state['final_look']).angle<1e-5)
+                check('Edit Mode clicks and transform keys pass through to Blender',all(
+                    state['surface'].handle(ui.InputEvent(key,'PRESS',100,region.height*.58))==ui.PASS_THROUGH
+                    for key in ('LEFTMOUSE','G','R','S')) and not state['session'].closed)
+                bpy.ops.transform.translate(value=(.1,0,0))
+                state['edit_look']=state['surface'].look.copy()
+                where=(150,region.height*.58)
+                native_event('MIDDLEMOUSE',point=where)
+                native_event('MOUSEMOVE','NOTHING',(where[0]+60,where[1]))
+                native_event('MIDDLEMOUSE','RELEASE',(where[0]+60,where[1]))
             elif step==13:
-                # A mode change made via a menu/operator has no Tab event for
-                # the surface to intercept. The owner-mode guard must close it.
+                check('middle-drag looks around in Edit Mode without closing panorama',viewport.current() is state['session']
+                      and state['surface'].look.rotation_difference(state['edit_look']).angle>.01)
+                bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.mode_set(mode='SCULPT')
             elif step==14:
-                check('operator/UI-style Sculpt Mode change closes the panorama',bpy.context.mode=='SCULPT'
-                      and state['session'].closed and viewport.current() is None)
-                try:
-                    viewport.open(bpy.context,pano.Panorama(obj))
-                except RuntimeError:
-                    refused=True
-                else:refused=False
-                check('panorama cannot be opened outside Object Mode',refused and viewport.current() is None)
+                check('operator/UI-style Sculpt Mode change keeps panorama',bpy.context.mode=='SCULPT'
+                      and not state['session'].closed and viewport.current() is state['session'])
+                check('Sculpt brush strength shortcut stays native',
+                      state['surface'].handle(ui.InputEvent('F','PRESS',100,region.height*.58,shift=True))==ui.PASS_THROUGH
+                      and not state['session'].closed)
+                open_view()
+                check('a cached panorama can attach in another mode',viewport.current() is state['session'])
                 bpy.ops.object.mode_set(mode='OBJECT')
                 open_view()
                 bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
             elif step==15:
-                check('Weight Paint Mode closes the panorama',bpy.context.mode=='PAINT_WEIGHT'
-                      and state['session'].closed and viewport.current() is None)
+                check('Weight Paint Mode keeps the panorama',bpy.context.mode=='PAINT_WEIGHT'
+                      and not state['session'].closed and viewport.current() is state['session'])
                 bpy.ops.object.mode_set(mode='OBJECT')
                 open_view()
                 bpy.ops.object.mode_set(mode='VERTEX_PAINT')
             elif step==16:
-                check('Vertex Paint Mode closes the panorama',bpy.context.mode=='PAINT_VERTEX'
-                      and state['session'].closed and viewport.current() is None)
+                check('Vertex Paint Mode keeps the panorama',bpy.context.mode=='PAINT_VERTEX'
+                      and not state['session'].closed and viewport.current() is state['session'])
                 bpy.ops.object.mode_set(mode='OBJECT')
                 open_view()
                 bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
             elif step==17:
-                check('Texture Paint Mode closes the panorama',bpy.context.mode=='PAINT_TEXTURE'
-                      and state['session'].closed and viewport.current() is None)
+                check('Texture Paint Mode keeps the panorama',bpy.context.mode=='PAINT_TEXTURE'
+                      and not state['session'].closed and viewport.current() is state['session'])
                 bpy.ops.object.mode_set(mode='OBJECT')
                 for item in tuple(selected()):item.select_set(False)
                 rig.select_set(True)
@@ -250,11 +263,19 @@ def tick():
                 open_view()
                 bpy.ops.object.mode_set(mode='POSE')
             elif step==18:
-                check('Pose Mode closes the panorama',bpy.context.mode=='POSE'
-                      and state['session'].closed and viewport.current() is None)
+                check('Pose Mode keeps the panorama',bpy.context.mode=='POSE'
+                      and not state['session'].closed and viewport.current() is state['session'])
                 bpy.ops.object.mode_set(mode='OBJECT')
                 check('all selection/mode checks preserve the source pose and scene camera',
                       obj.matrix_world==pose and bpy.context.scene.camera==initial_camera)
+                state['surface'].set_opacity(.42)
+                state['session'].close('USER')
+                photo.show_photo(bpy.context,camera,photo.cached_image(obj['mapillary_image_id']))
+                check('ordinary photo inherits opacity changed on a panorama',
+                      all(abs(bg.alpha-.42)<1e-6 for bg in camera.data.background_images if bg.image))
+                bpy.context.scene.blosm.mapillaryPhotoOpacity=17.
+                open_session=viewport.open(bpy.context,pano.Panorama(obj))
+                check('reopened panorama inherits opacity changed on an ordinary photo',abs(open_session.surface.opacity-.17)<1e-6)
                 finish()
                 return None
         state['step']+=1

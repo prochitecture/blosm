@@ -282,8 +282,9 @@ Close the session when:
 * The user presses Esc or its visible close control.
 * Another framework surface replaces it.
 * Its window, area, active space or region disappears or changes editor type.
-* Its owning window changes scene or view layer, or an unsupported view mode is
-  entered. For the initial scene-aligned panorama, entering Edit Mode closes it.
+* Its owning window changes scene or view layer, or an unsupported viewport
+  configuration is entered. Panorama viewing stays open across object/edit/sculpt/
+  paint/pose mode changes; adapters may opt into an Object Mode requirement.
 * Undo, Redo, file loading or addon unregistration begins.
 * An essential feature target disappears, such as the viewed camera.
 
@@ -578,11 +579,10 @@ session state. They do not increment an import revision or create undo steps.
 
 Publishing a packed photo is a Blender-data change and retains existing undo
 ownership. Applying selected bounds is one small undoable operator. Starting an
-import uses the existing import controller. An initial panorama opacity control
-can be session-local, initialized from the existing camera background's value
-when available; persisting a changed value requires a deliberate commit at the
-end of a gesture, not an undo checkpoint per pixel of dragging. That persistence
-is optional for the first immersive viewer and must be documented in its UI.
+import uses the existing import controller. Mapillary opacity is a shared scene
+percentage, initially 30%, saved with the project and used by both flat photos
+and panoramas. The overlay slider updates that RNA setting without creating an
+undo checkpoint per pointer movement; normal scene snapshots preserve its value.
 
 Undo/Redo closes the session before stale Blender references can be used. Redo
 must not restart network requests or silently recreate the viewer. Cancelled
@@ -636,14 +636,16 @@ Clicking selects ordinary Blender objects, including other cameras, while
 Shift-click uses Blender's extended/toggled selection. The press-to-drag threshold
 separates selection from looking around. Explicit selection changes are retained;
 the displayed panorama continues to use its own capture target. Native Tab/mode
-pie shortcuts remain available. A switch out of Object Mode closes the panorama
-through the common session's owner-mode check, retaining the final view and
-releasing any owned download. These interactions are implemented in version 1.
+pie shortcuts remain available. A switch out of Object Mode keeps the panorama
+open and its view fixed. Native tools receive left-mouse input and transforms;
+middle-drag looks around. Pending photo publication pauses through the shared
+import controller until Object Mode returns. These interactions are implemented
+in version 1.
 
 Temporarily hide the capture's camera object in the owner view layer while the
 panorama is open; keep other objects selectable. The implemented shared
 `visibility.TemporaryHide` lease restores its underlying visibility on teardown,
-including startup errors, replacement and mode/lifecycle exit. Save handlers omit
+including startup errors, replacement and lifecycle exit. Save handlers omit
 the transient hide from files, and object-pointer records recover historical
 undo snapshots. Camera filters coordinate underlying flags through that service.
 
@@ -1045,7 +1047,8 @@ block the shared foundation:
 
 * Panorama mouse sensitivity, FOV range and horizon/roll policy are implemented;
   see [the browser-viewer research and control decisions](../mapillary/PanoramaControls.md).
-* Whether immersive-view opacity is persisted after a completed gesture.
+* Photo opacity is implemented as a saved scene percentage, initially 30%, shared
+  by ordinary, fisheye and panoramic photo views and both UI controls.
 * Whether higher-resolution Mapillary retrieval is included after the initial
   preview is validated; it requires new cache and memory limits.
 * First map provider and associated tile/attribution/cache policy.

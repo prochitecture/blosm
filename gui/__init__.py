@@ -26,6 +26,11 @@ from ..progressive import blender as progressiveImport
 
 _has3dRealistic = app.has(Keys.mode3dRealistic)
 
+
+def _photoOpacityChanged(settings, context):
+    from ..mapillary.photo import sync_opacity
+    sync_opacity(settings.id_data)
+
 if _has3dRealistic:
     from ..realistic.material.renderer import FacadeWithColor
 
@@ -447,7 +452,7 @@ class BLOSM_PT_Extent(bpy.types.Panel):
             if background is not None:
                 image = background.image
                 photo_box = layout.box()
-                photo_box.prop(background,'alpha',text='Photo opacity',slider=True)
+                photo_box.prop(context.scene.blosm,'mapillaryPhotoOpacity',text='Photo opacity',slider=True)
                 creator = image.get('mapillary_creator','')
                 if creator:
                     photo_box.label(text='Photo by '+creator)
@@ -1119,6 +1124,13 @@ class BlosmProperties(bpy.types.PropertyGroup):
         name = "Progressive import",
         description = "Show imported content progressively and allow viewport navigation between work steps. Individual generation and evaluation calls may briefly pause the viewport",
         default = True
+    )
+
+    mapillaryPhotoOpacity: bpy.props.FloatProperty(
+        name = "Photo opacity",
+        description = "Shared opacity for all Mapillary photos and panoramas in this scene",
+        subtype = 'PERCENTAGE', min = 0., max = 100., default = 30.,
+        update = _photoOpacityChanged
     )
 
     concurrentDownloads: bpy.props.BoolProperty(

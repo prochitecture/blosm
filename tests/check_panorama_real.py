@@ -109,12 +109,12 @@ def tick():
                     state['phase']=3;state['ticks']=0
             elif p==3 and state['ticks']>8:
                 bpy.ops.screen.screenshot(filepath=str(args.artifacts/'real_panorama.png'))
-                state['surface'].opacity=.35
+                state['surface'].set_opacity(.35)
                 state['session'].invalidate()
                 state['phase']=4;state['ticks']=0
             elif p==4 and state['ticks']>8:
                 bpy.ops.screen.screenshot(filepath=str(args.artifacts/'real_transparent.png'))
-                state['surface'].opacity=1.
+                state['surface'].set_opacity(1.)
                 state['surface'].handle(InputEvent('LEFTMOUSE','PRESS',500,400))
                 state['phase']=5;state['ticks']=0;state['previous']=time.perf_counter()
             elif p==5:

@@ -180,15 +180,18 @@ normal 30–90° vertical range and 120° horizontal cap. Resize recalibrates th
 native projection and enforces the effective bounds. View leveling is kept
 separate from the capture pose used for texture alignment. See
 [research and behavior](../mapillary/PanoramaControls.md).
-Opacity is session-local, initially inherited
-from an existing photo background if one exists.
+Mapillary photo opacity is a shared, saved scene percentage (initially 30%),
+used by flat backgrounds and panoramic overlays. The host has no provider-specific
+opacity property; generic surfaces may keep their own values.
 
 Esc or Exit panorama retains the final eye position, rotation and FOV in normal
 perspective navigation. Click selects Blender objects; Shift-click extends/toggles
 selection; drag looks around once the mouse threshold is crossed. Selection keeps
 the current photo/capture pose active and remains after exit. Tab/mode-pie bindings
-go to Blender; leaving Object Mode ends the session at the next event or lifecycle
-tick. The generic UI router still offers Tab focus navigation to other consumers.
+go to Blender. The panorama remains open across mode changes; it leaves left-mouse
+input and transforms to native tools outside Object Mode and uses middle-drag for
+look. The generic host's optional `requires_object_mode` guard remains available
+to other surfaces. The UI router still offers Tab focus navigation to other consumers.
 Camera poses, scene camera, render dimensions and cursor are unchanged. Failed
 startup can restore the pre-entry view. Lifecycle
 teardown never writes a snapshot into the incoming scene or undo state.

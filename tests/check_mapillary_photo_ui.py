@@ -133,7 +133,7 @@ def displayed(identity):
     background = next((bg for bg in obj.data.background_images if bg.image==image),None)
     return (image is not None and image.packed_file is not None and scene().camera==obj
             and background is not None and background.frame_method=='FIT'
-            and background.alpha==1. and background.display_depth=='FRONT'
+            and abs(background.alpha-photo.opacity(scene()))<1e-6 and background.display_depth=='FRONT'
             and obj.data.show_background_images and area.spaces.active.region_3d.view_perspective=='CAMERA'
             and tuple(image.size)==(320,180) and scene().render.resolution_x==320
             and scene().render.resolution_y==180)
@@ -184,11 +184,15 @@ def tick():
             assert bpy.ops.blosm.view_mapillary_photo('EXEC_DEFAULT',True)=={'FINISHED'}
             check('cached operator reuses Blender image data without a transport',displayed('9007199254740993') and len(transports)==1 and runtime.active is None)
             bg = next(bg for bg in scene().camera.data.background_images if bg.image)
-            bg.alpha = .35
+            scene().blosm.mapillaryPhotoOpacity = 35.
             assert bpy.ops.blosm.view_mapillary_photo('EXEC_DEFAULT',True)=={'FINISHED'}
             check('cached camera viewing retains adjustable photo opacity',abs(bg.alpha-.35)<1e-6)
+            next(a for a in window.screen.areas if a.type=='VIEW_3D').spaces.active.show_region_ui=True
             state['phase'],state['ticks'] = 'opacity_screenshot',0
-        elif phase=='opacity_screenshot' and state['ticks']>=8:
+        elif phase=='opacity_screenshot':
+            area=next(a for a in window.screen.areas if a.type=='VIEW_3D')
+            next(r for r in area.regions if r.type=='UI').active_panel_category='Blosm'
+            if state['ticks']<8:return .03
             bpy.ops.screen.screenshot(filepath=str(args.artifacts/'photo_transparent.png'))
             start('9007199254740994')
             state['phase'] = 'before_pause'

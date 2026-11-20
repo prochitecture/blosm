@@ -21,6 +21,34 @@ MAX_BYTES = 32 * 1024 * 1024
 pending = None
 
 
+def opacity(scene):
+    """Shared photo/panorama opacity as a shader/background fraction."""
+    return scene.blosm.mapillaryPhotoOpacity / 100.
+
+
+def set_opacity(scene, value):
+    scene.blosm.mapillaryPhotoOpacity = max(0., min(100., float(value) * 100.))
+
+
+def sync_opacity(scene):
+    """Refresh existing Mapillary backgrounds; unopened photos read on display.
+
+    One scene setting persists with the project, independent of which camera or
+    image type is being viewed. User-created backgrounds retain their own alpha.
+    """
+    alpha = opacity(scene)
+    for obj in scene.objects:
+        if obj.type == 'CAMERA':
+            for background in obj.data.background_images:
+                if background.image and background.image.get('mapillary_photo_source') == 'Mapillary':
+                    background.alpha = alpha
+    from .. import viewport
+    session = viewport.current()
+    if session is not None and session.scene == scene:
+        session.invalidate()
+    runtime.redraw()
+
+
 def imported_camera(context):
     obj = context.view_layer.objects.active
     try:
@@ -71,7 +99,7 @@ def show_photo(context, obj, image, area=None):
                        if bg.image and bg.image.get('mapillary_photo_source') == 'Mapillary'),None)
     if background is None:
         background = camera.background_images.new()
-        background.alpha = 1.
+    background.alpha = opacity(context.scene)
     background.image = image
     background.show_background_image = True
     background.display_depth = 'FRONT'

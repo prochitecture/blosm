@@ -134,7 +134,8 @@ def tick():
                 mesh=bpy.data.objects['Cube'];activate(mesh);open_camera();bpy.ops.object.mode_set(mode='EDIT')
                 next_phase(2)
             elif p==2:
-                check('mode exit restores the source camera',viewport.current() is None and not camera(SOURCE).hide_get() and empty_records())
+                check('Edit Mode retains panorama and temporarily hidden source',viewport.current() is state['session']
+                      and camera(SOURCE).hide_get() and not empty_records())
                 bpy.ops.object.mode_set(mode='OBJECT')
                 open_camera();state['session'].error='Fixture viewport failure';next_phase(3)
             elif p==3:

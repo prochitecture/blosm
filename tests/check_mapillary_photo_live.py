@@ -37,7 +37,7 @@ try:
         image=photo.cached_image(camera['mapillary_image_id'])
         assert image is not None and image.packed_file is not None
         assert bpy.context.scene.camera==camera
-        assert any(bg.image==image and bg.alpha==1. and bg.frame_method=='FIT'
+        assert any(bg.image==image and abs(bg.alpha-photo.opacity(bpy.context.scene))<1e-6 and bg.frame_method=='FIT'
                    for bg in camera.data.background_images)
         assert photo.cached_image(camera['mapillary_image_id'])==image
         report['photos'].append({'image_id':camera['mapillary_image_id'],'camera_model':model,

@@ -214,8 +214,8 @@ def tick():
                 open_view();wheel(1)
                 bpy.ops.object.mode_set(mode='EDIT');next_phase(10)
             elif p==10 and state['ticks']>8:
-                check('mode change tears down an active zoom animation',viewport.current() is None and state['session'].closed
-                      and not bpy.app.timers.is_registered(host._tick))
+                check('mode change keeps panorama and stops the zoom gesture',viewport.current() is state['session']
+                      and not state['session'].closed and not state['surface'].animating)
                 bpy.ops.object.mode_set(mode='OBJECT')
                 check('all navigation preserves imported pose and rendering camera',obj.matrix_world==source_pose
                       and bpy.context.scene.camera==scene_camera)

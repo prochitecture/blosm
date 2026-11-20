@@ -225,7 +225,9 @@ try:
     # Existing user backgrounds survive, and a camera sharing the original
     # datablock must not acquire the selected camera's Mapillary photograph.
     user_image = bpy.data.images.new('User camera background',width=12,height=8)
-    obj.data.background_images.new().image = user_image
+    user_background = obj.data.background_images.new()
+    user_background.image = user_image
+    user_alpha = user_background.alpha
     twin = bpy.data.objects.new('Other camera sharing data',obj.data)
     bpy.context.scene.collection.objects.link(twin)
     cursor = tuple(bpy.context.scene.cursor.location)
@@ -235,9 +237,9 @@ try:
     image = photo.cached_image(identity)
     check('downloaded image is tagged packed and decoded',image is not None and image.packed_file is not None
           and tuple(image.size)==(12,8))
-    check('camera becomes the scene camera with opaque front photo background',
+    check('camera becomes the scene camera with default 30 percent front photo background',
           bpy.context.scene.camera is obj and obj.data.show_background_images
-          and any(bg.image is image and bg.alpha==1 and bg.display_depth=='FRONT'
+          and any(bg.image is image and abs(bg.alpha-.3)<1e-6 and bg.display_depth=='FRONT'
                   and bg.frame_method=='FIT' for bg in obj.data.background_images))
     check('shared camera data is copied without changing the other camera photo',
           obj.data is not twin.data and all(bg.image is not image for bg in twin.data.background_images))
@@ -259,7 +261,10 @@ try:
     obj.data.use_fake_user = True
     camera_data = obj.data
     background = next(bg for bg in obj.data.background_images if bg.image is image)
-    background.alpha = .35
+    photo.set_opacity(bpy.context.scene,.35)
+    check('ordinary photo opacity is a percentage RNA property',
+          bpy.context.scene.blosm.bl_rna.properties['mapillaryPhotoOpacity'].subtype=='PERCENTAGE')
+    check('opacity changes update an existing photo immediately',abs(background.alpha-.35)<1e-6)
     photo.show_photo(bpy.context,obj,image)
     check('renamed image is reused without duplicating background entries',
           photo.cached_image(identity) is image and len(bpy.data.images)==before_images
@@ -270,6 +275,21 @@ try:
     check('cached operator works without another download',result=={'FINISHED'}
           and len(transport.requests)==2 and photo.cached_image(identity) is image)
     check('photo opacity is retained by direct and cached activation',abs(background.alpha-.35)<1e-6)
+
+    models=[]
+    for index,model in enumerate(('perspective','spherical','fisheye','unknown'),100):
+        other=camera(str(int(identity)+index))
+        other['mapillary_camera_model']=model
+        photo.show_photo(bpy.context,other,image)
+        models.append(other)
+    photo.set_opacity(bpy.context.scene,.61)
+    check('all camera types and existing photo backgrounds share the updated opacity',all(
+          abs(bg.alpha-.61)<1e-6 for other in [obj]+models
+          for bg in other.data.background_images if bg.image is image))
+    check('shared opacity leaves user backgrounds unchanged',
+          all(bg.alpha==user_alpha for bg in obj.data.background_images if bg.image is user_image))
+    photo.set_opacity(bpy.context.scene,.35)
+    photo.show_photo(bpy.context,obj,image)
 
     saved = args.artifacts/'packed_photo.blend'
     bpy.ops.wm.save_as_mainfile(filepath=str(saved),check_existing=False)
@@ -289,6 +309,8 @@ try:
     portrait_obj,portrait_transport,portrait = task(portrait_id,'portrait')
     portrait_obj['mapillary_exif_orientation'] = 6
     drive(portrait.job)
+    check('another camera inherits the shared opacity',all(abs(bg.alpha-.35)<1e-6
+          for bg in portrait_obj.data.background_images if bg.image))
     portrait_image = photo.cached_image(portrait_id)
     check('embedded JPEG orientation is normalized exactly once',portrait.job.error is None
           and portrait_image is not None and tuple(portrait_image.size)==(32,64)

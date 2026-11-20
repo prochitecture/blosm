@@ -1,5 +1,46 @@
 # Mapillary import validation
 
+## Shared opacity and persistent panorama modes — 2026-11-20
+
+Both photo controls now use `Scene.blosm.mapillaryPhotoOpacity`, a saved native
+percentage with default 30%. Flat-photo backgrounds and the panorama shader
+convert that one value to an alpha fraction. Changing either control updates
+existing Mapillary backgrounds in the scene and subsequent camera views;
+user-created backgrounds keep their alpha. Earlier per-camera alpha values are
+replaced with the shared value when the photo is next displayed.
+
+The panorama no longer opts into the shared host's Object Mode requirement.
+Mode changes cancel a gesture/zoom tail and retain the viewer, fixed eye, source
+camera hiding and final orientation. Object Mode keeps left-drag look/picking;
+Edit/Sculpt/Paint/Pose modes pass left-mouse input and editing/brush shortcuts to
+Blender and use middle-drag for panorama look. Pending photo publication follows
+the existing import controller's pause outside Object Mode, then resumes without
+replacing or closing the panorama. The host's optional mode guard and other
+lifecycle cleanup remain available unchanged.
+
+Validation (offline, isolated factory profiles):
+
+- **43 background photo checks passed on Blender 5.2**, including the 30% default,
+  percentage RNA, immediate updates, ordinary/spherical/fisheye/unknown camera
+  models sharing a value, user backgrounds, cached activation and save/reopen.
+- **32 native selection/mode/opacity checks passed each on Blender 5.2 and 4.5**:
+  native Tab to Edit Mode, Edit transforms, middle-drag, Sculpt/Weight/Vertex/
+  Texture Paint/Pose, brush shortcut passthrough, camera selection and opacity
+  transfer in both directions between ordinary photos and panorama viewing.
+- **14 native photo UI checks passed each on 5.2 and 4.5**, covering cached views,
+  undo/redo, queued downloads and lifecycle. The final 5.2 sidebar screenshot
+  visibly shows `Photo opacity 35.00%`.
+- On 5.2, **20 loading checks**, **24 navigation checks**, **27 temporary-visibility
+  checks**, and **41 normal addon activation checks** passed. These include
+  paused publication/resumption after Edit Mode and unchanged save/undo/load/error
+  cleanup with the source camera restored on actual viewer exit.
+
+Evidence: `artifacts/mapillary_import/shared_opacity_modes/`: `photo_52_final`,
+`panorama_selection_52`, `panorama_selection_45`, `mapillary_photo_ui_52`,
+`mapillary_photo_ui_45`, `panorama_loading_52`, `panorama_controls_52`,
+`panorama_visibility_52`, and `addon_activation_52`. No credentials or real HTTP
+were required. Smooth photo/panorama transitions remain subsequent work.
+
 ## Sidebar registration correction — 2026-11-16
 
 Reproduced a startup regression through `addon_utils.enable`: the viewport's

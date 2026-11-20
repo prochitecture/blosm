@@ -77,7 +77,6 @@ def shader_create():
 
 
 class Panorama(Surface):
-    requires_object_mode=True
     close_label='Exit panorama'
 
     def __init__(self,obj):
@@ -88,8 +87,8 @@ class Panorama(Surface):
         self.status='Loading panorama…'
         self.failed=False
         self.ready=False
-        self.opacity=1.
         self.navigation=None
+        self.mode=None
         self.snapshot=None
         self.last_shape=None
         self.image_ticket=None
@@ -101,6 +100,9 @@ class Panorama(Surface):
 
     @property
     def fov(self): return self.navigation.fov
+
+    @property
+    def opacity(self): return photo.opacity(self.session.scene)
 
     @property
     def animating(self): return self.ready and self.navigation.animating
@@ -142,10 +144,6 @@ class Panorama(Surface):
         self.root=Container('panorama_controls',[self.close,self.slider,self.retry,self.credit])
         self.router=Router(self.root)
         self.image_ticket=session.ticket(self.identity)
-        for bg in self.obj.data.background_images:
-            if bg.image and bg.image.get('mapillary_image_id')==self.identity:
-                self.opacity=bg.alpha
-                break
         # The view stays in place until a usable cached/downloaded image exists.
         self.tick(.004)
 
@@ -167,7 +165,17 @@ class Panorama(Surface):
     def open_credit(self):
         bpy.ops.wm.url_open(url='https://www.mapillary.com/app/?pKey='+self.identity)
 
-    def set_opacity(self,value): self.opacity=value
+    def set_opacity(self,value): photo.set_opacity(self.session.scene,value)
+
+    def update_mode(self):
+        mode=bpy.context.mode
+        if mode!=self.mode:
+            self.cancel_gesture()
+            self.mode=mode
+            if self.ready:
+                self.status=('Click to select · Drag to look · Wheel to zoom · Esc to exit' if mode=='OBJECT'
+                             else 'Use Blender tools · Middle-drag to look · Wheel to zoom · Esc to exit')
+                self.session.invalidate()
 
     def cancel_gesture(self):
         self.drag=None
@@ -175,6 +183,7 @@ class Panorama(Surface):
         if hasattr(self,'router'): self.router.reset_capture()
 
     def tick(self,budget_seconds):
+        self.update_mode()
         self.validate()
         if self.ready and not self.owns_view():
             self.session.request_close('VIEW_CHANGED')
@@ -201,6 +210,7 @@ class Panorama(Surface):
             if image is not None:
                 self.use_image(image)
             elif runtime.is_busy(): self.status='Queued until the current Blosm import finishes…'
+            elif bpy.context.mode!='OBJECT': self.status='Waiting for Object Mode to load panorama…'
             else:
                 from ..app.blender import app
                 prefs=bpy.context.preferences.addons.get(app.addonName)
@@ -229,8 +239,9 @@ class Panorama(Surface):
             self.status='Unsupported panorama dimensions/orientation'
             return
         self.image_ref=ImageRef(image)
-        self.status='Click to select · Drag to look · Wheel to zoom · Esc to exit'
         self.ready=True
+        self.mode=None
+        self.update_mode()
         self.apply_view()
 
     def apply_view(self):
@@ -292,22 +303,22 @@ class Panorama(Surface):
             self.apply_view()
 
     def handle(self,event):
+        self.update_mode()
         if self.ready and not self.owns_view():
             self.session.request_close('VIEW_CHANGED')
             return PASS_THROUGH
-        # Native Tab/mode-pie bindings take precedence over overlay keyboard
-        # focus. An actual mode change closes the session on the next event/
-        # tick; a dismissed mode pie or unavailable mode leaves it open.
+        # Native Tab/mode-pie bindings take precedence over overlay focus.
+        # Mode changes keep the photo/view and switch gesture ownership.
         if event.type=='TAB':
             return PASS_THROUGH
         # A canvas drag owns its release even when crossing a toolbar button.
-        if self.drag is not None and event.type=='LEFTMOUSE' and event.value=='RELEASE':
+        if self.drag is not None and event.type==self.drag.press.type and event.value=='RELEASE':
             gesture=self.drag
             self.drag=None
             # Use the final position too if Blender coalesced the last move.
             delta=gesture.move(event.x,event.y)
             if delta is not None:self.drag_look(*delta)
-            if (gesture.release(event.x,event.y)
+            if (gesture.press.type=='LEFTMOUSE' and gesture.release(event.x,event.y)
                     and self.session.frame.available.contains(event.x,event.y)
                     and not self.toolbar.contains(event.x,event.y)
                     and self.root.hit(event.x,event.y) is None):
@@ -319,7 +330,8 @@ class Panorama(Surface):
             if delta is not None:self.drag_look(*delta)
             return HANDLED
         if self.router.handle(event)==HANDLED: return HANDLED
-        if event.type=='LEFTMOUSE':
+        look_button='LEFTMOUSE' if self.mode=='OBJECT' else 'MIDDLEMOUSE'
+        if event.type==look_button:
             if self.toolbar.contains(event.x,event.y):return HANDLED
             if event.value=='PRESS':
                 # Picking starts against the currently displayed projection.
@@ -330,20 +342,28 @@ class Panorama(Surface):
                 threshold=bpy.context.preferences.inputs.drag_threshold_mouse/self.session.frame.scale
                 self.drag=ClickDrag(event,threshold)
             return HANDLED
+        # Mesh selection, sculpt/paint strokes, and transforms belong to native
+        # tools in non-Object modes. Middle-drag remains fixed-eye panorama look.
+        if self.mode!='OBJECT' and event.type=='LEFTMOUSE':
+            if event.value=='PRESS':self.navigation.stop_zoom()
+            return PASS_THROUGH
         if event.type in {'WHEELUPMOUSE','WHEELDOWNMOUSE','NUMPAD_PLUS','NUMPAD_MINUS'}:
+            if self.mode!='OBJECT' and (event.ctrl or event.shift or event.alt): return PASS_THROUGH
             if self.ready and event.value=='PRESS':
                 was_animating=self.animating
                 self.navigation.wheel(1 if event.type in {'WHEELUPMOUSE','NUMPAD_PLUS'} else -1)
                 if self.animating and not was_animating:self.session.request_animation()
             return HANDLED
-        # Navigation that would move the eye is owned by this surface. Ordinary
-        # modelling keys exit first and continue through Blender's keymap.
+        # Navigation that would move the eye is owned by this surface. Object
+        # Mode transforms exit first; editing/brush shortcuts stay native.
         if event.type in {'MIDDLEMOUSE','TRACKPADPAN','TRACKPADZOOM','NDOF_MOTION'}: return HANDLED
-        if event.value=='PRESS' and event.type in {'G','R','S','NUMPAD_0','NUMPAD_1','NUMPAD_2',
+        if event.value=='PRESS' and event.type in {'NUMPAD_0','NUMPAD_1','NUMPAD_2',
                 'NUMPAD_3','NUMPAD_4','NUMPAD_5','NUMPAD_6','NUMPAD_7','NUMPAD_8',
                 'NUMPAD_PERIOD','HOME','ACCENT_GRAVE'}:
             self.session.request_close()
-        if event.type=='F' and event.value=='PRESS' and event.shift:self.session.request_close()
+        if self.mode=='OBJECT' and event.value=='PRESS' and event.type in {'G','R','S'}:
+            self.session.request_close()
+        if self.mode=='OBJECT' and event.type=='F' and event.value=='PRESS' and event.shift:self.session.request_close()
         return PASS_THROUGH
 
     def draw(self,frame,painter):
