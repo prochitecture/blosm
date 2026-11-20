@@ -12,6 +12,10 @@ synchronous result. Command-line mode blocks. Progressive mode requires an
 interactive window and Object Mode. Camera import itself downloads no photographs
 or thumbnails.
 
+Newly imported cameras have all location, rotation (including quaternion W), and
+scale components locked. To adjust a camera, unlock the relevant components in
+Blender's Transform panel.
+
 ### Filter camera visibility
 
 Open **Camera filters** in the Blosm panel with **Mapillary cameras** selected

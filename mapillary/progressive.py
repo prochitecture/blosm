@@ -323,6 +323,12 @@ class MapillaryImport:
                 obj.location = camera_pose.position
                 obj.rotation_mode = 'QUATERNION'
                 obj.rotation_quaternion = Matrix(camera_pose.rotation).to_quaternion()
+                obj.lock_location = (True, True, True)
+                obj.lock_rotation = (True, True, True)
+                # Quaternion cameras also expose W as an editable component.
+                obj.lock_rotations_4d = True
+                obj.lock_rotation_w = True
+                obj.lock_scale = (True, True, True)
                 props = dict(camera_pose.properties)
                 props.update(image_id=record['id'], sequence_id=str(metadata.get('sequence') or record.get('sequence_id') or ''),
                              captured_at=str(metadata.get('captured_at') or record.get('captured_at') or ''),
