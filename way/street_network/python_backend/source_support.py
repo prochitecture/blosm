@@ -60,6 +60,8 @@ class ClippedApproachSupport:
                 end = End(opened['section_id'], opened['end'])
                 if end.section_id not in sections or end in attached:
                     continue  # A recovered original junction already owns it.
+                if end.end in sections[end.section_id].scope_ends:
+                    raise SourceSupportError('A known source scope boundary cannot also be a rectangle selection cut')
                 if end in result:
                     raise SourceSupportError('A selection cut has multiple original outside owners')
                 source = self.sources[end.section_id]
@@ -146,9 +148,7 @@ class ClippedApproachSupport:
     def _extension(self, section, end, cut, needed):
         node, opened, incidence = cut
         source = self.sources[section.id]
-        if node['topology_kind'] == 'JUNCTION':
-            raise SourceSupportError('Outside junction support requires its complete original incidence plan')
-        if node['topology_kind'] not in ('CONTINUATION', 'ENDPOINT'):
+        if node['topology_kind'] not in ('CONTINUATION', 'ENDPOINT', 'JUNCTION'):
             raise SourceSupportError('Outside source topology is not classified')
         if opened['owner_scope'] != 'ACTIVE':
             raise SourceSupportError('Retained physical boundary support needs coordinated ownership')
@@ -177,6 +177,14 @@ class ClippedApproachSupport:
                 np.linalg.norm((1. - parameter) * endpoints[0] + parameter * endpoints[1] - cut_xy) > .001):
             raise SourceSupportError('Outside coordinates do not reproduce the exact original source cut')
         controls, intervals, remaining = [], [], min(needed, self.maximum_extension)
+        if (node['topology_kind'] == 'JUNCTION'
+                and remaining >= float(np.linalg.norm(node_xy - cut_xy)) - self.clearance):
+            # A short extension strictly within the same original segment
+            # does not reach the remote junction. Keep an explicit selection
+            # cut there. Reaching the junction (or its clearance) still needs
+            # the complete original incidence recovery, never a fabricated
+            # free end or an independent continuation through the junction.
+            raise SourceSupportError('Outside junction support requires its complete original incidence plan')
         original_budget = remaining
         legs = [(node_xy, nodes, float(opened['parameter']), float(outside))]
         onward = [leg for leg in node['legs'] if tuple(map(str, leg['source_nodes'])) != nodes]
@@ -216,6 +224,7 @@ class ClippedApproachSupport:
             extra_controls=controls, source_intervals=list(reversed(intervals)) if end == 0 else intervals,
             added_polyline_length_m=original_budget - remaining, requested_extra_m=needed,
             maximum_extension_m=self.maximum_extension,
+            outside_node_kind=node['topology_kind'],
             output_end_kind='SOURCE_ENDPOINT' if true_endpoint else 'SELECTION_CUT')
 
     def prepare(self, network):
@@ -257,6 +266,7 @@ class ClippedApproachSupport:
             while True:
                 context = BuildContext(network, dict(update.products), patterns)
                 failed = None
+                deferred = []
                 for junction in network.intersections:
                     if len(junction.ends) < 3:
                         continue
@@ -264,12 +274,39 @@ class ClippedApproachSupport:
                     approaches = self._approaches(context, junction)
                     yield from progress.checkpoint(f'Fitting clipped footprint for {junction.key.text()}')
                     try:
-                        IntersectionProvider.footprint(context, junction)
+                        footprint = IntersectionProvider.footprint(context, junction)
+                        from .compound_preparation import DeferredCompoundFootprint
+                        if isinstance(footprint, DeferredCompoundFootprint):
+                            deferred.append(dict(junction=junction.key.text(),
+                                neighbors=[key.text() for key in footprint.neighbors],
+                                reason=str(footprint.failure)))
+                            # Deferral only establishes an original neighboring
+                            # junction. A clipped external arm still needs a
+                            # finite full-profile contact budget. Recover the
+                            # existing style-floor/strict source reach, rather
+                            # than publishing a tiny rectangle cut as a free end.
+                            required=self._lengths(junction,approaches)
+                            bundled={sid for bundle in network.bundles for sid in bundle.sections}
+                            demands=[]
+                            for approach in approaches:
+                                if not isinstance(approach.path,Route):continue
+                                last=approach.path.pieces[-1]
+                                end=End(last.section.id,int(last.forward))
+                                root=End(approach.source.id,approach.end)
+                                if (end in cuts and end not in attempted and last.section.id not in bundled
+                                        and approach.length+1e-6<required[root]):
+                                    demands.append((approach,max(0.,required[root]-self.clearance)))
+                            if demands:
+                                demand=ApproachExtentError(junction,demands)
+                                demand.source_support_trigger='DEFERRED_COMPOUND_EXTERNAL_CONTACT_BUDGET'
+                                failed=(junction,approaches,demand)
+                                break
                     except (CornerConstructionError, ApproachExtentError) as exc:
                         failed = (junction, approaches, exc)
                         break
                 if failed is None:
-                    report['status'] = 'CONTACTS_READY'
+                    report['deferred_compounds'] = deferred
+                    report['status'] = 'COMPOUND_OWNERSHIP_REQUIRED' if deferred else 'CONTACTS_READY'
                     return SourcePreparation(network, report)
                 junction, approaches, error = failed
                 yield from progress.checkpoint(f'Recovering clipped support for {junction.key.text()}')
@@ -298,6 +335,9 @@ class ClippedApproachSupport:
                     replacements[last.section.id] = replacement
                     prepends[last.section.id] = len(provenance['extra_controls']) if end.end == 0 else 0
                     provenance['junction'] = junction.key.text()
+                    if hasattr(error,'source_support_trigger'):
+                        provenance['trigger']=error.source_support_trigger
+                        provenance['finite_contact_budget_m']=target
                     additions.append(provenance)
                 if not replacements:
                     return self._error(network, report, error)

@@ -69,7 +69,7 @@ class PhysicalStreetInventory:
             raise ValueError('A Bundle cannot have active and retained physical ownership')
         return SimpleNamespace(streets={**snapshot.streets, **retained},
                                bundles={**snapshot.bundles, **retained_bundles},
-                               junction_origins=snapshot.junction_origins)
+                               junction_origins=getattr(snapshot,'junction_origins',{}))
 
 
 class PhysicalBundleInventory:

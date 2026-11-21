@@ -4,6 +4,10 @@ import numpy as np
 from .mesh import cross
 
 
+class ContinuationReachError(ValueError):
+    """A finite continuation needs a longer original-source lead."""
+
+
 def _evaluate(controls, t):
     t = np.asarray(t)
     degree = len(controls) - 1
@@ -19,7 +23,8 @@ class WidthContinuation:
     zero endpoint second derivatives. Bernstein numerator bounds and a positive
     speed projection certify its curvature over the complete parameter interval.
     """
-    def __init__(self, first, last, start_tangent, end_tangent, minimum_radius, *, refine_curvature=False):
+    def __init__(self, first, last, start_tangent, end_tangent, minimum_radius, *,
+                 refine_curvature=False, outward_offset=0.):
         first, last = np.asarray(first, dtype=float), np.asarray(last, dtype=float)
         a, b = np.asarray(start_tangent, dtype=float), np.asarray(end_tangent, dtype=float)
         if (not all(v.shape == (2,) and np.all(np.isfinite(v)) for v in (first, last, a, b))
@@ -33,25 +38,38 @@ class WidthContinuation:
         axis /= np.linalg.norm(axis)
         length = float((last - first) @ axis)
         if length <= 1e-8:
-            raise ValueError('Width continuation has no positive longitudinal reach')
+            raise ContinuationReachError('Width continuation has no positive longitudinal reach')
         va, vb = length * a, length * b
         self.controls = np.array((first, first + va / 5., first + 2. * va / 5.,
                                   last - 2. * vb / 5., last - vb / 5., last))
-        self.first_derivative = 5. * np.diff(self.controls, axis=0)
-        self.second_derivative = 20. * np.diff(self.controls, n=2, axis=0)
+        if not math.isfinite(outward_offset) or outward_offset < 0.:
+            raise ValueError('A width continuation needs a finite nonnegative outward offset')
+        if outward_offset:
+            # Degree elevation preserves the quintic exactly. Displacing only
+            # its middle control adds 64 t³(1-t)³ times the requested offset.
+            # Position and both derivatives at either end are unaffected.
+            weights = np.arange(1, 6)[:, None] / 6.
+            p = self.controls
+            self.controls = np.vstack((p[0], weights*p[:-1]+(1.-weights)*p[1:], p[-1]))
+            chord = last-first
+            outward = np.array((chord[1], -chord[0])) / np.linalg.norm(chord)
+            self.controls[3] += (64./20.) * outward_offset * outward
+        degree = len(self.controls)-1
+        self.first_derivative = degree * np.diff(self.controls, axis=0)
+        self.second_derivative = degree*(degree-1) * np.diff(self.controls, n=2, axis=0)
         lower_speed = float(np.min(self.first_derivative @ axis))
         if lower_speed <= 1e-8:
-            raise ValueError('Width continuation needs more longitudinal reach to avoid turning back')
-        coefficients = np.zeros(8)
+            raise ContinuationReachError('Width continuation needs more longitudinal reach to avoid turning back')
+        coefficients = np.zeros(2*degree-2)
         for i, velocity in enumerate(self.first_derivative):
             for j, acceleration in enumerate(self.second_derivative):
-                coefficients[i + j] += (math.comb(4, i) * math.comb(3, j)
-                    / math.comb(7, i + j)) * cross(velocity, acceleration)
+                coefficients[i + j] += (math.comb(degree-1, i) * math.comb(degree-2, j)
+                    / math.comb(2*degree-3, i + j)) * cross(velocity, acceleration)
         self.curvature_bound = float(np.max(abs(coefficients)) / lower_speed ** 3)
         self.curvature_intervals = 1
         if self.curvature_bound > (1. + 1e-8) / minimum_radius:
             if not refine_curvature:
-                raise ValueError('Width continuation needs more longitudinal reach for the required minimum radius')
+                raise ContinuationReachError('Width continuation needs more longitudinal reach for the required minimum radius')
             self.curvature_bound, self.curvature_intervals = self._refined_curvature(coefficients, minimum_radius)
         self.maximum_speed = float(np.max(np.linalg.norm(self.first_derivative, axis=1)))
         self.maximum_second = float(np.max(np.linalg.norm(self.second_derivative, axis=1)))
@@ -98,7 +116,7 @@ class WidthContinuation:
                 intervals += 1
                 continue
             if depth == 7:
-                raise ValueError('Width continuation needs more longitudinal reach for the required minimum radius')
+                raise ContinuationReachError('Width continuation needs more longitudinal reach for the required minimum radius')
             a, b = self._halves(velocity)
             c, d = self._halves(coefficients)
             pending.extend(((a, c, depth + 1), (b, d, depth + 1)))

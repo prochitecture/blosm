@@ -10,8 +10,21 @@ import math
 import numpy as np
 from .mesh import Mesh, cross
 from .model import Key
+from .updates import drain_steps, numerical_time_slices
 from .quad_workspace import QuadEnergy, QuadGradient
 from .regions import Region, RegionUnion, signed_area
+
+
+class QuadChartCellBudgetError(ValueError):
+    """A valid physical rim needs another bounded computational partition."""
+
+
+class QuadChartLayerBudgetError(ValueError):
+    """A positive chart exhausted its finite radial-layer construction."""
+
+
+class VisibilityKernelError(ValueError):
+    """A valid boundary needs computational subdivision before radial charting."""
 
 
 def _quality(points):
@@ -30,7 +43,7 @@ def visibility_center(polygon, epsilon=1e-10):
               (float(hi[0]), float(hi[1])), (float(lo[0]), float(hi[1]))]
     for a, b in zip(local, np.roll(local, -1, axis=0)):
         if len(result) < 3:
-            raise ValueError('Block has no visibility kernel; decompose it into local charts')
+            raise VisibilityKernelError('Block has no visibility kernel; decompose it into local charts')
         edge = b - a
         length = float(np.linalg.norm(edge))
         if length == 0.:
@@ -52,7 +65,7 @@ def visibility_center(polygon, epsilon=1e-10):
                 points.append((p[0] + fraction * (q[0] - p[0]),
                                p[1] + fraction * (q[1] - p[1])))
         if not points:
-            raise ValueError('Block has no visibility kernel; decompose it into local charts')
+            raise VisibilityKernelError('Block has no visibility kernel; decompose it into local charts')
         result = []
         previous = points[-1]
         for p in points:
@@ -62,12 +75,12 @@ def visibility_center(polygon, epsilon=1e-10):
             previous = p
     result = np.asarray(result)
     if len(result) < 3 or abs(signed_area(result)) <= epsilon ** 2:
-        raise ValueError('Block has no strict visibility kernel')
+        raise VisibilityKernelError('Block has no strict visibility kernel')
     weights = cross(result, np.roll(result, -1, axis=0))
     center = np.sum((result + np.roll(result, -1, axis=0)) * weights[:, None], axis=0) / (3. * np.sum(weights))
     edge = np.roll(local, -1, axis=0) - local
     if np.min(cross(edge, center - local) / np.linalg.norm(edge, axis=1)) <= epsilon:
-        raise ValueError('Block visibility kernel has insufficient numerical clearance')
+        raise VisibilityKernelError('Block visibility kernel has insufficient numerical clearance')
     return center + origin
 
 
@@ -121,6 +134,12 @@ class FixedRimQuality:
         self.power = power
 
     def improve(self, mesh):
+        return drain_steps(self._iterations(mesh))
+
+    def improve_steps(self, mesh):
+        return numerical_time_slices(self._iterations(mesh))
+
+    def _iterations(self, mesh):
         xy, faces = mesh.xyz[:, :2].copy(), mesh.quads
         edge_ids = np.sort(np.stack((faces, np.roll(faces, -1, axis=1)), axis=-1).reshape(-1, 2), axis=1)
         unique, counts = np.unique(edge_ids, axis=0, return_counts=True)
@@ -143,6 +162,7 @@ class FixedRimQuality:
             sine = jac / (lengths * np.roll(lengths, -1, axis=1))
             if np.max(lengths.max(axis=1) / lengths.min(axis=1)) <= self.target_ratio and sine.min() >= .1:
                 break
+            yield
             gradient = scatter.evaluate(current)
             length2 = np.sum((xy[src] - xy[dst]) ** 2, axis=1)
             mean2 = np.bincount(dst, weights=length2, minlength=len(xy)) / degree
@@ -152,6 +172,8 @@ class FixedRimQuality:
             cap = .2 * np.sqrt(mean2)
             move *= np.minimum(1., np.divide(cap, norm, out=np.ones_like(norm), where=norm > 0.))[:, None]
             for power in range(16):
+                if power:
+                    yield
                 proposal = xy + (2. ** -power) * move
                 proposed = trial.evaluate(proposal)
                 if proposed < value * (1. - 1e-12):
@@ -179,6 +201,10 @@ class QuadChartQualityError(ValueError):
         self.result = result
 
 
+class QuadChartCoreError(ValueError):
+    """The radial construction cannot close its final positive quad core."""
+
+
 class LayeredQuadChart:
     def __init__(self, patterns, *, spacing=.7, max_cells=50000, max_layers=256,
                  quality_iterations=300, maximum_ratio=8.):
@@ -192,6 +218,12 @@ class LayeredQuadChart:
         self.maximum_ratio = maximum_ratio
 
     def build(self, boundary, *, require_quality=True):
+        return drain_steps(self.build_steps(boundary, require_quality=require_quality))
+
+    def build_steps(self, boundary, *, require_quality=True):
+        return numerical_time_slices(self._layers(boundary, require_quality=require_quality))
+
+    def _layers(self, boundary, *, require_quality):
         boundary = np.asarray(boundary, dtype=float)
         RegionUnion().build((Region(Key('chart', 0), boundary),))
         if len(boundary) % 2 or len(boundary) < 4:
@@ -205,6 +237,7 @@ class LayeredQuadChart:
         transition = RadialTransition(self.patterns)
         coarsened, layers = 0, 0
         for _ in range(self.max_layers):
+            yield
             n = len(front)
             a = np.asarray([points[i] for i in front])
             radii = np.linalg.norm(a, axis=1)
@@ -223,6 +256,8 @@ class LayeredQuadChart:
             candidates = []
             if n > 6:
                 for i in range(n):
+                    if i and i % 64 == 0:
+                        yield
                     indices = [(i + k) % n for k in range(4)]
                     if sum(gap[indices[:3]]) >= math.pi - .01:
                         continue
@@ -251,7 +286,7 @@ class LayeredQuadChart:
             if consumed != n:
                 raise ValueError('Cyclic transition selection does not partition the front')
             if len(faces) + sum(4 if count == 3 else 1 for i, count in groups) + 2 > self.max_cells:
-                raise ValueError('Direct quad chart exceeds its cell budget')
+                raise QuadChartCellBudgetError('Direct quad chart exceeds its cell budget')
             new_ids = {}
             for i in sorted(i for i, count in groups):
                 new_ids[i] = len(points)
@@ -276,7 +311,7 @@ class LayeredQuadChart:
             if final:
                 break
         else:
-            raise ValueError('Direct quad chart exceeds its layer budget')
+            raise QuadChartLayerBudgetError('Direct quad chart exceeds its layer budget')
         if len(front) == 4:
             faces.append(tuple(front))
         elif len(front) == 6:
@@ -288,7 +323,7 @@ class LayeredQuadChart:
                 if np.min(jac) > 1e-10:
                     variants.append((float(ratio.max()), i, pair))
             if not variants:
-                raise ValueError('No positive six-vertex direct quad core')
+                raise QuadChartCoreError('No positive six-vertex direct quad core')
             faces.extend(min(variants, key=lambda variant: (round(variant[0], 7), variant[1]))[2])
         else:
             raise ValueError('Direct quad core has unsupported parity')
@@ -298,13 +333,13 @@ class LayeredQuadChart:
         mesh.xyz[:len(boundary), :2] = boundary
         mesh.seams = {0: np.arange(len(boundary))}
         initial = mesh.validate()
-        mesh, improvement = self.quality.improve(mesh)
+        mesh, improvement = yield from self.quality.improve_steps(mesh)
         quality = mesh.validate()
         rotations = None
         if require_quality and self.maximum_ratio < quality['maximum_edge_ratio'] <= 2. * self.maximum_ratio:
             from .quad_rotations import QuadEdgeRotations
-            mesh, rotations = QuadEdgeRotations(maximum_ratio=self.maximum_ratio,
-                max_cells=self.max_cells).improve(mesh,
+            mesh, rotations = yield from QuadEdgeRotations(maximum_ratio=self.maximum_ratio,
+                max_cells=self.max_cells).improve_steps(mesh,
                     FixedRimQuality(iterations=min(100, self.quality.iterations)))
             quality = mesh.validate()
         points = mesh.xyz[mesh.quads, :2]

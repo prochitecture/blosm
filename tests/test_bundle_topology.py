@@ -9,7 +9,9 @@ import unittest
 
 # Load the Blender-independent module without importing the add-on's bpy entry.
 name='tested_bundle_topology'
-spec=importlib.util.spec_from_file_location(name,Path(__file__).resolve().parents[1]/'way/street_network/bundle_topology.py')
+topology_root=Path(__file__).resolve().parents[1]/'way/street_network'
+spec=importlib.util.spec_from_file_location(name,topology_root/'bundle_topology.py',
+    submodule_search_locations=[str(topology_root)])
 module=importlib.util.module_from_spec(spec);sys.modules[name]=module;spec.loader.exec_module(module)
 PreparedBundleTopology=module.PreparedBundleTopology
 BundleTopologyError=module.BundleTopologyError
@@ -50,6 +52,57 @@ def chained(reverse=False):
     return bundle, streets, origins
 
 
+def fragmented_pair():
+    paths = {1: ((0., 0.), (10., -2.), (20., -3.)),
+             3: ((20., -3.), (35., -2.), (50., 0.)),
+             2: ((30., 3.), (10., 2.), (0., 0.)),
+             4: ((50., 0.), (40., 2.), (30., 3.))}
+    sources = {1: 'a', 3: 'a', 2: 'b', 4: 'b'}
+    nodes = {1: ('head', 'a-mid'), 3: ('a-mid', 'tail'),
+             2: ('b-mid', 'head'), 4: ('tail', 'b-mid')}
+    streets = {}
+    for sid, points in paths.items():
+        item = section(sid*10, points)
+        source = sources[sid]
+        item.update(category='residential', tags=dict(oneway='yes', name='Paired Street'),
+                    source_way_ids=(source,), source_segments=[(source, *nodes[sid], 0., 1.)])
+        streets[sid] = dict(id=sid, bundle_id=7, items=[item])
+    ports = {8: ((1, 0), (2, 1)), 9: ((1, 1), (3, 0)),
+             10: ((2, 0), (4, 1)), 11: ((3, 1), (4, 0))}
+    physical = []
+    for jid, ends in ports.items():
+        sid, end = ends[0]
+        location = paths[sid][-1 if end else 0]
+        ring = [dict(item_kind='Street', endpoints=[dict(street_id=sid, end=end,
+            terminal_id=sid*10, terminal_kind='Section')]) for sid, end in ends]
+        # An external side Street remains a separate incidence at every join.
+        ring.append(dict(item_kind='Street', endpoints=[dict(street_id=100+jid,
+            end=0, terminal_id=1000+jid, terminal_kind='Section')]))
+        physical.append(dict(junction_id=jid, location=location, ring=ring))
+    bundle = dict(id=7, head=(4, 3, 1, 2), tail=(2, 1, 3, 4),
+        head_locations=tuple(paths[sid][-1 if sid in (2,4) else 0] for sid in (4,3,1,2)),
+        tail_locations=tuple(paths[sid][0 if sid in (2,4) else -1] for sid in (2,1,3,4)),
+        owned_streets=(1,2,3,4))
+    return bundle, streets, dict(physical=physical)
+
+
+def branched_corridor():
+    paths={1:((40.,10.),(0.,10.)),2:((0.,0.),(15.,0.)),3:((15.,0.),(20.,0.)),
+           4:((20.,0.),(40.,0.)),5:((15.,0.),(40.,-10.)),6:((20.,0.),(20.,10.))}
+    kinds={1:'primary',2:'primary',3:'primary_link',4:'primary',5:'tertiary',6:'residential'}
+    streets={sid:dict(id=sid,bundle_id=7,items=[dict(section(10*sid,points),category=kinds[sid],width=6.,
+        source_way_ids=(str(sid),),tags=dict(oneway='yes',name='Main'))]) for sid,points in paths.items()}
+    physical=[]
+    for jid,ports in ((8,((2,1),(3,0),(5,0))),(9,((3,1),(4,0),(6,0)))):
+        sid,end=ports[0]
+        physical.append(dict(junction_id=jid,location=paths[sid][-1 if end else 0],ring=[
+            dict(item_kind='Street',endpoints=[dict(street_id=s,terminal_id=10*s,
+                terminal_kind='Section',end=e)]) for s,e in ports]))
+    bundle=dict(id=7,head=(1,2),tail=(1,4,5),head_locations=((0.,10.),(0.,0.)),
+        tail_locations=((40.,10.),(40.,0.),(40.,-10.)),owned_streets=tuple(paths))
+    return bundle,streets,dict(physical=physical)
+
+
 class BundleTopologyTests(unittest.TestCase):
     def setUp(self):
         self.reader=PreparedBundleTopology(('residential','service'))
@@ -72,6 +125,105 @@ class BundleTopologyTests(unittest.TestCase):
         self.assertEqual(result.required_features,('INTERNAL_JUNCTIONS',))
         self.assertEqual({r.start.section_id for m in result.members for s in m.spans for r in s.sections},{10,11,20})
         json.dumps(result.report())
+
+    def test_fragmented_opposed_source_paths_keep_shared_terminal_incidence(self):
+        bundle, streets, origins = fragmented_pair()
+        before = deepcopy((bundle, streets, origins))
+        result = self.reader.read(bundle, streets, origins=origins)
+        self.assertEqual(result.chains, ((2, 4), (1, 3)))
+        self.assertEqual([m.forward for m in result.members], [False, False, True, True])
+        self.assertEqual({j.junction_id for j in result.chain_joins}, {9, 10})
+        self.assertTrue(all(m.complete for m in result.members))
+        self.assertIn('SHARED_TERMINALS', result.required_features)
+        self.assertEqual((bundle, streets, origins), before)
+
+    def test_fragmented_pair_rejects_missing_incidence_and_interior_crossing(self):
+        for change in ('missing', 'crossing', 'source', 'name', 'oneway', 'branch'):
+            bundle, streets, origins = fragmented_pair()
+            if change == 'missing': origins['physical'][1]['ring'].pop(0)
+            elif change == 'crossing': streets[3]['items'][0]['points'] = ((20.,-3.,0.), (35.,8.,0.), (50.,0.,0.))
+            elif change == 'source': streets[3]['items'][0]['source_segments'][0] = ('a','wrong','tail',0.,1.)
+            elif change == 'name': streets[3]['items'][0]['tags']['name'] = 'Other Street'
+            elif change == 'oneway': streets[3]['items'][0]['tags']['oneway'] = 'no'
+            else: origins['physical'][1]['ring'].append(deepcopy(origins['physical'][1]['ring'][0]))
+            with self.subTest(change=change), self.assertRaises(BundleTopologyError):
+                self.reader.read(bundle, streets, origins=origins)
+
+    def test_main_carriageways_retain_longitudinal_link_and_every_other_source_role(self):
+        bundle,streets,origins=branched_corridor()
+        before=deepcopy((bundle,streets,origins))
+        result=self.reader.read(bundle,streets,origins=origins)
+        self.assertEqual(result.chains,((1,),(2,3,4)))
+        self.assertEqual(result.exterior_streets,(5,))
+        self.assertEqual(result.interior_streets,(6,))
+        self.assertEqual([member.forward for member in result.members],[False,True,True,True])
+        self.assertIn('SOURCE_CARRIAGEWAY_CHAINS',result.required_features)
+        self.assertEqual((bundle,streets,origins),before)
+
+    def test_main_chain_apply_uses_retained_original_streets(self):
+        bundle,streets,origins=branched_corridor()
+        retained={4:streets.pop(4)};issues=[]
+        snapshot=SimpleNamespace(streets=streets,retained_physical_streets=retained,bundles={7:bundle},
+            junction_origins=origins,issue=lambda *args:issues.append(args))
+        self.reader.apply(snapshot)
+        self.assertFalse(issues)
+        self.assertEqual(bundle['topology']['chains'],((1,),(2,3,4)))
+        self.assertEqual(set(snapshot.retained_physical_streets),{4})
+        self.assertNotIn(4,snapshot.streets)
+
+    def test_main_chain_cannot_guess_a_missing_incidence_transverse_link_or_third_peer(self):
+        for change in('incidence','transverse','peer'):
+            bundle,streets,origins=branched_corridor()
+            if change=='incidence':origins['physical'][0]['ring'].pop(1)
+            elif change=='transverse':streets[3]['items'][0]['points']=((15.,0.,0.),(15.,2.,0.),(20.,0.,0.))
+            else:streets[5]['items'][0]['category']='primary'
+            with self.subTest(change=change),self.assertRaises(BundleTopologyError):
+                self.reader.read(bundle,streets,origins=origins)
+
+    def test_main_chain_terminal_proof_keeps_an_interior_same_class_crossing(self):
+        bundle,streets,origins=branched_corridor()
+        streets[3]['items'][0]['category']='primary'
+        streets[5]['items'][0].update(category='primary',points=((15.,0.,0.),(30.,0.,0.),(40.,10.,0.)))
+        bundle.update(tail=(1,4),tail_locations=((40.,10.),(40.,0.)))
+        origins['physical'].append(dict(junction_id=10,location=(40.,10.),ring=[
+            dict(item_kind='Street',endpoints=[dict(street_id=sid,end=end,terminal_kind='Section',
+                terminal_id=sid*10)]) for sid,end in((1,0),(5,1))]))
+        result=self.reader.read(bundle,streets,origins=origins)
+        self.assertEqual(result.chains,((1,),(2,3,4)))
+        self.assertEqual(result.interior_streets,(5,6))
+
+    def test_named_complete_pair_retains_actual_ends_when_heuristic_tail_contains_only_ramps(self):
+        bundle,streets,origins=branched_corridor()
+        bundle.update(tail=(5,),tail_locations=((40.,-10.),))
+        result=self.reader.read(bundle,streets,origins=origins)
+        self.assertEqual(result.chains,((1,),(2,3,4)))
+        self.assertIn('FULL_NAMED_SOURCE_EXTENT',result.required_features)
+        for change in('names','divergent','unaccounted'):
+            b,s,o=deepcopy((bundle,streets,origins))
+            if change=='names':s[1]['items'][0]['tags']['name']='Other'
+            elif change=='divergent':s[1]['items'][0]['points']=((40.,100.,0.),(0.,10.,0.))
+            else:
+                s[7]=dict(id=7,bundle_id=7,items=[dict(section(70,((50.,20.),(60.,20.))),
+                    category='primary',width=6.,tags=dict(name='Main',oneway='yes'))])
+                b['owned_streets']+=(7,)
+            with self.subTest(change=change),self.assertRaises(BundleTopologyError):
+                self.reader.read(b,s,origins=o)
+
+    def test_original_common_terminal_sort_tie_uses_the_separated_member_order(self):
+        bundle,streets,origins=branched_corridor()
+        streets={sid:streets[sid] for sid in(1,2)}
+        streets[1]['items'][0]['points']=((40.,10.,0.),(0.,0.,0.))
+        streets[2]['items'][0]['points']=((0.,0.,0.),(40.,-10.,0.))
+        bundle.update(head=(2,1),tail=(1,2),head_locations=((0.,0.),(0.,0.)),
+            tail_locations=((40.,10.),(40.,-10.)),owned_streets=(1,2))
+        origins=dict(physical=[dict(junction_id=8,location=(0.,0.),ring=[
+            dict(item_kind='Street',endpoints=[dict(street_id=sid,end=end,terminal_kind='Section',
+                terminal_id=sid*10)]) for sid,end in((1,1),(2,0))])])
+        result=self.reader.read(bundle,streets,origins=origins)
+        self.assertEqual([m.street_id for m in result.members],[1,2])
+        self.assertIn('SHARED_TERMINAL_ORDER',result.required_features)
+        origins['physical'][0]['ring'].pop()
+        with self.assertRaises(BundleTopologyError):self.reader.read(bundle,streets,origins=origins)
 
     def test_longitudinal_chain_retains_streets_sections_and_lateral_roles(self):
         for reverse in (False, True):
@@ -189,10 +341,55 @@ class BundleTopologyTests(unittest.TestCase):
 
     def test_owned_interior_street_is_not_an_invented_third_outer_member(self):
         bundle,streets=sample();bundle['owned_streets']=(1,2,3)
+        streets[3]['items'][0]=section(30,((20.,0.),(20.,10.)))
+        streets[1]['items'][1]['attachments'][0]['side']='LEFT'
         result=self.reader.read(bundle,streets)
         self.assertEqual(len(result.members),2)
         self.assertEqual(result.interior_streets,(3,))
         self.assertIn('INTERIOR_STREETS',result.required_features)
+
+    def test_owned_exterior_attachment_is_not_a_separator_crossing(self):
+        for reverse in (False, True):
+            bundle,streets=sample(reverse=reverse);bundle['owned_streets']=(1,2,3)
+            before=deepcopy((bundle,streets))
+            result=self.reader.read(bundle,streets)
+            self.assertEqual(result.interior_streets,())
+            self.assertEqual(result.exterior_streets,(3,))
+            self.assertNotIn('INTERIOR_STREETS',result.required_features)
+            self.assertEqual(result.report()['exterior_streets'],(3,))
+            self.assertEqual((bundle,streets),before)
+            self.assertEqual(result.junctions[0].attachments[0].street_id,3)
+
+    def test_known_outward_port_does_not_hide_a_later_interior_crossing(self):
+        bundle,streets=sample();bundle['owned_streets']=(1,2,3)
+        streets[3]['items'][0]=section(30,((20.,0.),(20.,-5.),(30.,15.)))
+        result=self.reader.read(bundle,streets)
+        self.assertEqual(result.interior_streets,(3,))
+        self.assertEqual(result.exterior_streets,())
+
+    def test_nonattached_owned_street_needs_all_segment_intervals_outside(self):
+        bundle,streets=sample(junction=False);bundle['owned_streets']=(1,2,3)
+        streets[3]['items'][0]=section(30,((-10.,-4.),(50.,-4.)))
+        result=self.reader.read(bundle,streets)
+        self.assertEqual(result.exterior_streets,(3,))
+        # Both endpoints are exterior, but the open segment crosses the median.
+        streets[3]['items'][0]=section(30,((-10.,5.),(50.,5.)))
+        result=self.reader.read(bundle,streets)
+        self.assertEqual(result.interior_streets,(3,))
+        self.assertEqual(result.exterior_streets,())
+
+    def test_unresolved_attachment_side_or_collinear_boundary_remains_conservative(self):
+        bundle,streets=sample();bundle['owned_streets']=(1,2,3)
+        streets[1]['items'][1]['attachments'][0]['side']=None
+        self.assertEqual(self.reader.read(bundle,streets).interior_streets,(3,))
+        bundle,streets=sample(junction=False);bundle['owned_streets']=(1,2,3)
+        streets[3]['items'][0]=section(30,((20.,0.),(30.,0.)))
+        self.assertEqual(self.reader.read(bundle,streets).interior_streets,(3,))
+
+    def test_self_crossing_member_outline_cannot_prove_an_exterior_role(self):
+        bundle,streets=sample(junction=False);bundle['owned_streets']=(1,2,3)
+        streets[2]['items'][0]=section(20,((0.,10.),(20.,-10.),(40.,10.)))
+        self.assertEqual(self.reader.read(bundle,streets).interior_streets,(3,))
 
     def test_changing_member_order_is_not_silently_sorted(self):
         bundle,streets=sample();bundle.update(tail=(2,1),tail_locations=((40.,10.),(40.,0.)))

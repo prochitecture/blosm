@@ -13,13 +13,19 @@ from .regions import BoundaryLoop, Region, RegionUnion
 from .mesh import cross
 
 
+class AnalyticalContactError(ValueError):
+    """Existing local contact branches did not resolve a retained curb switch."""
+
+
 class CertifiedCurbSampler:
     """Sample each real curve using its own curvature and physical spacing."""
-    def __init__(self, tolerance, spacing, max_samples):
+    def __init__(self, tolerance, spacing, max_samples, *, piecewise=False):
         if (not all(math.isfinite(v) and v > 0. for v in (tolerance, spacing))
                 or type(max_samples) is not int or max_samples < 4):
             raise ValueError('Invalid certified curb sampling limits')
         self.tolerance, self.spacing, self.max_samples = tolerance, spacing, max_samples
+        self.piecewise = bool(piecewise)
+        self.last_piecewise_bounds = ()
 
     def regular(self, first, last, step):
         count = max(1, int(math.ceil((last - first) / step)))
@@ -27,7 +33,7 @@ class CertifiedCurbSampler:
             raise ValueError('Certified curb sampling exceeds its sample budget')
         return np.linspace(first, last, count + 1)
 
-    def lead_metrics(self, approach, parameters, cumulative, distance, base, length):
+    def lead_metrics(self, approach, parameters, cumulative, distance, base, length, *, local_curvature=False):
         route = approach.path
         if getattr(route, 'outward', False):
             pieces = [(piece.path, float(route.stations[i]), piece.forward) for i, piece in enumerate(route.pieces)]
@@ -50,13 +56,53 @@ class CertifiedCurbSampler:
                 maximum_speed = 1. + abs(distance) * float(np.linalg.norm(derivative, axis=1).max())
                 speed = max(speed, ratio * maximum_speed)
             else:
-                k = path.curvature_bound
+                low,high=max(0.,first-offset),min(path.length,last-offset)
+                if not forward:low,high=path.length-high,path.length-low
+                k=(path.visible_curvature_bound(low,high)
+                   if local_curvature and high>low+1e-10 else path.curvature_bound)
                 curvature = max(curvature, k / (1. - abs(distance) * k))
                 speed = max(speed, ratio * (1. + abs(distance) * k))
         return curvature, speed, fixed
 
+    def _piecewise_circle(self, curve, first, last):
+        """Each original lead and circular arc keeps its own error certificate."""
+        values, bounds = [], []
+        for part in range(3):
+            low = max(first*curve.length, curve.lengths[part])
+            high = min(last*curve.length, curve.lengths[part+1])
+            if high <= low+1e-10:continue
+            a, b = low/curve.length, high/curve.length
+            if part == 1:
+                curvature, speed, fixed = 1./curve.corner.radius, 1., ()
+            else:
+                approach, parameters, cumulative, offset = curve.leads[0 if part == 0 else 1]
+                curvature, speed, fixed = self.lead_metrics(approach, parameters, cumulative, offset,
+                    curve.lengths[part], curve.length,local_curvature=True)
+            step = self.spacing/speed
+            if curvature > 1e-12:
+                step = min(step, math.sqrt(8.*self.tolerance/curvature)/speed,
+                           math.pi/(2.*curvature*speed))
+            anchors = sorted({a, b, *(float(t) for t in fixed if a < t < b)})
+            count = 0
+            for start, finish in zip(anchors, anchors[1:]):
+                sampled = self.regular(start, finish, step/curve.length)
+                values.extend(sampled[:-1]);count += len(sampled)-1
+                if len(values)+1 > self.max_samples:
+                    raise ValueError('Certified curb sampling exceeds its sample budget')
+            bounds.append(dict(part=part, curvature_bound=curvature, speed_bound=speed,
+                physical_parameter_step=step, chord_error_bound=curvature*(speed*step)**2/8.,
+                tolerance=self.tolerance, intervals=count, first=a, last=b))
+        self.last_piecewise_bounds = tuple(bounds)
+        if not values:
+            raise ValueError('Piecewise analytical curb has no positive original span')
+        values[0] = first  # Preserve the exact semantic contact, including its last ulp.
+        return np.r_[values, last]
+
     def sample(self, curve, first, last):
-        if curve.continuation is not None:
+        self.last_piecewise_bounds = ()
+        if hasattr(curve, 'certified_parameters'):
+            parameters = curve.certified_parameters(self, first, last)
+        elif curve.continuation is not None:
             count = curve.continuation.intervals(self.spacing, self.tolerance)
             parameters = self.regular(first, last, 1. / count)
         elif curve.corner.center is None:
@@ -69,6 +115,8 @@ class CertifiedCurbSampler:
             step = min(self.spacing / max(speed, 1e-12),
                        math.sqrt(8. * self.tolerance / max(second, 1e-12)))
             parameters = self.regular(first, last, step)
+        elif self.piecewise:
+            parameters = self._piecewise_circle(curve, first, last)
         else:
             first_distance, last_distance = first * curve.length, last * curve.length
             curvature, speed, fixed = 0., 1., [first, last]
@@ -118,13 +166,14 @@ class CertifiedCurbSampler:
 
 
 class AnalyticalBoundarySampler:
-    def __init__(self, *, tolerance=.005, spacing=.7, max_samples=16384):
+    def __init__(self, *, tolerance=.005, spacing=.7, max_samples=16384, piecewise=False):
         if (not math.isfinite(tolerance) or tolerance <= 0.
                 or not math.isfinite(spacing) or spacing <= 0.
                 or type(max_samples) is not int or max_samples < 4):
             raise ValueError('Invalid analytical boundary sampling limits')
         self.tolerance, self.max_samples = tolerance, max_samples
-        self.curves = CertifiedCurbSampler(tolerance, spacing, max_samples)
+        self.curves = CertifiedCurbSampler(tolerance, spacing, max_samples, piecewise=piecewise)
+        self.curve_reports = []
 
     @staticmethod
     def _circle_contact(curves, initial, lower, upper):
@@ -170,7 +219,10 @@ class AnalyticalBoundarySampler:
                 if not valid:
                     break
                 u = float(np.clip(valid[0], 0., 1.))
-                parameters.append((curve.lengths[1] + u * (curve.lengths[2] - curve.lengths[1])) / curve.length)
+                if getattr(curve,'circle_interval',None) is not None:
+                    parameters.append(float(curve.source_parameter(u)))
+                else:
+                    parameters.append((curve.lengths[1] + u * (curve.lengths[2] - curve.lengths[1])) / curve.length)
             if len(parameters) == 2:
                 parameters = np.asarray(parameters)
                 if (np.all(parameters >= lower - 1e-9) and np.all(parameters <= upper + 1e-9)
@@ -180,7 +232,9 @@ class AnalyticalBoundarySampler:
 
     def _check_contact_budget(self, curves, current, spans, layouts):
         for span, curve, t in zip(spans, curves, current):
-            points = curve(np.linspace(0., 1., layouts[span.owner].rows + 1))
+            points = getattr(curve,'contact_reference_points',None)
+            if points is None:
+                points = curve(np.linspace(0., 1., layouts[span.owner].rows + 1))
             vectors = np.diff(points, axis=0)
             length2 = np.sum(vectors ** 2, axis=1)
             if np.any(length2 <= 1e-16):
@@ -194,6 +248,14 @@ class AnalyticalBoundarySampler:
     def _contact(self, first, last, labels, layouts):
         curves = [layouts[span.owner].boundaries[label.index]
                   for span, label in zip((first, last), labels)]
+        circular_joins = ('native_original_circle_fillet', 'original_lead_fillet', 'original_bank_join')
+        if (getattr(first.owner,'kind',None) in circular_joins
+                or getattr(last.owner,'kind',None) in circular_joins):
+            from .bank_circle_contacts import shared_contact as bank_circle_contact
+            return bank_circle_contact(self, curves, (first,last), labels, layouts)
+        if any(getattr(curve,'exact_retained_parent_contacts',False) for curve in curves):
+            from .retained_arc_fillets import shared_contact
+            return shared_contact(self,first,last,labels,layouts)
         initial = np.array((labels[0].last, labels[1].first))
         # Solve locally around the clipping contact. Another intersection of the
         # same finite curves must never be substituted for this one.
@@ -228,14 +290,24 @@ class AnalyticalBoundarySampler:
                     break
             else:
                 break
-        raise ValueError('Analytical curb contact needs a different local intersection branch')
+        from .coincident_source_curbs import contact as coincident_contact
+        coincident=coincident_contact(curves,initial,lower,upper)
+        if coincident is not None:
+            self._check_contact_budget(curves,coincident,(first,last),layouts)
+            return coincident
+        raise AnalyticalContactError('Analytical curb contact needs a different local intersection branch')
 
     def build(self, group):
+        self.retained_arc_contact_tokens=set()
+        self.retained_arc_contact_handoffs=[]
+        from .canonical_source_curb_runs import canonicalize
+        group,self.source_curb_canonicalizations=canonicalize(group,self.curves.spacing)
         sources = {p.region.owner: p for p in group.footprints}
         layouts = {owner: source.layout for owner, source in sources.items()}
         if any(layout is None for layout in layouts.values()):
             raise ValueError('Analytical compound sampling needs the source footprint layouts')
         loops, total = [], 0
+        self.curve_reports = []
         for loop in group.loops:
             labels = [rim_label(span, sources) for span in loop.spans]
             contacts = {}
@@ -276,6 +348,9 @@ class AnalyticalBoundarySampler:
                         raise ValueError('Retained analytical curb interval reverses or collapses')
                     layout = layouts[owner]
                     parameters = self.curves.sample(layout.boundaries[label.index], first, last)
+                    if self.curves.last_piecewise_bounds:
+                        self.curve_reports.append(dict(owner=owner.text(), curve=label.index,
+                            pieces=self.curves.last_piecewise_bounds))
                     count = len(parameters) - 1
                     if total + count > self.max_samples:
                         raise ValueError('Analytical compound boundary exceeds its sample budget')

@@ -128,6 +128,34 @@ class PythonCompoundPartitionTests(unittest.TestCase):
         self.assertEqual(len(result.metadata['blocks']), 2)
         validate_overlaps({model.Key('compound', 1): result.mesh})
 
+    def test_cancel_during_chart_construction_and_restart(self):
+        group,context=inputs(short_junction_pair(model))
+        source=context.network.to_dict()
+        rims=[loop.xy.copy() for loop in group.loops]
+        builder=CompoundQuadChart(PatternLibrary())
+        interrupted=builder.build_steps(group,context)
+        self.assertIsNone(next(interrupted))
+        self.assertIsNone(next(interrupted))
+        interrupted.close()
+        self.assertEqual(context.network.to_dict(),source)
+        for loop,xy in zip(group.loops,rims):
+            np.testing.assert_array_equal(loop.xy,xy)
+
+        resumed=builder.build_steps(group,context)
+        advances=0
+        while True:
+            try:
+                self.assertIsNone(next(resumed))
+            except StopIteration as done:
+                mesh=done.value.mesh
+                break
+            advances+=1
+        self.assertGreaterEqual(advances,3)
+        fresh_group,fresh_context=inputs(short_junction_pair(model))
+        expected=CompoundQuadChart(PatternLibrary()).build(fresh_group,fresh_context).mesh
+        np.testing.assert_array_equal(mesh.xyz,expected.xyz)
+        np.testing.assert_array_equal(mesh.quads,expected.quads)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -6,8 +6,10 @@ method substrings for targeted qualification. Run only with the chat's factory
 profile; the script deliberately removes all test-scene data between cases.
 """
 import argparse
+from collections import Counter
 from contextlib import contextmanager
 from dataclasses import replace
+from itertools import count
 import hashlib
 import importlib.util
 import json
@@ -82,7 +84,7 @@ def digest(value):
 def buffer(items, attribute, dtype, width=1):
     value = np.empty(len(items) * width, dtype=dtype)
     items.foreach_get(attribute, value)
-    return hashlib.sha256(value.tobytes()).hexdigest()
+    return hashlib.sha256(memoryview(value).cast('B')).hexdigest()
 
 
 def mesh_state(mesh):
@@ -100,26 +102,38 @@ def mesh_state(mesh):
         counts=(len(mesh.vertices), len(mesh.polygons)))
 
 
-def controller_state(controller):
+def output_state(obj):
+    output = dict(type=obj.type, matrix=tuple(tuple(row) for row in obj.matrix_world),
+                  owner=obj.get('st_py_owner'), metadata=json.loads(obj.get('st_py_metadata', '{}')))
+    if obj.type == 'MESH':
+        output['mesh'] = mesh_state(obj.data)
+        if obj.modifiers:
+            output['evaluated_mesh'] = mesh_state(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
+    else:
+        output['asset'] = obj.get('st_py_asset')
+    return output
+
+
+def controller_source(controller):
     source = json.loads(controller['st_py_source_data'])
-    # A fresh import UUID is the only source field ignored. Construction
-    # metadata, source provenance, section IDs and topology remain exact.
     source.pop('uuid', None)
+    return source
+
+
+def controller_manifest(controller):
     manifest = json.loads(controller.get('st_py_manifest', '{}'))
     manifest.pop('network_uuid', None)
+    return manifest
+
+
+def controller_state(controller):
+    source = controller_source(controller)
+    manifest = controller_manifest(controller)
     outputs = {}
     for obj in controller['st_py_outputs'].objects:
         key = obj['st_py_key']
         assert key not in outputs, key
-        output = dict(type=obj.type, matrix=tuple(tuple(row) for row in obj.matrix_world),
-                      owner=obj.get('st_py_owner'), metadata=json.loads(obj.get('st_py_metadata', '{}')))
-        if obj.type == 'MESH':
-            output['mesh'] = mesh_state(obj.data)
-            if obj.modifiers:
-                output['evaluated_mesh'] = mesh_state(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
-        else:
-            output['asset'] = obj.get('st_py_asset')
-        outputs[key] = output
+        outputs[key] = output_state(obj)
     return dict(source=source, manifest=manifest, outputs=outputs,
                 terrain_mode=controller.get('st_py_terrain_mode'))
 
@@ -138,6 +152,52 @@ def scene_state():
         assert key not in result, key
         result[key] = state
     return result
+
+
+def city_scene_fingerprint():
+    """Hash the same canonical scene JSON as digest(scene_state()), one output at a time."""
+    def encoded(value):
+        return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+
+    def member_prefix(index, key):
+        return (b',' if index else b'') + encoded(key) + b':'
+
+    bpy.context.view_layer.update()
+    by_key = {}
+    for controller in controllers(committed=True):
+        key = ','.join(str(section['id']) for section in controller_source(controller)['sections'])
+        assert key not in by_key, key
+        by_key[key] = controller
+    scene = hashlib.sha256(b'{')
+    components = {}
+    for i, key in enumerate(sorted(by_key)):
+        controller = by_key[key]
+        scene.update(member_prefix(i, key))
+        component = hashlib.sha256()
+
+        def write(data):
+            component.update(data)
+            scene.update(data)
+
+        write(b'{"manifest":')
+        write(encoded(controller_manifest(controller)))
+        write(b',"outputs":{')
+        outputs = sorted(controller['st_py_outputs'].objects, key=lambda obj: obj['st_py_key'])
+        previous = None
+        for j, obj in enumerate(outputs):
+            name = obj['st_py_key']
+            assert name != previous, name
+            previous = name
+            write(member_prefix(j, name))
+            write(encoded(output_state(obj)))
+        write(b'},"source":')
+        write(encoded(controller_source(controller)))
+        write(b',"terrain_mode":')
+        write(encoded(controller.get('st_py_terrain_mode')))
+        write(b'}')
+        components[key] = component.hexdigest()
+    scene.update(b'}')
+    return components, scene.hexdigest()
 
 
 def inventory():
@@ -217,18 +277,30 @@ class StreetProgressiveChecks(unittest.TestCase):
         self.assertIsNone(session.job.error, str(session.job.error))
         self.assertTrue(predicate(), 'Required checkpoint was not reached: ' + session.phase)
 
-    def drain(self, session, *, successful=True):
+    def drain(self, session, *, successful=True, real_extract=False):
         trace = []
-        for _ in range(200000):
+        callbacks, longest = 0, None
+        for _ in (count() if real_extract else range(200000)):
             if session.job.done:
                 break
+            previous_phase = session.phase
             start = time.perf_counter()
-            session.job.step(max_steps=1)
-            trace.append(dict(phase=session.phase, committed=session.committed_units,
-                              seconds=time.perf_counter() - start))
+            if real_extract:
+                session.job.step()
+            else:
+                session.job.step(max_steps=1)
+            callbacks += 1
+            row = dict(phase=session.phase, committed=session.committed_units, seconds=time.perf_counter() - start)
+            if longest is None or row['seconds'] > longest['seconds']:
+                longest = dict(row, phase_before=previous_phase)
+            # Preserve every synthetic checkpoint. For a city, retain one
+            # row per publication and measure every normal driver callback.
+            if not real_extract or not trace or row['committed'] != trace[-1]['committed']:
+                trace.append(row)
         self.assertTrue(session.job.done, 'Progressive session did not terminate')
         result = session.finish(silent=True)
-        METRICS.append(dict(test=self.id(), result=result, callbacks=trace))
+        METRICS.append(dict(test=self.id(), result=result, callbacks=trace, callback_count=callbacks,
+                            longest_callback=longest, callback_trace='publication' if real_extract else 'all'))
         self.assertFalse(session.ownership.pending)
         self.assertIsNone(session.finish(silent=True), 'Cleanup ran twice')
         if successful:
@@ -260,6 +332,7 @@ class StreetProgressiveChecks(unittest.TestCase):
         self.assertEqual(bpy.ops.blosm.import_data(), {'FINISHED'})
         expected = scene_state()
         self.assertEqual(len(expected), 3)
+        self.assertEqual(city_scene_fingerprint(), ({key:digest(v) for key,v in expected.items()}, digest(expected)))
         self.prepare(True)
         session = self.new_session()
         selected, _ = self.sentinel()
@@ -625,11 +698,87 @@ class StreetProgressiveChecks(unittest.TestCase):
                 expected = scene_state()
                 self.assertTrue(expected, 'Real extract produced no accepted street network')
                 self.prepare(True, path)
-                result, _ = self.drain(self.new_session())
+                result, _ = self.drain(self.new_session(), real_extract=True)
                 self.assertEqual(scene_state(), expected)
                 self.assertEqual(result['committed'], len(expected))
                 METRICS.append(dict(osm=str(path.resolve()), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
                                     exact_geometry_sha256=digest(expected), components=len(expected)))
+
+    def assert_published_ground_inventory(self, report, physical):
+        """Count original supported Sections independently of the component iterator."""
+        from blosm.way.street_network.design import StreetDesign
+        from blosm.way.street_network.physical_ports import GroundSurfacePolicy
+        included, deferred = [], []
+        categories = StreetDesign().categories
+        for street in physical.streets.values():
+            for item in street['items']:
+                if item['kind'] == 'Section' and item['category'] in categories:
+                    destination = deferred if GroundSurfacePolicy.reason(item.get('tags', {})) else included
+                    destination.append(item['id'])
+        self.assertEqual(len(included), len(set(included)), 'Duplicate source Section ownership')
+        self.assertCountEqual(report['ground_scope']['deferred_sections'], deferred)
+        self.assertFalse(report['ground_scope']['blocked_sections'])
+        committed = {controller.name:controller for controller in controllers(committed=True)}
+        self.assertCountEqual((surface['controller'] for surface in report['surfaces']), committed.keys())
+        published = Counter()
+        for surface in report['surfaces']:
+            controller = committed[surface['controller']]
+            source = json.loads(controller['st_py_source_data'])
+            ids = [section['id'] for section in source['sections']]
+            self.assertCountEqual(surface['sections'], ids)
+            published.update(ids)
+            meshes = [obj for obj in controller['st_py_outputs'].objects if obj.type == 'MESH']
+            self.assertGreater(surface['quads'], 0)
+            self.assertEqual(surface['quads'], sum(len(obj.data.polygons) for obj in meshes))
+            self.assertFalse(any(obj.get('st_py_preview') or obj.get(ownership.PENDING) for obj in meshes))
+        self.assertEqual(published, Counter(included), 'Missing or multiply published original ground Sections')
+
+    def test_real_extracts_coverage_parity(self):
+        """Partial real imports must report the same failures in either mode."""
+        from street_issue_qualification import complete_ground_result
+        from blosm.way.street_network.physical_sources import PhysicalStreetInventory
+        def coverage(session_result):
+            names = {collection.get('blosm_street_report') for collection in bpy.data.collections
+                     if collection.get('blosm_street_report')}
+            reports = [json.loads(bpy.data.texts[name].as_string()) for name in names]
+            self.assertEqual(len(reports), 1)
+            report = reports[0]
+            physical = PhysicalStreetInventory.from_report(report['source'])
+            if getattr(ARGS, 'require_ground_coverage', False):
+                self.assertTrue(complete_ground_result(session_result, reports),
+                                str((session_result['outcome'], report.get('ground_coverage'),
+                                     [row.get('reason') for row in report['surfaces'] if row.get('status') != 'READY'])))
+                self.assert_published_ground_inventory(report, physical)
+            # Re-preparing a real OSM network can assign different transient
+            # Section IDs. Compare source OSM identity and counts instead.
+            source_ways = {item['id']: item.get('source_way_ids', ())
+                for street in physical.streets.values() for item in street['items']
+                if item['kind'] == 'Section'}
+            issues = sorted((issue['kind'], issue['reason']) for issue in report['preparation_issues'])
+            components = [dict(status=row['status'], reason=row.get('reason'), quads=row.get('quads'),
+                sections=len(row['sections']), streets=len(row['streets']),
+                osm_ways=sorted({way for sid in row['sections'] for way in source_ways.get(sid, ())}))
+                for row in report['surfaces']]
+            return dict(coverage=report['coverage'], issues=issues, components=components)
+
+        for path in ARGS.osm:
+            with self.subTest(osm=str(path)):
+                self.prepare(False, path)
+                self.assertEqual(bpy.ops.blosm.import_data(), {'FINISHED'})
+                blocking = dict(runtime.last_result)
+                self.assertIn(blocking['outcome'], ('success', 'partial'))
+                expected_coverage = coverage(blocking)
+                expected, fingerprint = city_scene_fingerprint()
+                self.prepare(True, path)
+                result, _ = self.drain(self.new_session(), successful=False, real_extract=True)
+                self.assertEqual(result['outcome'], blocking['outcome'])
+                self.assertEqual(result['errors'], blocking['errors'])
+                self.assertEqual(coverage(result), expected_coverage)
+                self.assertEqual(city_scene_fingerprint(), (expected, fingerprint))
+                self.assertEqual(result['committed'], len(expected))
+                METRICS.append(dict(osm=str(path.resolve()), coverage=expected_coverage,
+                    blocking_result=blocking, progressive_result=result,
+                    exact_geometry_sha256=fingerprint))
 
     def test_fixture_matrix_exact_parity(self):
         from _python_street_fixtures import (fixture_networks, transition_fixture_networks,
@@ -771,6 +920,8 @@ def main():
     parser.add_argument('--artifacts', type=Path, required=True)
     parser.add_argument('--osm', type=Path, action='append', default=[])
     parser.add_argument('--only', action='append', default=[])
+    parser.add_argument('--require-ground-coverage', action='store_true',
+                        help='Require complete supported ground coverage in the real-extract coverage parity check')
     parser.add_argument('--extended', action='store_true',
                         help='Run all authored junction, Bundle, boundary and internal-route fixtures')
     ARGS = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
@@ -788,7 +939,9 @@ def main():
         names = [name for name in names if any(fragment in name for fragment in ARGS.only)]
         assert names, 'No selected test methods'
     if not ARGS.osm:
-        names = [name for name in names if name != 'test_real_extracts_exact_parity']
+        names = [name for name in names if not name.startswith('test_real_extracts_')]
+    if ARGS.require_ground_coverage and 'test_real_extracts_coverage_parity' not in names:
+        parser.error('--require-ground-coverage needs --osm and the real-extract coverage parity check')
     suite = unittest.TestSuite(StreetProgressiveChecks(name) for name in names)
     with offline():
         result = unittest.TextTestRunner(verbosity=2, resultclass=ReportResult).run(suite)

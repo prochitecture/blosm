@@ -96,7 +96,7 @@ class ExactTransitionFitter:
             elif isinstance(path,Path):
                 ids = (path.section.id,)
                 far = End(path.section.id,1-approach.end)
-                if far.end in path.section.selection_ends:
+                if far.end in path.section.selection_ends or far.end in path.section.scope_ends:
                     continue
             else:
                 continue  # No explicit free-terminal contract on this path view.

@@ -83,6 +83,8 @@ class PreparedNetworkAdapter:
                 entries.append(dict(kind=type(item).__name__, id=getattr(item,'id',-1),
                     points=points, category=getattr(item,'category',None),
                     width=getattr(item,'width',None), offset=getattr(item,'offset',None),
+                    original_resolved_width=getattr(item,'sourceWidth',None),
+                    source_placement=dict(getattr(item,'sourcePlacement',{})),
                     tags=dict(getattr(item,'tags',{})),
                     source_way_ids=sorted(getattr(item,'sourceWayIds',())),
                     source_segments=getattr(item,'sourceSegments',()),
@@ -132,6 +134,7 @@ class PreparedNetworkAdapter:
         PreparedOwnershipReview().apply(snapshot)
         from .connectivity import SurfaceConnectivityReview
         SurfaceConnectivityReview().apply(snapshot, self.design.categories)
+        physical_sources=PhysicalStreetInventory.view(snapshot).streets
         for bundle in manager.iterBundles():
             members = tuple(s.id for s in bundle.streetsHead)
             tail = tuple(s.id for s in bundle.streetsTail)
@@ -166,7 +169,7 @@ class PreparedNetworkAdapter:
                 members=records, status='UNSUPPORTED' if reason else 'SUPPORTED', reason=reason,
                 head_locations=tuple(tuple(float(v) for v in p[:2]) for p in bundle.headLocs),
                 tail_locations=tuple(tuple(float(v) for v in p[:2]) for p in bundle.tailLocs),
-                owned_streets=tuple(sorted(sid for sid,s in snapshot.streets.items()
+                owned_streets=tuple(sorted(sid for sid,s in physical_sources.items()
                                           if s['bundle_id']==bundle.id)))
             if reason:
                 snapshot.issue('Bundle', bundle.id, 'BUNDLE_SCOPE', reason)

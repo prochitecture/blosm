@@ -15,11 +15,17 @@ from .model import End, Key
 from .regions import RegionUnion, _classify
 
 
+class SourceContainmentError(ValueError):
+    """A candidate exterior cuts a finite original source path or its margin."""
+
+
 @dataclass(frozen=True)
 class ExteriorSpecification:
     """Derived contact request, never a synthetic source Intersection."""
     id: int
     radii: dict
+    ordered_ends: tuple | None = None
+    median_pairs: tuple = ()
 
     def corner_radius(self, end):
         return self.radii[end]
@@ -87,6 +93,20 @@ class CompoundPortPlanner:
                     return True
                 if abs(labels[i].first - 1.) > 1e-8 or abs(labels[last].last) > 1e-8:
                     return True
+        return False
+
+    def incomplete_source_widths(self,group):
+        """A raw footprint union must contain its whole consumed source roads."""
+        if group.physical_layout is not None or not getattr(group,'claims',()):
+            return False
+        from .source_strip_containment import certify,SourceStripContainmentError
+        try:
+            certify(self.context,group,{claim.section_id for claim in group.claims})
+        except SourceStripContainmentError:
+            # This is a planning trigger, never a weakened geometric test.
+            # The complete original incidence exterior is rebuilt and its
+            # consumed roads plus real incoming prefixes are proved again.
+            return True
         return False
 
     def build(self, group):
@@ -174,7 +194,7 @@ class CompoundPortPlanner:
             points = path.frame(stations)[0]
             inside, boundary = _classify(points, x, clearance)
             if not np.all(inside & (boundary < 0)):
-                raise ValueError('Complete compound exterior does not retain its consumed centerline')
+                raise SourceContainmentError('Complete compound exterior does not retain its consumed centerline')
             for start in range(0, len(points) - 1, self.support_chunk):
                 a = points[start:start + self.support_chunk]
                 b = points[start + 1:start + self.support_chunk + 1]
@@ -186,7 +206,7 @@ class CompoundPortPlanner:
                 t = np.divide(cross(offset, edge[None]), determinant, out=np.zeros_like(determinant), where=valid)
                 u = np.divide(cross(offset, d[:, None]), determinant, out=np.zeros_like(determinant), where=valid)
                 if np.any(valid & (t >= 0.) & (t <= 1.) & (u >= 0.) & (u <= 1.)):
-                    raise ValueError('A consumed centerline exits its compound exterior')
+                    raise SourceContainmentError('A consumed centerline exits its compound exterior')
                 # Without crossings, the minimum segment distance occurs at
                 # an endpoint projected onto the other segment (also parallel).
                 distances = []
@@ -200,4 +220,4 @@ class CompoundPortPlanner:
                     f = np.clip(np.sum(v * d[:, None], axis=2) / d2[:, None], 0., 1.)
                     distances.append(np.linalg.norm(v - f[..., None] * d[:, None], axis=2))
                 if min(float(distance.min()) for distance in distances) <= clearance:
-                    raise ValueError('Consumed centerline lacks certified clearance from its compound exterior')
+                    raise SourceContainmentError('Consumed centerline lacks certified clearance from its compound exterior')

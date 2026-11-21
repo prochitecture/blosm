@@ -145,10 +145,22 @@ class RayCurb:
             raise AxialChartUnavailable('A physical curb reaches the angular origin')
         return result
 
-    def jet(self, station):
+    def jet(self, station, *, interval=None):
         """Local transverse coordinate and dy/ds on the actual curb chord."""
         station = np.asarray(station)
         index = np.clip(np.searchsorted(self.stations, station, side='right')-1, 0, len(self.points)-2)
+        if interval is not None:
+            ends = np.asarray(interval, dtype=float)
+            if ends.shape != (2,) or not np.isfinite(ends).all() or ends[0] == ends[1]:
+                raise ValueError('A one-sided curb jet needs one finite declared chord interval')
+            first, last = sorted(ends)
+            margin = 128.*np.finfo(float).eps*max(1., abs(first), abs(last), self.frame.scale,
+                                                float(np.max(abs(self.frame.center))))
+            if (np.any((self.stations > first+margin) & (self.stations < last-margin))
+                    or np.any(station < first-margin) or np.any(station > last+margin)):
+                raise ValueError('A one-sided curb jet cannot cross an undeclared original chord knot')
+            index = int(np.clip(np.searchsorted(self.stations, .5*(first+last), side='right')-1,
+                                0, len(self.points)-2))
         edge = self.points[index+1]-self.points[index]
         xy = self(station)
         delta = xy-self.frame.center
@@ -185,7 +197,7 @@ class AngularCrown:
             np.where(y <= last, (y - last) / np.maximum(last - low, 1e-12), 0.))
         return self.datum + self.rise * np.clip(1. - distance * distance, 0., 1.)
 
-    def gradient(self, points):
+    def gradient(self, points, *, chord_interval=None):
         """World-XY gradient of the physical crown, including moving peaks.
 
         Curb samples define actual Cartesian chords, so their ray derivatives
@@ -196,7 +208,8 @@ class AngularCrown:
         """
         points = np.asarray(points)
         local = self.frame.local(points)
-        jets = [curve.jet(local[..., 0]) for curve in self.curves]
+        jets = ([curve.jet(local[..., 0]) for curve in self.curves] if chord_interval is None else
+                [curve.jet(local[..., 0], interval=chord_interval) for curve in self.curves])
         (ao, da), (ai, di), (bi, db), (bo, do) = jets
         high, dh = np.maximum(ao, bi), np.where(ao >= bi, da, db)
         low, dl = np.minimum(ai, bo), np.where(ai <= bo, di, do)
@@ -232,6 +245,8 @@ class AngularCrown:
         ds = (-peak_slope-distance*side_slope)/side_width
         z_s = np.where(active, -2.*self.rise*distance*ds, 0.)
         z_y = np.where(active, -2.*self.rise*distance/side_width, 0.)
+        if hasattr(self.frame, 'gradient_world'):
+            return self.frame.gradient_world(points, z_s, z_y)
         delta = points-self.frame.center
         radius = np.linalg.norm(delta, axis=-1)
         if np.any(radius <= 1e-8):

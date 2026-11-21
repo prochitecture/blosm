@@ -18,11 +18,98 @@ def distorted():
 
 
 class PythonQualityCorrectionTests(unittest.TestCase):
+    def test_independent_vertex_steps_repair_dense_bands_without_moving_the_seam(self):
+        from tested_python_streets.local_quad_grading import grade_dense_steps
+        from tested_python_streets.updates import drain_steps
+        pattern = PatternLibrary().grid(26,26)
+        xy = np.rint(26.*pattern.uv)
+        rim = np.flatnonzero(np.any((xy==0.) | (xy==26.), axis=1))
+        movable = np.ones(len(xy), dtype=bool)
+        movable[rim] = False
+        xy[movable & (xy[:,0]%2 == 1),0] += .93
+        mesh = Mesh(np.column_stack((xy + (1932.,-721.),np.zeros(len(xy)))),
+                    pattern.quads, seams={0:rim})
+        before = mesh.xyz.copy()
+        attempt = grade_dense_steps(mesh,2000)
+        next(attempt)
+        attempt.close()
+        np.testing.assert_array_equal(mesh.xyz,before)
+        result, report = drain_steps(grade_dense_steps(mesh,2000))
+        self.assertGreater(report['initial_defects'],256)
+        self.assertLessEqual(report['stored_quality']['maximum_edge_ratio'],8.)
+        self.assertGreaterEqual(report['stored_quality']['minimum_corner_sine'],.03)
+        np.testing.assert_array_equal(result.xyz[rim],before[rim])
+        np.testing.assert_array_equal(mesh.xyz,before)
+
+    def test_native_stencil_grade_derivative_includes_profile_height_changes(self):
+        from tested_python_streets.native_stencil_alignment import _grade_penalty
+        xy=np.array(((0.,0.),(1.7,.1),(1.2,1.),(-.1,.8)))
+        z=np.array((0.,.18,.27,.02))
+        slopes=np.array(((.01,.02),(.04,-.03),(.05,.01),(-.02,.03)))
+        faces=np.array(((0,1,2,3),))
+        value,gradient=_grade_penalty(xy,z,slopes,faces,.10)
+        self.assertGreater(value,0.)
+        for i,axis in np.ndindex(xy.shape):
+            delta=np.zeros_like(xy)
+            delta[i,axis]=1e-6
+            dz=np.sum(slopes*delta,axis=1)
+            hi,_=_grade_penalty(xy+delta,z+dz,slopes,faces,.10)
+            lo,_=_grade_penalty(xy-delta,z-dz,slopes,faces,.10)
+            self.assertAlmostEqual(gradient[i,axis],(hi-lo)/(2e-6),places=6)
+
+    def test_narrow_grass_disk_keeps_the_fixed_tip_and_pavement_requires_its_own_angle_limit(self):
+        from tested_python_streets.local_quad_grading import grade
+        mesh = Mesh(np.array(((0., 0., 0.), (1., 0., 0.), (1.5, .003, 0.), (.5, .003, 0.))),
+                    np.array(((0, 1, 2, 3),)), 'grass', {0: np.arange(4)})
+        disk, details = grade(mesh, 1, narrow_grass_disk=True)
+        np.testing.assert_array_equal(disk.xyz, mesh.xyz)
+        self.assertLessEqual(details['stored_quality']['maximum_edge_ratio'], 8.)
+        self.assertGreater(details['stored_quality']['minimum_corner'], 0.)
+        mesh.material = 'pavement'
+        with self.assertRaises(ValueError):
+            grade(mesh, 1, narrow_grass_disk=True)
+        with self.assertRaises(ValueError):
+            grade(mesh, 1)
+
+    def test_local_grading_derivative_matches_a_directional_difference(self):
+        from tested_python_streets.local_quad_grading import _objective
+        xy = np.array(((0., 0.), (1., 0.), (1.2, .006), (.43, .05)))
+        faces = np.array(((0, 1, 2, 3),))
+        free = np.array((1, 2))
+        scales = np.array((.25, .48))
+        offsets = np.zeros(4)
+        direction = np.array((.23, -.06, .15, .1))
+        def evaluate(x):
+            return _objective(xy, faces, free, scales, x, .06)
+        _, gradient = evaluate(offsets)
+        step = 1e-6
+        difference = (evaluate(offsets+step*direction)[0]-evaluate(offsets-step*direction)[0])/(2*step)
+        self.assertAlmostEqual(difference, gradient @ direction, places=6)
+
+    def test_local_collar_separates_incompatible_fixed_edge_lengths(self):
+        from tested_python_streets.local_quad_grading import grade
+        from tested_python_streets.four_side_charts import quality
+        xy = np.array(((1240., 860.), (1241., 860.), (1240.55, 861.), (1240.45, 861.)))
+        mesh = Mesh(np.column_stack((xy, np.zeros(4))), np.array([[0, 1, 2, 3]]),
+                    seams={0: np.arange(4)})
+        repaired, report = grade(mesh, 64)
+        np.testing.assert_array_equal(repaired.xyz[:4], mesh.xyz)
+        np.testing.assert_array_equal(repaired.seams[0], mesh.seams[0])
+        self.assertEqual(len(repaired.quads), 5)
+        self.assertEqual(report['inserted_quads'], 4)
+        self.assertLessEqual(quality(repaired)['maximum_edge_ratio'], 8.)
+        validate_overlaps({Key('chart', 1): repaired})
+        with self.assertRaises(ValueError):
+            grade(mesh, 4)
+
     def test_joint_loss_gradient_matches_independent_directional_differences(self):
         xy = np.array(((0., 0.), (10., 0.), (10.2, .002), (-.1, .003)))
         faces = np.array(((0, 1, 2, 3),))
         solver = QuadShapeCorrection()
         value, report, gradient = solver.evaluate(xy, faces, gradient=True)
+        losses = solver.face_losses(np.stack((xy,xy[::-1])))
+        self.assertAlmostEqual(losses[0],value)
+        self.assertTrue(np.isinf(losses[1]))
         self.assertLess(report['minimum_corner_sine'], .05)
         for direction in (np.array(((.2, .03), (-.1, .01), (.07, -.02), (-.05, -.01))),
                           np.array(((0., .02), (0., -.01), (0., .03), (0., -.02)))):

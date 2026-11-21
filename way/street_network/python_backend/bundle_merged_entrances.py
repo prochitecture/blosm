@@ -57,31 +57,56 @@ class MemberInventory:
 class PairedAngularEntrance:
     maximum_samples = 20000
 
-    def __init__(self, context, run, end, frame):
+    def __init__(self, context, run, end, frame, *, source_tolerance=None, source_parameters=None):
         self.frame_chart, self.end_index = frame, end
+        # The local entrance is bounded by the two actual crossing-adjacent
+        # Sections. Retain the complete original run separately for body
+        # ownership; distant Sections and their attachments are not discarded.
+        self.run = run
+        self.source_run_sections = run.source_sections
         self.original_ends = tuple(member.ends[end] for member in run.members)
-        self.visits = tuple(member.visits[0] for member in run.members)
+        self.visits = tuple(member.visits[0 if end == 0 else -1] for member in run.members)
+        if any(visit.section_id != endpoint.section_id
+               for visit, endpoint in zip(self.visits, self.original_ends)):
+            raise ValueError('Merged entrance lost its original crossing-adjacent source incidence')
         self.paths = tuple(context[Key('path', visit.section_id)] for visit in self.visits)
         self.path = MemberInventory(tuple(Piece(path, True) for path in self.paths))
-        curves, profiles, origins = [], [], []
+        curves, profiles, origins, source_stations = [], [], [], []
         for role, (visit, path) in enumerate(zip(self.visits, self.paths)):
             profile = context[Key('profile', visit.section_id)].oriented(int(not visit.forward))
             if profile.half != (1 if role == 0 else -1):
                 raise ValueError('Merged entrance lost its original half-profile orientation')
             profiles.append(profile)
             frame.certify(path, forward=visit.forward)
-            samples = path.samples(0., path.length, context.network.settings.spacing,
-                                   tolerance=.1*context.network.settings.curve_tolerance)
+            tolerance = .1*context.network.settings.curve_tolerance
+            if source_tolerance is not None:
+                if not math.isfinite(source_tolerance) or source_tolerance <= 0.:
+                    raise ValueError('Merged entrance needs a positive finite source chord tolerance')
+                tolerance = min(tolerance, source_tolerance)
+            samples = (np.asarray(source_parameters[visit.section_id], dtype=float)
+                       if source_parameters is not None else
+                       path.samples(0., path.length, context.network.settings.spacing, tolerance=tolerance))
+            if (samples.ndim != 1 or len(samples) < 2 or not np.isfinite(samples).all()
+                    or samples[0] != 0. or samples[-1] != path.length or np.any(np.diff(samples) <= 0.)):
+                raise ValueError('Merged entrance source parameters must span the complete finite original path')
+            if source_parameters is not None:
+                # Supplied contact knots do not replace the original source
+                # approximation certificate. Refine each finite interval.
+                from .paired_source_sampling import sample_source_parameters
+                samples=sample_source_parameters(path,0.,path.length,
+                    context.network.settings.spacing,tolerance,samples,maximum_samples=self.maximum_samples)
             if len(samples) > self.maximum_samples:
                 raise ValueError('Merged entrance exceeds its source sampling budget')
             for side in (-1., 1.):
                 q = side*(1 if visit.forward else -1)
                 points = path.point(samples, path.section.offset+q*.5*path.section.width)
                 curves.append(points if visit.forward else points[::-1])
+            source_stations.append(samples if visit.forward else samples[::-1])
             origins.append(path.frame(0. if self.original_ends[role].end == 0 else path.length)[0])
         if abs(profiles[0].rise-profiles[1].rise)>1e-9 or abs(profiles[0].datum-profiles[1].datum)>1e-9:
             raise ValueError('Merged Bundle entrance requires its original shared crown')
         self.field = AngularCrown(frame, curves, datum=profiles[0].datum, rise=profiles[0].rise)
+        self.source_curve_stations = tuple(source_stations)
         self.sign = 1. if end == 0 else -1.
         self.origin_station = float(np.mean(frame.local(origins)[:, 0]))
         self.length = (min(ray.stations[-1] for ray in self.field.curves)-self.origin_station
@@ -176,12 +201,14 @@ class MergedEntranceSpecification:
     layout: object
     group: object
     centerline_proof_checks: int
+    paired_sources: tuple = ()
+    source_phase_proof: object = None
 
     @classmethod
-    def build(cls, context, bundle, crossing, runs):
+    def build(cls, context, bundle, crossing, runs, *, source_parameters=None):
         try:
             frame = shared_frame(context, bundle)
-            approaches = [PairedAngularEntrance(context, run, end, frame)
+            approaches = [PairedAngularEntrance(context, run, end, frame, source_parameters=source_parameters)
                 for run in runs for end, token in enumerate(run.boundaries)
                 if token == ('crossing', crossing.street_id)]
         except AxialChartUnavailable:
@@ -260,18 +287,52 @@ class MergedEntrancePreparation:
                 runs = VisibleBundleRuns.build(network, bundle, crossings)
             except AxialChartUnavailable:
                 continue
-            if len(runs) == 2 and all(len(member.visits) == 1 for run in runs for member in run.members):
+            if len(runs) == 2:
                 result.append((bundle, crossings[0], runs))
         return tuple(result)
 
     @classmethod
     def tasks(cls, network, candidates):
+        candidates=tuple(candidates)
         sites = {site.key: site for site in network.intersections}
+        all_crossings={site for bundle,crossing,runs in candidates for site in crossing.sites}
+        incidence={end:site for site in network.intersections for end in site.ends}
         for bundle, crossing, runs in candidates:
             ends = {end for key in crossing.sites for end in sites[key].ends}
             ids = {*bundle.sections, *crossing.sections}
+            extra_sites,extra_routes,extra_footprints = set(),set(),set()
+            if any(len(member.visits)>1 for run in runs for member in run.members):
+                # A paired side mouth owns an original three-arm site,
+                # not merely its two Bundle paths. Make all its physical source
+                # dependencies available before joint preparation/hydration.
+                member_ids=set(bundle.sections)
+                for site in network.intersections:
+                    if len(site.ends)>2 and any(end.section_id in member_ids for end in site.ends):
+                        extra_sites.add(site.key)
+                        ids.update(end.section_id for end in site.ends)
+                        extra_routes.update(route_key(end) for end in site.ends)
+                from .ownership import footprint_key
+                for run in runs:
+                    for member in run.members:
+                        for before,after in zip(member.visits,member.visits[1:]):
+                            exit=End(before.section_id,int(before.forward))
+                            entry=End(after.section_id,int(not after.forward))
+                            site=incidence.get(exit)
+                            if (site is not None and entry in site.ends and len(site.ends)>2
+                                    and site.key not in all_crossings):
+                                extra_footprints.add(footprint_key(site.key))
             deps = tuple(sorted({bundle.key, *crossing.sites,
+                *extra_sites,*extra_routes,*extra_footprints,
                 *(Key(kind, sid) for sid in ids for kind in ('path', 'profile')),
                 *(route_key(end) for end in ends if end.section_id not in bundle.sections)}))
             yield Task(preparation_key(bundle), deps,
-                lambda context, b=bundle, c=crossing, r=runs: MergedEntranceSpecification.build(context, b, c, r))
+                lambda context, b=bundle, c=crossing, r=runs: cls.build(context,b,c,r),version='3')
+
+    @staticmethod
+    def build(context,bundle,crossing,runs):
+        terminal=MergedEntranceSpecification.build(context,bundle,crossing,runs)
+        if terminal is None or not any(len(member.visits)>1 for run in runs for member in run.members):
+            return terminal
+        from .paired_junction_preparation import prepare
+        terminal,_,_,_=prepare(context,bundle,terminal)
+        return terminal

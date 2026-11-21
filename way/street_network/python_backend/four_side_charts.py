@@ -29,17 +29,22 @@ def quality(mesh):
 
 class FourSidedQuadChart:
     def __init__(self, patterns, *, max_cells=50000, max_candidates=24,
-                 quality_iterations=100, maximum_ratio=8.):
+                 quality_iterations=100, maximum_ratio=8., minimum_corner_angle=.20,
+                 minimum_polygon_sine=.15, include_smooth_corners=False):
         if (type(max_cells) is not int or max_cells < 1
                 or type(max_candidates) is not int or max_candidates < 1
                 or type(quality_iterations) is not int or quality_iterations < 0
-                or not math.isfinite(maximum_ratio) or maximum_ratio < 1.):
+                or not math.isfinite(maximum_ratio) or maximum_ratio < 1.
+                or not math.isfinite(minimum_corner_angle) or not 0. < minimum_corner_angle < math.pi
+                or not math.isfinite(minimum_polygon_sine) or not 0. < minimum_polygon_sine < 1.):
             raise ValueError('Invalid four-sided quad-chart budgets')
         self.patterns, self.max_cells, self.max_candidates = patterns, max_cells, max_candidates
         self.quality_iterations, self.maximum_ratio = quality_iterations, maximum_ratio
+        self.minimum_corner_angle, self.minimum_polygon_sine = minimum_corner_angle, minimum_polygon_sine
+        self.include_smooth_corners = bool(include_smooth_corners)
 
     @staticmethod
-    def corners(boundary):
+    def corners(boundary, *, minimum_corner_angle=.20, minimum_polygon_sine=.15, include_smooth_corners=False):
         n = len(boundary)
         if n == 4:
             return [(0., (0, 1, 2, 3))]
@@ -50,9 +55,17 @@ class FourSidedQuadChart:
         turns = np.arctan2(cross(previous, unit), np.sum(previous * unit, axis=1))
         chosen = sorted(np.flatnonzero(turns > .05),
                         key=lambda i: (-round(float(turns[i]), 8), int(i)))[:16]
+        if include_smooth_corners:
+            stations = np.r_[0., np.cumsum(lengths)]
+            metric = [int(np.argmin(abs(stations[:-1]-at))) for at in np.linspace(0., stations[-1], 9)[:-1]]
+            chosen = sorted(set(chosen[:8]) | set(metric) | set(np.linspace(0, n-1, min(4, n), dtype=int)))
         choices = sorted({(int(i) + shift) % n for i in chosen for shift in (-1, 0, 1)})
         if len(choices) > 36:
-            choices = sorted(sorted(choices, key=lambda i: (-round(float(turns[i]), 8), i))[:36])
+            if include_smooth_corners:
+                extra = sorted(set(choices)-set(chosen), key=lambda i: (-round(float(turns[i]), 8), i))
+                choices = sorted(set(chosen) | set(extra[:36-len(chosen)]))
+            else:
+                choices = sorted(sorted(choices, key=lambda i: (-round(float(turns[i]), 8), i))[:36])
         # The scalar corner angles are invariant across the candidate sets.
         # Keep math.atan2 and the existing operation order for exact scores.
         angles = np.zeros(n)
@@ -80,7 +93,8 @@ class FourSidedQuadChart:
             size = np.linalg.norm(chord, axis=2)
             sine = cross(chord, np.roll(chord, -1, axis=1)) / (size * np.roll(size, -1, axis=1))
             at = angles[corners]
-            keep = (sine.min(axis=1) >= .15) & (at.min(axis=1) >= .20) & (at.max(axis=1) <= math.pi + .01)
+            keep = ((sine.min(axis=1) >= minimum_polygon_sine) & (at.min(axis=1) >= minimum_corner_angle)
+                    & (at.max(axis=1) <= math.pi + .01))
             corners, size, sine, at = corners[keep], size[keep], sine[keep], at[keep]
             balance = np.sum(np.log(size[:, :2] / size[:, 2:]) ** 2, axis=1)
             score = (np.sum((at - math.pi / 2.) ** 2, axis=1)
@@ -138,7 +152,8 @@ class FourSidedQuadChart:
         if len(boundary) // 2 - 1 > self.max_cells:
             raise ValueError('Four-sided rim exceeds its cell budget')
         RegionUnion().build((Region(Key('chart', 0), boundary),))
-        options, attempted = self.corners(boundary), 0
+        options, attempted = self.corners(boundary, minimum_corner_angle=self.minimum_corner_angle,
+            minimum_polygon_sine=self.minimum_polygon_sine, include_smooth_corners=self.include_smooth_corners), 0
         for score, corners in options[:self.max_candidates]:
             attempted += 1
             try:

@@ -5,6 +5,10 @@ from .bundle_angular_curves import RayCurb
 from .mesh import Assembler
 
 
+class CutTooDense(ValueError):
+    """The proposed computational cut would exceed the profile sample budget."""
+
+
 class AngularRoadTiles:
     def __init__(self, builder, frame, field):
         self.builder,self.frame,self.field = builder,frame,field
@@ -37,7 +41,34 @@ class AngularRoadTiles:
             raise ValueError('The road body has no useful local split')
         return indices
 
-    def build(self, outer, seam, name):
+    def _fit_cuts(self, ray, shared, stations, indices):
+        """Locate internal tile cuts on existing crown samples with enough clearance."""
+        def fits(i):
+            curb = ray(stations[i])
+            # bounded_subchain reuses a source vertex within this station tolerance.
+            separate = np.abs(ray.stations-stations[i]) > 1e-8
+            distances = np.linalg.norm(ray.points[separate]-curb, axis=1)
+            clearance = min(float(distances.min(initial=np.inf)),
+                            float(np.linalg.norm(shared[i]-shared[i-1])),
+                            float(np.linalg.norm(shared[i+1]-shared[i])))
+            return np.linalg.norm(shared[i]-curb) <= 64*min(self.builder.spacing, 6.*clearance)
+
+        result = [indices[0]]
+        for index in indices[1:-1]:
+            if index > result[-1] and fits(index):
+                result.append(index)
+                continue
+            nearby = range(max(result[-1]+1, index-6), min(index+7, len(shared)-1))
+            compatible = (i for i in nearby if fits(i))
+            nearest = min(compatible, key=lambda i: abs(stations[i]-stations[index]), default=None)
+            if nearest is not None:
+                result.append(nearest)
+        result.append(indices[-1])
+        if len(result)<3:
+            raise ValueError('The road body has no feasible local split')
+        return result
+
+    def build(self, outer, seam, name, *, fit_cuts=False):
         physical,kinds,keys = outer
         shared,shared_keys = seam
         curb_edges = [i for i,kind in enumerate(kinds) if kind[0]=='outer']
@@ -47,6 +78,8 @@ class AngularRoadTiles:
         if np.any(np.diff(stations)<=1e-9):
             raise ValueError('Local road crown is not angularly monotone')
         indices = self._indices(ray,shared,stations)
+        if fit_cuts:
+            indices = self._fit_cuts(ray, shared, stations, indices)
         curbs = []
         for tile,(a,b) in enumerate(zip(indices,indices[1:])):
             start_key = keys[first] if tile==0 else (name,'local curb cut',tile)
@@ -63,7 +96,7 @@ class AngularRoadTiles:
             count = max(2,int(math.ceil(np.linalg.norm(crown-curb)/min(self.builder.spacing,6.*minimum))))
             count += count%2
             if count>64:
-                raise ValueError('Local road cut exceeds its bounded profile family')
+                raise CutTooDense('Local road cut exceeds its bounded profile family')
             points = np.linspace(curb,crown,count+1)
             addresses = [(name,'local profile',tile,j) for j in range(count+1)]
             addresses[0],addresses[-1] = curbs[tile][1][0],shared_keys[index]

@@ -251,6 +251,8 @@ class FixedRimSeparator:
             raise ValueError('Separator boundary exceeds its plateau envelope')
         failures = []
         from .separator_angular import AngularSeparatorChart
+        from .fixed_rim_bands import BandedSeparatorChart
+        from .separator_grading import LocalSeparatorBands, PointedSeparatorChart
         early = ()
         if self.paired_rim:
             from .chart_strategies import FlatPairedRimStrategy
@@ -265,7 +267,13 @@ class FixedRimSeparator:
                     ('partitioned', PartitionedSeparatorChart(self.patterns, spacing=self.spacing,
                          interior_spacing=2. * self.spacing, max_cells=self.max_cells)),
                     ('angular', AngularSeparatorChart(self.patterns, spacing=self.spacing,
-                         max_cells=self.max_cells)))
+                         max_cells=self.max_cells)),
+                    ('fixed-rim-bands', BandedSeparatorChart(self.patterns, spacing=self.spacing,
+                         interior_spacing=2. * self.spacing, max_cells=self.max_cells)),
+                    ('local-bands', LocalSeparatorBands(self.patterns, spacing=self.spacing,
+                         interior_spacing=2. * self.spacing, max_cells=self.max_cells)),
+                    ('pointed-bands', PointedSeparatorChart(self.patterns, spacing=self.spacing,
+                         interior_spacing=2. * self.spacing, max_cells=self.max_cells)))
         for name, builder in (*early, *builders):
             try:
                 chart = builder.build(boundary[:, :2])

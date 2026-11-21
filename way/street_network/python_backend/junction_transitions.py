@@ -24,11 +24,18 @@ class JunctionTransitions:
     @staticmethod
     def seam_signature(context, keys, neighbors):
         """Local input/owner signature despite a network-wide plan task."""
-        from .ownership import PLAN
+        from .ownership import (PLAN,footprint_key,bundle_signature,SOURCE_SAMPLING_POLICY,
+            SOURCE_RANGE_POLICY,SOURCE_CURB_COORDINATE_POLICY,SOURCE_BANK_POLICY,
+            SOURCE_ARC_POLICY,SOURCE_OWNED_CONNECTOR_POLICY,SOURCE_PARENT_CHAIN_POLICY,SOURCE_RESIDUAL_GAP_POLICY,SOURCE_ROOT_POLICY,SOURCE_OWNED_BUNDLE_NORMAL_POLICY,SOURCE_OWNED_PREFIX_CORNER_POLICY)
         plan = context[PLAN]
         owners = [(j.key.text(), plan.owner(j.key).text() if plan.owner(j.key) is not None else None)
                   for j in neighbors]
-        return [(key.text(), context.digest(key)) for key in keys], owners
+        physical = [(j.key.text(), tuple((key.text(),context.digest(footprint_key(key)))
+                    for key in plan.by_site[j.key].members),bundle_signature(context,plan.by_site[j.key])) for j in neighbors
+                    if j.key in plan.by_site and plan.by_site[j.key].physical_layout is not None]
+        return (SOURCE_SAMPLING_POLICY,SOURCE_RANGE_POLICY,SOURCE_CURB_COORDINATE_POLICY,
+            SOURCE_BANK_POLICY,SOURCE_ARC_POLICY,SOURCE_OWNED_CONNECTOR_POLICY,SOURCE_PARENT_CHAIN_POLICY,SOURCE_RESIDUAL_GAP_POLICY,SOURCE_ROOT_POLICY,SOURCE_OWNED_BUNDLE_NORMAL_POLICY,SOURCE_OWNED_PREFIX_CORNER_POLICY,
+            [(key.text(),context.digest(key)) for key in keys],owners,physical)
 
     @staticmethod
     def extend(context, approach):
@@ -103,14 +110,14 @@ class JunctionTransitions:
         if any(not p.path.exact and not p.path._certified(reach) for p in pieces):
             return None
         result = Route(pieces, terminal_free=(len(pieces) == len(candidate.traversals)
-            and candidate.terminal_site is None and not candidate.terminal_selection))
+            and candidate.terminal_site is None and not candidate.terminal_selection and not candidate.terminal_scope))
         if minimum >= result.length - 1e-6:
             return None
         if compound_only:
             physical = {j.key for j in context.network.intersections if len(j.ends) > 2}
             ids = tuple(visit.section_id for visit in candidate.traversals)
             if (profile.half != 0 or candidate.terminal_site not in physical
-                    or candidate.terminal_selection or result.terminal_free
+                    or candidate.terminal_selection or candidate.terminal_scope or result.terminal_free
                     or ids != tuple(piece.section.id for piece in pieces)):
                 return None
             result.deferred_profile_reserve = DeferredProfileReserve(
@@ -123,10 +130,12 @@ class JunctionTransitions:
     @classmethod
     def footprint(cls, context, junction, approaches):
         from .intersections import IntersectionProvider, CornerConstructionError, ApproachExtentError
-        current = list(approaches)
+        from .owned_prefixes import approaches as prefix_approaches, certify as certify_prefixes
+        current, prefix_claims = prefix_approaches(context,junction,approaches)
         for iteration in range(cls.maximum_expansions + 1):
             try:
-                layout = IntersectionProvider._footprint(context, junction, list(current))
+                layout = (IntersectionProvider.curved_boundary(context,junction,list(current)) if prefix_claims
+                          else IntersectionProvider._footprint(context,junction,list(current)))
             except (CornerConstructionError, ApproachExtentError) as exc:
                 needed = {a.source.id for a in exc.approaches}
                 layout, failure = None, exc
@@ -146,8 +155,25 @@ class JunctionTransitions:
                             replacements[a.source.id] = extended
             if not replacements:
                 if failure is not None:
+                    from .finite_scope_ports import from_failure as finite_scope_footprint
+                    finite = finite_scope_footprint(context, junction, current, failure)
+                    if finite is not None:
+                        return finite
+                    from .free_pads import from_failure as free_pad_footprint
+                    finite = free_pad_footprint(context, junction, current, failure)
+                    if finite is not None:
+                        return finite
+                    from .finite_free_caps import from_failure as finite_free_cap
+                    finite = finite_free_cap(context, junction, current, failure)
+                    if finite is not None:
+                        return finite
+                    from .compound_preparation import DeferredCompoundFootprint
+                    deferred = DeferredCompoundFootprint.from_failure(context,junction,current,failure)
+                    if deferred is not None:
+                        return deferred
                     raise failure
                 cls.check_claims(context, layout)
+                certify_prefixes(context,junction,layout,prefix_claims)
                 return replace(layout, absorbed_transitions=tuple(sorted({s for a in current
                     for s in getattr(a.path, 'absorbed_sites', ())})))
             current = [replacements.get(a.source.id, a) for a in current]
@@ -179,10 +205,10 @@ class JunctionTransitions:
     @staticmethod
     def absorbed(context, site, approaches, neighbors):
         """Retain the two-ended source site but publish no duplicate taper."""
-        from .ownership import PLAN, footprint_key
+        from .ownership import PLAN, resolved_footprint
         from .intersections import JunctionLayout
-        claims = [(j, context[footprint_key(j.key)]) for j in neighbors
-                  if site.key in context[footprint_key(j.key)].absorbed_transitions]
+        claims = [(j, resolved_footprint(context,j.key)) for j in neighbors
+                  if site.key in resolved_footprint(context,j.key).absorbed_transitions]
         if not claims:
             return None
         junction, footprint = claims[0]

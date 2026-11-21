@@ -63,15 +63,25 @@ def assign_declared_samples(mesh,points,keys,prefix):
 
 
 class MergedRunWithExternalCap:
+    def entrance_margin(self, context):
+        return 2.*context.network.settings.spacing
+
+    def make_domain(self,context,bundle,approach):
+        return ExternalRunDomain(context,bundle,approach)
+
+    @staticmethod
+    def cap(context,members,end,sampling):
+        return BundleProvider.cap(context,*members,end,rim_source=sampling)
+
     def build(self,context,bundle,approach,merged_cut):
-        domain = ExternalRunDomain(context,bundle,approach)
+        domain = self.make_domain(context,bundle,approach)
         end,settings = domain.end,context.network.settings
         members = tuple(Member((),np.empty((0,3)),member.ends) for member in domain.run.members)
         sampling = SourceRimSampling(RouteTopology(context.network).attachments(context.network))
-        actual = BundleProvider.cap(context,*members,end,rim_source=sampling)
+        actual = self.cap(context,members,end,sampling)
         if actual is None:
             raise ValueError('The original attached end lost its rounded physical cap')
-        margin = 2.*settings.spacing
+        margin = self.entrance_margin(context)
         meshes,interfaces,reports = {},{},[]
         for role in (0,1):
             bridge = SourcePreservingAngularBridge(domain)
@@ -125,6 +135,26 @@ class MergedRunWithExternalCap:
             fixed=np.zeros(len(cap.mesh.xyz),bool);fixed[np.unique(unique[counts==1])]=True
             boundary=cap.mesh.xyz[fixed].copy()
             floors=np.full(len(cap.mesh.xyz),domain.field.datum)
+            from .publication_slopes import PublicationSlopeGuard
+            unavoidable=PublicationSlopeGuard.fixed_gradient_floors(cap.mesh,fixed,domain.field.datum)
+            cap_recovery=None
+            if np.max(unavoidable)>.1+PublicationSlopeGuard.tolerance:
+                # A computational ear can constrain three boundary vertices
+                # into one excessive bilinear corner gradient. Retile that
+                # bounded patch with the existing direct-quad grass recovery;
+                # actual rim samples, heights and slope limits stay fixed.
+                from .gapped_grass_recovery import recover
+                old_count=len(cap.mesh.xyz)
+                recovered,_,cap_recovery=recover(cap.mesh,
+                    [('merged grass cap',i) for i in range(old_count)],domain.field,
+                    namespace='merged grass cap',max_cells=body.max_cells)
+                if cap_recovery is None:
+                    raise ValueError('Merged grass cap needs a qualified fixed-boundary quad patch')
+                fixed=np.r_[fixed,np.zeros(len(recovered.xyz)-old_count,bool)]
+                if not np.array_equal(recovered.xyz[fixed],boundary):
+                    raise ValueError('Merged grass-cap recovery changed its physical boundary')
+                cap.mesh=recovered
+                floors=np.full(len(cap.mesh.xyz),domain.field.datum)
             corrected=cap.mesh;rounds=[]
             for iteration in range(8):
                 corrected,projection=SlopeProjection(max_cells=body.max_cells).solve(corrected,fixed,
@@ -138,8 +168,10 @@ class MergedRunWithExternalCap:
             if not np.array_equal(corrected.xyz[fixed],boundary):
                 raise ValueError('Rounded grass-cap reconciliation changed a physical boundary')
             cap.mesh=corrected
-            cap.metadata=dict(cap.metadata,interior_height_reconciliation=dict(initial_slope=cap_slope,
-                rounds=rounds,exact_boundary=True,crown_ceiling=domain.field.ceiling))
+            cap.metadata=dict(cap.metadata,quality=corrected.validate(),
+                interior_height_reconciliation=dict(initial_slope=cap_slope,
+                    fixed_corner_quad_recovery=cap_recovery,rounds=rounds,
+                    exact_boundary=True,crown_ceiling=domain.field.ceiling))
         for point,key in zip(np.c_[cuts,np.full(len(cuts),domain.field.ceiling)],cut_names):
             if key not in declared_keys:
                 declared_points.append(point)
@@ -168,6 +200,17 @@ class MergedRunWithExternalCap:
                 original_cap += 1
             else:
                 raise ValueError('Complete run separator has an undeclared exterior edge')
+        publication_roundoff = None
+        from .publication_slopes import PublicationSlopeGuard
+        rounded_grass = Mesh(separator.xyz.astype(np.float32), separator.quads, 'grass')
+        if float(rounded_grass.quad_slopes().max()) > .1+PublicationSlopeGuard.tolerance:
+            from .surface_query import QuadHeightField
+            fixed = np.zeros(len(separator.xyz), bool)
+            fixed[np.unique(body._boundary_vertices(separator))] = True
+            separator, _, publication_roundoff = PublicationSlopeGuard().correct(separator,
+                QuadHeightField(separator, datum=domain.field.datum, ceiling=domain.field.ceiling), fixed,
+                exaggeration=1., limit=.1, max_cells=body.max_cells, check_joins=lambda candidate: None)
+            cap.metadata = dict(cap.metadata, publication_roundoff=publication_roundoff)
         published_pavement = Mesh(pavement.xyz.astype(np.float32),pavement.quads)
         published_separator = Mesh(separator.xyz.astype(np.float32),separator.quads,'grass')
         if max(published_pavement.validate()['maximum_edge_ratio'],published_separator.validate()['maximum_edge_ratio']) > 8.:

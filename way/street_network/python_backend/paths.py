@@ -8,6 +8,7 @@ adaptive intervals and Gauss integration, rather than a fixed dense subdivision
 for every segment. No SciPy or Blender API is required.
 """
 import math
+from dataclasses import replace
 import numpy as np
 from .mesh import cross
 
@@ -25,9 +26,87 @@ def unit(vector):
     return vector / length
 
 
+class PathSampleBudgetExceeded(ValueError):
+    """The requested sampling would exceed the supplied point allocation."""
+
+
 class Path:
     def __init__(self, section, tolerance=.005, endpoint_directions=None, *, deviation_limit=None,
-                 endpoint_bends=None, endpoint_alignment_limits=None):
+                 endpoint_bends=None, endpoint_alignment_limits=None, returning=False, _coalescing=True,
+                 _radius_factor=1.5):
+        self.coalescing = None
+        self.radius_reserve_fallback = None
+        try:
+            self._initialize(section, tolerance, endpoint_directions, deviation_limit=deviation_limit,
+                endpoint_bends=endpoint_bends, endpoint_alignment_limits=endpoint_alignment_limits,
+                returning=returning, minimum_radius_factor=_radius_factor)
+        except ValueError as exc:
+            if (not _coalescing or section.interpolation != 3 or len(section.points) < 3
+                    or not any(message in str(exc) for message in
+                        ('Local Smooth', 'Smooth offset curvature'))):
+                raise
+            candidate = self._coalesced(section, tolerance, endpoint_directions,
+                deviation_limit, endpoint_bends, endpoint_alignment_limits, returning)
+            if candidate is None:
+                # Fit the largest reserve first. This preference is separate
+                # from mandatory continuous curvature and envelope guards.
+                for factor in (1.45, 1.4, 1.35, 1.3, 1.25):
+                    try:
+                        candidate = Path(section, tolerance, endpoint_directions,
+                            deviation_limit=deviation_limit, endpoint_bends=endpoint_bends,
+                            endpoint_alignment_limits=endpoint_alignment_limits, returning=returning,
+                            _coalescing=False, _radius_factor=factor)
+                    except ValueError:
+                        continue
+                    candidate.radius_reserve_fallback = dict(minimum_radius_factor=factor,
+                        original_failure=str(exc))
+                    break
+                if candidate is None:
+                    raise exc
+            else:
+                candidate.coalescing['original_failure'] = str(exc)
+            self.__dict__.update(candidate.__dict__)
+
+    def _coalesced(self, section, tolerance, endpoint_directions, deviation_limit,
+                   endpoint_bends, endpoint_alignment_limits, returning):
+        from .local_smoothing import coalesced_source_indices, within_polyline_envelope
+        original = np.asarray(section.points, dtype=float)
+        bound = max(4.*tolerance, section.width if deviation_limit is None else deviation_limit)
+        directions = dict(endpoint_directions or {})
+        # Coalescing must not independently change an authored endpoint frame.
+        directions.setdefault(0, unit(original[1, :2]-original[0, :2]))
+        directions.setdefault(1, unit(original[-1, :2]-original[-2, :2]))
+        protected = tuple(1 if end == 0 else len(original)-2 for end in (endpoint_bends or {}))
+        seen = set()
+        for fraction in (.01, .025, .05, .1, .2, .25, .3, .4):
+            budget = min(fraction*section.width, .4*bound)
+            indices = coalesced_source_indices(original[:, :2], budget, protected)
+            if len(indices) == len(original) or indices in seen:
+                continue
+            seen.add(indices)
+            source = replace(section, points=tuple(map(tuple, original[list(indices)])))
+            try:
+                candidate = Path(source, tolerance, directions, deviation_limit=bound-budget,
+                    endpoint_bends=endpoint_bends, endpoint_alignment_limits=endpoint_alignment_limits,
+                    returning=returning, _coalescing=False)
+            except ValueError:
+                continue
+            if not within_polyline_envelope(candidate.coefficients, original[:, :2], bound):
+                continue
+            # Preserve the authored source identity and complete controls in
+            # every downstream consumer and report; only evaluation data differ.
+            candidate.section = section
+            candidate.source_points = original[:, :2].copy()
+            candidate.deviation_limit = bound
+            candidate.coalescing = dict(policy='CERTIFIED_DENSE_CONTROLS_V1',
+                retained_indices=indices, source_control_count=len(original),
+                coalescing_limit=budget, source_deviation_limit=bound)
+            return candidate
+        return None
+
+    def _initialize(self, section, tolerance=.005, endpoint_directions=None, *, deviation_limit=None,
+                    endpoint_bends=None, endpoint_alignment_limits=None, returning=False,
+                    minimum_radius_factor=1.5):
         self.section = section
         self.tolerance = tolerance
         self.points = np.asarray(section.points, dtype=float)[:, :2]
@@ -46,8 +125,9 @@ class Path:
         self.alignment_limit = max(4. * tolerance, .25 * self.deviation_limit)
         if np.max(abs(np.asarray(section.points)[:, 2])) > 1e-7:
             raise ValueError('Source centerlines must remain in the construction XY plane; terrain placement derives elevation separately')
-        if np.linalg.norm(self.points[0] - self.points[-1]) < 1e-7:
-            raise ValueError('Closed Section requires a dedicated loop provider')
+        self.returning = bool(returning)
+        if np.linalg.norm(self.points[0] - self.points[-1]) < 1e-7 and not self.returning:
+            raise ValueError('Closed Section needs explicit start/end incidence at its closure')
         delta = np.diff(self.points, axis=0)
         self.chords = np.linalg.norm(delta, axis=1)
         self.alignment_limits = np.full(len(self.chords), self.alignment_limit)
@@ -96,7 +176,8 @@ class Path:
             original_certified = certified
             try:
                 self.points, self.chords, self.coefficients, self.local_bends = LocalCubicSmoothing(
-                    self.source_points, reach, self.deviation_limit, endpoint_directions, endpoint_bends).build()
+                    self.source_points, reach, self.deviation_limit, endpoint_directions, endpoint_bends,
+                    minimum_radius_factor=minimum_radius_factor).build()
                 self.knots = np.r_[0., np.cumsum(self.chords)]
                 self.localized = True
                 certified = self._certified()
@@ -286,13 +367,13 @@ class Path:
             maximum = max(maximum, float(np.max(upper/lower**3)))
         return min(self.curvature_bound, maximum)
 
-    def samples(self, first, last, spacing, *, tolerance=None, local_curvature=False,
+    def samples(self, first, last, spacing, *, tolerance=None, local_curvature=False, piecewise=False,
                 max_samples=None):
         if max_samples is not None and (type(max_samples) is not int or max_samples<3):
             raise ValueError('A path sample budget must be an integer of at least three')
         if last <= first + 1e-7:
             raise ValueError('Intersection trims consume the complete carriageway')
-        if self.localized:
+        if self.localized or (piecewise and not self.exact):
             return self._localized_samples(first, last, spacing,
                 self.tolerance if tolerance is None else tolerance, max_samples, local_curvature)
         if not self.exact:
@@ -311,7 +392,7 @@ class Path:
             count = max(2, int(np.ceil((last - first) / spacing)))
             count += count % 2
             if max_samples is not None and count+1>max_samples:
-                raise ValueError('Path sampling exceeds its allocation budget')
+                raise PathSampleBudgetExceeded('Path sampling exceeds its allocation budget')
             return np.linspace(first, last, count + 1)
         # Exact control vertices are compulsory samples, even at sharp corners.
         fixed = np.r_[first, self.stations[(self.stations > first) & (self.stations < last)], last]
@@ -324,7 +405,7 @@ class Path:
             count += count % 2
             total += count
             if max_samples is not None and total>max_samples:
-                raise ValueError('Path sampling exceeds its allocation budget')
+                raise PathSampleBudgetExceeded('Path sampling exceeds its allocation budget')
             pieces.append(np.linspace(a, b, count + 1)[:-1])
         return np.concatenate(pieces + [np.array([last])])
 
@@ -335,13 +416,16 @@ class Path:
         avoids tiny leftovers at arc/line joins, while bounding every interval
         by the maximum curvature of all polynomial pieces it intersects.
         """
+        if self.radius_reserve_fallback is not None:
+            return self._offset_samples(first, last, spacing, tolerance, max_samples)
         count = max(2, int(np.ceil((last - first) / spacing)))
         count += count % 2
         if max_samples is not None and count + 1 > max_samples:
-            raise ValueError('Path sampling exceeds its allocation budget')
+            raise PathSampleBudgetExceeded('Path sampling exceeds its allocation budget')
         base = np.linspace(first, last, count + 1)
         curvature = np.zeros(count)
-        for a, b, bound in zip(self.piece_stations, self.piece_stations[1:], self.piece_curvature_bounds):
+        stations = self.piece_stations if self.localized else self.station(self.knots)
+        for a, b, bound in zip(stations, stations[1:], self.piece_curvature_bounds):
             if b < first or a > last:
                 continue
             lo = max(0, int(np.searchsorted(base, a, side='left')) - 1)
@@ -364,11 +448,97 @@ class Path:
             parts[int(np.argmax(parts))] += 1
         total = int(parts.sum())
         if max_samples is not None and total + 1 > max_samples:
-            raise ValueError('Path sampling exceeds its allocation budget')
+            raise PathSampleBudgetExceeded('Path sampling exceeds its allocation budget')
         starts = np.r_[0, np.cumsum(parts)[:-1]]
         offsets = np.arange(total) - np.repeat(starts, parts)
         rows = np.repeat(base[:-1], parts) + offsets * np.repeat(np.diff(base) / parts, parts)
         return np.r_[rows, last]
+
+    def _signed_piece_bounds(self):
+        """Signed curvature enclosure from the existing absolute certificate.
+
+        cross(P', P'') is quadratic for a cubic. Its Bernstein coefficients
+        establish each piece's possible signs without numerical sampling.
+        """
+        a, b, c = (self.coefficients[:, k, :] for k in (1, 2, 3))
+        p0, p1, p2 = 2.*cross(a, b), 6.*cross(a, c), 6.*cross(b, c)
+        bernstein = np.stack((p0, p0+.5*p1, p0+p1+p2), axis=1)
+        scale = np.maximum(1., np.max(abs(bernstein), axis=1))
+        margin = 128.*np.finfo(float).eps*scale
+        return (np.where(bernstein.max(axis=1)+margin > 0., self.piece_curvature_bounds, 0.),
+                np.where(bernstein.min(axis=1)-margin < 0., self.piece_curvature_bounds, 0.))
+
+    def _offset_chord_bound(self, first, last, signed=None):
+        """Continuous error bound for every lateral offset in the pavement.
+
+        For rightward offset r, ds_r=(1+r*kappa)ds and its exact arc length is
+        ds+r*dtheta. The offset-curvature bound times this length squared / 8
+        bounds chord error. Each signed branch is convex in r, so checking the
+        two outermost lateral values also covers every intermediate profile row.
+        """
+        positive, negative = self._signed_piece_bounds() if signed is None else signed
+        lo = max(0, int(np.searchsorted(self.piece_stations, first, side='right'))-1)
+        hi = min(len(positive), int(np.searchsorted(self.piece_stations, last, side='left'))+1)
+        pos = float(positive[lo:hi].max(initial=0.))
+        neg = float(negative[lo:hi].max(initial=0.))
+        ds = last-first
+        if max(pos, neg)*ds >= math.pi*.5:
+            return math.inf  # Cannot infer the unwrapped tangent turn yet.
+        tangents = self.frame(np.array((first, last)))[1]
+        turn = math.atan2(float(cross(tangents[0], tangents[1])), float(tangents[0] @ tangents[1]))
+        margin = 256.*np.finfo(float).eps*max(1., ds, self.length)
+        result = 0.
+        for offset in (self.section.offset-.5*self.section.width, self.section.offset+.5*self.section.width):
+            denominators = 1.+offset*pos, 1.-offset*neg
+            if min(denominators) <= 0.:
+                return math.inf
+            curvature = max(pos/denominators[0], neg/denominators[1])
+            length = ds+offset*turn
+            if length <= 0.:
+                return math.inf
+            result = max(result, curvature*(length+margin)**2/8.+margin)
+        return result
+
+    def _offset_samples(self, first, last, spacing, tolerance, max_samples):
+        """Avoid combining an inner curb's curvature with an outer curb's speed.
+
+        Used only for a newly recovered tight bend. Previously accepted paths
+        retain their complete row layout. Every new interval is certified;
+        there is no sampled-error relaxation or larger tolerance.
+        """
+        signed = self._signed_piece_bounds()
+        rows = [float(first)]
+        target = .99*tolerance
+        while rows[-1] < last-1e-10:
+            start, finish = rows[-1], min(last, rows[-1]+spacing)
+            if self._offset_chord_bound(start, finish, signed) > target:
+                low, high = start, finish
+                for unused in range(18):
+                    mid = .5*(low+high)
+                    if self._offset_chord_bound(start, mid, signed) <= target:
+                        low = mid
+                    else:
+                        high = mid
+                finish = low
+            if finish-start <= 1e-8:
+                raise ValueError('Certified offset sampling cannot advance within its finite budget')
+            rows.append(float(finish))
+            if max_samples is not None and len(rows) > max_samples:
+                raise PathSampleBudgetExceeded('Path sampling exceeds its allocation budget')
+        rows[-1] = float(last)
+        # Distribute a short terminal remainder across a bounded tail. Splitting
+        # only the final pair can produce two unnecessarily short inner rows.
+        if len(rows) >= 3 and rows[-1]-rows[-2] < .75*(rows[-2]-rows[-3]):
+            best, minimum = None, rows[-1]-rows[-2]
+            for count in range(2, min(12, len(rows)-1)+1):
+                tail = np.linspace(rows[-count-1], rows[-1], count+1)
+                step = float(tail[1]-tail[0])
+                if step > minimum and all(self._offset_chord_bound(a, b, signed) <= tolerance
+                                          for a, b in zip(tail, tail[1:])):
+                    best, minimum = tail, step
+            if best is not None:
+                rows[-len(best):] = best.tolist()
+        return np.asarray(rows)
 
     def point(self, station, offset=0.):
         point, _, normal = self.frame(station)

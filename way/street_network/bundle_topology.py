@@ -9,7 +9,7 @@ nearest-point search. A managed topology edit must rebuild affected references.
 This module has no Blender dependency. It does not claim that a mapped extent
 has a valid offset surface, and does not infer connections from proximity.
 """
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import math
 
 
@@ -91,11 +91,14 @@ class BundleTopology:
     required_features: tuple[str, ...]
     chains: tuple[tuple[int, ...], ...] = ()
     chain_joins: tuple[ChainJoin, ...] = ()
+    exterior_streets: tuple[int, ...] = ()
 
     def report(self):
         result = dict(status='MAPPED', **asdict(self))
         if not self.chains:
             result.pop('chains'); result.pop('chain_joins')
+        if not self.exterior_streets:
+            result.pop('exterior_streets')
         return result
 
 
@@ -177,6 +180,142 @@ class _StreetPath:
 
             result.append(SectionRange(anchor(a if forward else b), anchor(b if forward else a)))
         return tuple(result if forward else reversed(result))
+
+
+class _BundleOwnership:
+    """Separate broad preparation ownership from physical median interiors.
+
+    Bundle construction also owns attached exterior Streets. Membership in that
+    inventory alone cannot mean that a road crosses the separator. Only prove
+    an exterior role when the finite authored path stays outside a simple
+    two-member extent polygon and every known attachment faces outwards.
+    Ambiguous, coincident, crossing and genuinely interior runs retain their
+    previous interior role for explicit downstream validation.
+    """
+    def __init__(self, members, streets, events, tolerance):
+        self.tolerance = tolerance
+        self.events = events
+        self.members = {member.street_id: member for member in members}
+        self.rim = ()
+        if len(members) != 2:
+            return
+        paths = [self._points(member, streets[member.street_id]) for member in members]
+        rim=[]
+        for point in paths[0]+list(reversed(paths[1])):
+            if not rim or math.dist(rim[-1],point)>tolerance:rim.append(point)
+        if len(rim)>1 and math.dist(rim[0],rim[-1])<=tolerance:rim.pop()
+        if len(rim)<3:return
+        if any(math.dist(a, b) <= tolerance for a, b in zip(rim, rim[1:] + rim[:1])):
+            return
+        self.rim = tuple(rim)
+        edges = list(zip(rim, rim[1:] + rim[:1]))
+        # A self-intersecting extent has no reliable inside/outside. This is a
+        # classification guard, not a substitute for native Bundle validation.
+        for i, (a, b) in enumerate(edges):
+            for j in range(i + 1, len(edges)):
+                if j == i + 1 or (i == 0 and j == len(edges) - 1):
+                    continue
+                if self._cuts(a, b, *edges[j]) is not None:
+                    self.rim = ()
+                    return
+        origin = rim[0]
+        area = sum(self._cross((a[0]-origin[0], a[1]-origin[1]),
+                               (b[0]-origin[0], b[1]-origin[1])) for a, b in edges)
+        if abs(area) <= tolerance * tolerance:
+            self.rim = ()
+            return
+        # The first path follows the rim, the second is reversed in it.
+        self.inside = {members[0].street_id: 'LEFT' if area > 0 else 'RIGHT',
+                       members[1].street_id: 'RIGHT' if area > 0 else 'LEFT'}
+
+    @staticmethod
+    def _cross(a, b):
+        return a[0]*b[1] - a[1]*b[0]
+
+    @staticmethod
+    def _points(member, street):
+        sections = {item['id']: item for item in street['items'] if item['kind'] == 'Section'}
+        result = []
+        for span in member.spans:
+            for extent in span.sections:
+                points = sections[extent.start.section_id]['points']
+                first = extent.start.segment_index + extent.start.factor
+                last = extent.end.segment_index + extent.end.factor
+                def sample(parameter):
+                    index = min(int(math.floor(parameter)), len(points)-2)
+                    t = parameter-index
+                    return tuple(points[index][k] + t*(points[index+1][k]-points[index][k]) for k in (0, 1))
+                lo, hi = sorted((first, last))
+                controls = [float(i) for i in range(int(math.floor(lo))+1, int(math.ceil(hi))) if lo < i < hi]
+                if first > last:
+                    controls.reverse()
+                piece = [sample(value) for value in (first, *controls, last)]
+                result.extend(piece[1:] if result else piece)
+        return result
+
+    def _cuts(self, a, b, c, d):
+        """None means disjoint; () means collinear overlap/touch; else cuts."""
+        u, v = (b[0]-a[0], b[1]-a[1]), (d[0]-c[0], d[1]-c[1])
+        w = c[0]-a[0], c[1]-a[1]
+        lu, lv = math.hypot(*u), math.hypot(*v)
+        determinant = self._cross(u, v)
+        if abs(determinant) <= self.tolerance * max(lu, lv):
+            if abs(self._cross(w, u)) > self.tolerance * lu:
+                return None
+            parameters = tuple(((p[0]-a[0])*u[0] + (p[1]-a[1])*u[1])/(lu*lu) for p in (c, d))
+            return () if max(min(parameters), 0.) <= min(max(parameters), 1.) + self.tolerance/lu else None
+        t, s = self._cross(w, v)/determinant, self._cross(w, u)/determinant
+        if (-self.tolerance/lu <= t <= 1.+self.tolerance/lu
+                and -self.tolerance/lv <= s <= 1.+self.tolerance/lv):
+            return (min(1., max(0., t)),)
+        return None
+
+    def _location(self, point):
+        inside = False
+        for a, b in zip(self.rim, self.rim[1:] + self.rim[:1]):
+            u = b[0]-a[0], b[1]-a[1]
+            length2 = u[0]*u[0] + u[1]*u[1]
+            t = min(1., max(0., ((point[0]-a[0])*u[0] + (point[1]-a[1])*u[1])/length2))
+            if math.dist(point, (a[0]+t*u[0], a[1]+t*u[1])) <= self.tolerance:
+                return 'BOUNDARY'
+            if (a[1] > point[1]) != (b[1] > point[1]):
+                if point[0] < a[0] + (point[1]-a[1])*u[0]/u[1]:
+                    inside = not inside
+        return 'INSIDE' if inside else 'OUTSIDE'
+
+    def exterior(self, street):
+        if not self.rim:
+            return False
+        for event in self.events:
+            member = self.members[event.street_id]
+            inside = self.inside[event.street_id]
+            if not member.forward:
+                inside = 'RIGHT' if inside == 'LEFT' else 'LEFT'
+            for attachment in event.attachments:
+                if attachment.street_id == street['id'] and attachment.side in (None, inside):
+                    return False
+        segments = [pair for item in street['items'] if item['kind'] == 'Section'
+                    for pair in zip(item['points'], item['points'][1:])]
+        if not segments:
+            return False
+        for a, b in segments:
+            if any(len(point) < 2 or not all(math.isfinite(v) for v in point[:2]) for point in (a, b)):
+                return False
+            if math.dist(a[:2], b[:2]) <= self.tolerance:
+                return False
+            cuts = {0., 1.}
+            for c, d in zip(self.rim, self.rim[1:] + self.rim[:1]):
+                found = self._cuts(a, b, c, d)
+                if found == ():
+                    return False
+                if found is not None:
+                    cuts.update(found)
+            ordered = sorted(cuts)
+            for first, last in zip(ordered, ordered[1:]):
+                t = .5*(first+last)
+                if self._location(tuple(a[k]+t*(b[k]-a[k]) for k in (0, 1))) != 'OUTSIDE':
+                    return False
+        return True
 
 
 class PreparedBundleTopology:
@@ -335,6 +474,36 @@ class PreparedBundleTopology:
         return BundleTopology(bundle['id'], tuple(members), tuple(events), (), tuple(sorted(features)),
                               tuple(tuple(sid for sid, _ in chain) for chain in chains), tuple(joins))
 
+    def _main_chains(self,bundle,streets,origins):
+        from .bundle_main_chains import normalize_main_chains
+        prepared=normalize_main_chains(bundle,streets,origins,self.tolerance)
+        if prepared is None:return None
+        normalized,others=prepared
+        result=self._chained(normalized,streets,origins)
+        by_id={member.street_id:member for member in result.members}
+        proxies=[];sources={}
+        for role,chain in enumerate(result.chains):
+            first=chain[0]
+            proxies.append(MemberExtent(first,True,role,role,True,
+                tuple(span for sid in chain for span in by_id[sid].spans)))
+            sources[first]=dict(id=first,items=[item for sid in chain for item in streets[sid]['items']
+                                              if item['kind']=='Section'])
+        ownership=_BundleOwnership(tuple(proxies),sources,(),self.tolerance)
+        if not ownership.rim:return None
+        # The native grouping may tie its end ordering at a common node. A
+        # simple complete control rim establishes the physical lateral order.
+        if ownership.inside[proxies[0].street_id]=='LEFT':
+            normalized=dict(normalized,head=normalized['head'][::-1],tail=normalized['tail'][::-1],
+                head_locations=normalized['head_locations'][::-1],tail_locations=normalized['tail_locations'][::-1])
+            result=self._chained(normalized,streets,origins)
+        exterior=tuple(sid for sid in others if ownership.exterior(streets[sid]))
+        interior=tuple(sid for sid in others if sid not in exterior)
+        features={*result.required_features,'SOURCE_CARRIAGEWAY_CHAINS'}
+        if normalized.get('source_extent_derived'):features.add('FULL_NAMED_SOURCE_EXTENT')
+        if interior:features.add('INTERIOR_STREETS')
+        return replace(result,interior_streets=interior,exterior_streets=exterior,
+                       required_features=tuple(sorted(features)))
+
     def read(self, bundle, streets, *, origins=None):
         head, tail = tuple(bundle['head']), tuple(bundle['tail'])
         if (not head or len(set(head)) != len(head) or len(set(tail)) != len(tail)):
@@ -345,9 +514,25 @@ class PreparedBundleTopology:
             raise BundleTopologyError('ENDPOINT_COUNT', 'Each Bundle endpoint member needs its own prepared location')
         if set(head) != set(tail):
             if origins is not None:
-                return self._chained(bundle, streets, origins)
+                try:return self._chained(bundle, streets, origins)
+                except BundleTopologyError:
+                    repaired=self._main_chains(bundle,streets,origins)
+                    if repaired is not None:return repaired
+                    raise
             raise BundleTopologyError('UNRESOLVED_MEMBERSHIP', 'Members entering or leaving inside a Bundle need explicit incidence records')
         if head != tail:
+            if origins is not None:
+                from .bundle_source_chains import paired_source_chains,shared_terminal_order
+                normalized=shared_terminal_order(bundle,streets,origins,self.tolerance)
+                if normalized is not None:
+                    result=self.read(normalized,streets,origins=origins)
+                    return replace(result,required_features=tuple(sorted(
+                        {*result.required_features,'SHARED_TERMINAL_ORDER'})))
+                normalized = paired_source_chains(bundle, streets, origins, self.tolerance)
+                if normalized is not None:
+                    result = self._chained(normalized, streets, origins)
+                    return replace(result, required_features=tuple(sorted(
+                        {*result.required_features, 'SHARED_TERMINALS'})))
             raise BundleTopologyError('MEMBER_ORDER_CHANGE',
                 'Prepared member order changes between ends; review ordering and the no-crossing requirement before constructing a surface')
         members, events, features, used_sections = [], [], set(), set()
@@ -379,17 +564,23 @@ class PreparedBundleTopology:
             spans = tuple(MemberSpan(i, cuts[a], cuts[b], path.ranges(a, b))
                           for i, (a, b) in enumerate(zip(ordered, ordered[1:])))
             members.append(MemberExtent(sid, start < end, order, order, complete, spans))
-        interior = tuple(sorted(set(bundle.get('owned_streets', ())) - set(head)))
-        if any(sid not in streets for sid in interior):
+        owned = tuple(sorted(set(bundle.get('owned_streets', ())) - set(head)))
+        if any(sid not in streets for sid in owned):
             raise BundleTopologyError('MISSING_INTERIOR_STREET', 'Bundle owns an absent interior Street')
+        ownership = _BundleOwnership(members, streets, events, self.tolerance)
+        exterior = tuple(sid for sid in owned if ownership.exterior(streets[sid]))
+        interior = tuple(sid for sid in owned if sid not in exterior)
         if interior:
             features.add('INTERIOR_STREETS')
-        return BundleTopology(bundle['id'], tuple(members), tuple(events), interior, tuple(sorted(features)))
+        return BundleTopology(bundle['id'], tuple(members), tuple(events), interior, tuple(sorted(features)),
+                              exterior_streets=exterior)
 
     def apply(self, snapshot):
+        from .physical_sources import PhysicalStreetInventory
+        sources=PhysicalStreetInventory.view(snapshot).streets
         for bundle in snapshot.bundles.values():
             try:
-                bundle['topology'] = self.read(bundle, snapshot.streets,
+                bundle['topology'] = self.read(bundle, sources,
                     origins=getattr(snapshot, 'junction_origins', None)).report()
             except BundleTopologyError as exc:
                 bundle['topology'] = dict(status='UNRESOLVED', code=exc.code, reason=str(exc))

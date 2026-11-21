@@ -115,7 +115,8 @@ def continuation_sections(network, bundle):
             if site is not None and any(e.section_id in bundle.interior_section_ids for e in site.ends):
                 streets.update(sections[e.section_id].street_id for e in site.ends
                                if e.section_id not in bundle.sections)
-    return {s.id for s in network.sections if s.street_id in streets}
+    from .bundle_partial_caps import dependencies
+    return {s.id for s in network.sections if s.street_id in streets} | dependencies(network, bundle)
 
 
 @dataclass(frozen=True)

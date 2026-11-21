@@ -110,11 +110,11 @@ class TransitionClearance:
 
     @classmethod
     def build(cls, context, approaches, neighbors=()):
-        from .ownership import footprint_key
+        from .ownership import resolved_footprint
         limits = .4 * np.array([a.length for a in approaches])
         constraints = []
         for junction in neighbors:
-            footprint = context[footprint_key(junction.key)]
+            footprint = resolved_footprint(context,junction.key)
             for i, approach in enumerate(approaches):
                 mouth = footprint.mouths.get((approach.source.id, 1 - approach.end))
                 if mouth is None:

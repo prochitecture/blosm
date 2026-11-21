@@ -6,6 +6,7 @@ repair; a badly parameterized region still needs another chart family.
 """
 import math
 import numpy as np
+from .updates import drain_steps
 from .mesh import Mesh, cross
 
 
@@ -83,6 +84,9 @@ class QuadEdgeRotations:
         return sorted(options, key=lambda item: (-round(item[0], 8), item[1], item[2], item[3]))
 
     def improve(self, mesh, relaxation):
+        return drain_steps(self.improve_steps(mesh, relaxation))
+
+    def improve_steps(self, mesh, relaxation):
         """Return the best measured ratio, never a worse final iterate.
 
         Relaxation must retain physical rim vertices. The existing fixed-rim
@@ -97,6 +101,7 @@ class QuadEdgeRotations:
         for _ in range(self.max_passes):
             if best_ratio <= self.maximum_ratio:
                 break
+            yield
             faces, used, accepted = current.quads.copy(), set(), 0
             for score, first, last, variant, replacement in self.proposals(current):
                 if first in used or last in used:
@@ -110,7 +115,10 @@ class QuadEdgeRotations:
             ratio = rotated.validate()['maximum_edge_ratio']
             if ratio < best_ratio:
                 best, best_ratio = rotated, ratio
-            current, report = relaxation.improve(rotated)
+            if hasattr(relaxation, "improve_steps"):
+                current, report = yield from relaxation.improve_steps(rotated)
+            else:
+                current, report = relaxation.improve(rotated)
             ratio = current.validate()['maximum_edge_ratio']
             if ratio < best_ratio:
                 best, best_ratio = current, ratio

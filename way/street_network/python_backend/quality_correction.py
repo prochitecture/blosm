@@ -5,6 +5,7 @@ every accepted step. Feasibility is measured, never inferred from proxy energy.
 """
 import math
 import numpy as np
+from .updates import drain_steps, numerical_time_slices
 from .mesh import Mesh, cross
 
 
@@ -59,7 +60,26 @@ class QuadShapeCorrection:
         return (report is not None and report['maximum_edge_ratio'] <= self.maximum_ratio
                 and report['minimum_corner_sine'] >= self.minimum_sine)
 
+    def face_losses(self, points):
+        """Evaluate independent line-search trials, rejecting each folded face."""
+        edge = np.roll(points, -1, axis=1) - points
+        lengths = np.linalg.norm(edge, axis=2)
+        turns = cross(edge, np.roll(edge, -1, axis=1))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratio = lengths.max(axis=1) / lengths.min(axis=1)
+            sine = turns / (lengths * np.roll(lengths, -1, axis=1))
+            loss = (np.maximum(0., ratio-self.target_ratio)**2
+                    + 64.*np.sum(np.maximum(0., self.target_sine-sine)**2, axis=1))
+        valid = (turns.min(axis=1)>1e-10) & (lengths.min(axis=1)>1e-12)
+        return np.where(valid, loss, np.inf)
+
     def improve(self, mesh, *, fixed_vertices=None):
+        return drain_steps(self._iterations(mesh, fixed_vertices))
+
+    def improve_steps(self, mesh, *, fixed_vertices=None):
+        return numerical_time_slices(self._iterations(mesh, fixed_vertices))
+
+    def _iterations(self, mesh, fixed_vertices):
         mesh.validate()
         if len(mesh.quads) > self.max_cells:
             raise ValueError('Quad-shape correction exceeds its cell budget')
@@ -93,6 +113,7 @@ class QuadShapeCorrection:
             return max(report['maximum_edge_ratio'] / self.maximum_ratio,
                        self.minimum_sine / report['minimum_corner_sine'])
         for iteration in range(self.max_iterations):
+            yield
             value, report, gradient = self.evaluate(xy, faces, gradient=True)
             if score(report) < best_score:
                 best, best_score = xy.copy(), score(report)
@@ -111,6 +132,8 @@ class QuadShapeCorrection:
             cap = .1 * np.sqrt(mean2)
             move *= np.minimum(1., np.divide(cap, norm, out=np.ones_like(norm), where=norm > 0.))[:, None]
             for line in range(24):
+                if line:
+                    yield
                 candidate = xy + 2. ** -line * move
                 trial, _, _ = self.evaluate(candidate, faces)
                 evaluations += 1

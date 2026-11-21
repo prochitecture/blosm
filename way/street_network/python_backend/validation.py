@@ -171,23 +171,37 @@ def validate_overlaps_steps(meshes, *, changed=None, cell_size=2., tolerance=1e-
     yield from _checkpoint(on_progress, 'Collecting street overlap geometry')
     keys = list(meshes)
     changed = set(keys) if changed is None else set(changed)
-    arrays = []
-    for key in keys:
-        arrays.append(meshes[key].xyz[meshes[key].quads, :2])
-        yield None
-    points = np.concatenate(arrays)
-    owners = np.concatenate([np.full(len(a), i, dtype=np.int32) for i, a in enumerate(arrays)])
-    selected = np.array([key in changed for key in keys], dtype=bool)[owners]
-    if not np.any(selected):
-        return dict(quads=len(points), candidate_pairs=0)
-    minimum, maximum = points.min(axis=1), points.max(axis=1)
-    bins = np.floor(np.stack((minimum, maximum)) / cell_size)
-    if not np.all(np.isfinite(bins)) or np.max(abs(bins)) > 2 ** 61:
-        raise ValueError('Surface coordinates exceed the overlap-index integer range')
-    first, last = bins.astype(np.int64)
-    spans = last - first + 1
-    if np.any(spans > 4096) or np.any(spans[:, 0] * spans[:, 1] > 4096):
-        raise ValueError('Surface quad exceeds the overlap-index spatial budget')
+    total = sum(len(mesh.quads) for mesh in meshes.values())
+    if not any(key in changed and len(meshes[key].quads) for key in keys):
+        return dict(quads=total, candidate_pairs=0)
+    # Keep one scene-wide face array. Gathering and quantizing in batches
+    # avoids a second copy of all city quads and both sets of floating bins.
+    points = np.empty((total, 4, 2), dtype=np.float64)
+    owners = np.empty(total, dtype=np.int32)
+    selected = np.empty(total, dtype=bool)
+    minimum = np.empty((total, 2), dtype=np.float64)
+    maximum = np.empty_like(minimum)
+    first = np.empty((total, 2), dtype=np.int64)
+    spans = np.empty_like(first)
+    offset = 0
+    for owner, key in enumerate(keys):
+        mesh = meshes[key]
+        for start in range(0, len(mesh.quads), _ENTRY_BATCH):
+            quads = mesh.quads[start:start + _ENTRY_BATCH]
+            rows = slice(offset, offset + len(quads))
+            points[rows] = mesh.xyz[quads, :2]
+            owners[rows], selected[rows] = owner, key in changed
+            minimum[rows], maximum[rows] = points[rows].min(axis=1), points[rows].max(axis=1)
+            bins = np.floor(np.stack((minimum[rows], maximum[rows])) / cell_size)
+            if not np.all(np.isfinite(bins)) or np.max(abs(bins)) > 2 ** 61:
+                raise ValueError('Surface coordinates exceed the overlap-index integer range')
+            low, high = bins.astype(np.int64)
+            span = high - low + 1
+            if np.any(span > 4096) or np.any(span[:, 0] * span[:, 1] > 4096):
+                raise ValueError('Surface quad exceeds the overlap-index spatial budget')
+            first[rows], spans[rows] = low, span
+            offset += len(quads)
+            yield None
     grid = yield from _CellGrid.create_steps(first, spans, np.flatnonzero(selected),
                                              max_index_entries, on_progress)
     pair_count, batches = 0, 0

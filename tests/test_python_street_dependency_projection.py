@@ -41,6 +41,30 @@ class PythonDependencyProjections(unittest.TestCase):
             np.testing.assert_array_equal(update.products[key].mesh.xyz, fresh.products[key].mesh.xyz)
             np.testing.assert_array_equal(update.products[key].mesh.quads, fresh.products[key].mesh.quads)
 
+    def test_far_route_mouth_reaching_a_local_crossroad_is_not_projected_away(self):
+        network, = locality_fixture_networks(model)
+        # Shorten the remote continuation until its genuine routed mouth
+        # passes through Section 6 and enters the local crossroad Section 4.
+        points = {6: ((0., 22., 0.), (0., 24., 0.)),
+                  7: ((0., 24., 0.), (0., 50., 0.)),
+                  8: ((0., 24., 0.), (20., 24., 0.))}
+        network = replace(network, sections=tuple(replace(s, points=points[s.id])
+                            if s.id in points else s for s in network.sections))
+        backend = PythonMeshBackend(network.settings)
+        initial = backend.prepare(network)
+        backend.commit(initial)
+        self.assertIn((4, 1), initial.products[model.Key('mouths', 2)].mouths)
+        changed = replace(network, sections=tuple(replace(s, width=5.8) if s.id == 8 else s
+                                                 for s in network.sections))
+        update = backend.prepare(changed)
+        self.assertIn(model.Key('bundle_plan', 7), update.rebuilt)
+        self.assertIn(model.Key('road', 4), update.rebuilt)
+        fresh = PythonMeshBackend(changed.settings).prepare(changed)
+        for key, part in update.products.items():
+            if getattr(part, 'mesh', None) is not None:
+                np.testing.assert_array_equal(part.mesh.xyz, fresh.products[key].mesh.xyz)
+                np.testing.assert_array_equal(part.mesh.quads, fresh.products[key].mesh.quads)
+
     @staticmethod
     def free_bundle(separation):
         return model.Network('free_projection', (

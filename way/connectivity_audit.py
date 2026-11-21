@@ -1,7 +1,8 @@
-"""Inspect the legacy XY graph's connection assumptions using OSM provenance.
+"""Record geometric crossings separately from authoritative OSM connectivity.
 
-This records evidence; it does not infer heights from layer tags or silently
-rewrite the preparation graph. Grade-aware graph construction remains separate.
+The optional source-topology policy records nonconnections retained by the new
+preparation graph. The default still audits older callers without assuming they
+have fixed their graph. Layer tags never become invented physical elevations.
 """
 from collections import Counter, defaultdict
 from itertools import combinations
@@ -13,7 +14,7 @@ class ConnectivityAudit:
         return tuple(str(tags.get(key, default)).strip().lower()
             for key, default in (('layer', '0'), ('bridge', 'no'), ('tunnel', 'no')))
 
-    def read(self, ways, splits):
+    def read(self, ways, splits, *, source_topology=False):
         events = defaultdict(list)
         for way in ways:
             for segment in way.segments:
@@ -38,6 +39,8 @@ class ConnectivityAudit:
                 grade_a, grade_b = self.grade(a.element.tags), self.grade(b.element.tags)
                 rows.append(dict(location=point, osm_way_ids=ids,
                     code='GRADE_SEPARATED_XY' if grade_a != grade_b else 'INFERRED_XY_CONNECTION',
-                    categories=(a.category, b.category), grades=(grade_a, grade_b)))
-        return dict(policy='Audit only: legacy graph uses XY intersections; these events lack a shared OSM endpoint node',
+                    categories=(a.category, b.category), grades=(grade_a, grade_b),
+                    connectivity='SEPARATE_SOURCE_INCIDENCES' if source_topology else 'UNVERIFIED_XY'))
+        return dict(policy=('OSM_NODE_IDENTITY' if source_topology else
+                    'Audit only: legacy graph uses XY intersections; these events lack a shared OSM endpoint node'),
                     counts=dict(Counter(row['code'] for row in rows)), events=rows)

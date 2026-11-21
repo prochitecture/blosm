@@ -1,5 +1,6 @@
 from .item import Item
 from ..way_properties import getWidth
+from ..source_placement import constant_placement
 
 
 class Section(Item):
@@ -15,6 +16,8 @@ class Section(Item):
         self.centerline = polyline[::]          # a Python list of coordinates
         self.offset = 0.                        # an offset from the centerline
         self.width = 0.                         # the width of the section
+        self.sourceWidth = None                # before optional pixel/transition correction
+        self.sourcePlacement = dict(status='NOT_TAGGED', offset=0.)
 
         self.oneway = None
         self.forwardLanes = None
@@ -38,6 +41,10 @@ class Section(Item):
         self.tags = net_section.tags
         self.sourceWayIds = getattr(net_section, 'sourceWayIds', frozenset())
         self.sourceSegments = getattr(net_section, 'sourceSegments', ())
+        directions = {1 if last > first else -1 for _, _, _, first, last in self.sourceSegments
+                      if first != last}
+        self.sourceDirection = (next(iter(directions)) if len(directions) == 1 else
+                                (1 if net_section.forward else -1) if not directions else 0)
 
         self._src = polyline[0]
         self._dst = polyline[-1]
@@ -141,6 +148,10 @@ class Section(Item):
         self.widthOrigin = 'OSM width tag' if width else 'Lane count and style/category lane width'
         self.laneWidth = width/self.totalLanes if width else props['laneWidth']
         self.width = self.totalLanes * self.laneWidth
+        self.sourceWidth = self.width
+        self.sourcePlacement = constant_placement(self.tags, self.width, self.totalLanes,
+                                                  direction=self.sourceDirection)
+        self.offset = self.sourcePlacement.get('offset', 0.)
         self.forwardWidth =  self.forwardLanes * self.laneWidth + \
                                 self.bothLanes * self.laneWidth/2.
         self.backwardWidth = self.backwardLanes * self.laneWidth + \

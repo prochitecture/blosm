@@ -14,7 +14,7 @@ from tested_python_streets.model import Key, Network, Section
 from tested_python_streets.patterns import PatternLibrary
 from tested_python_streets.providers import Part
 from tested_python_streets.source_support import ClippedApproachSupport
-from tested_python_streets.updates import UpdateCoordinator, Task, drain_steps
+from tested_python_streets.updates import CooperativeBuild, UpdateCoordinator, Task, drain_steps
 from tested_python_streets.uv import DEFAULT_UV_MAP
 from tested_python_streets.validation import validate_overlaps, validate_overlaps_steps
 
@@ -44,6 +44,40 @@ class Parts:
 
 
 class PythonStreetProgressiveTests(unittest.TestCase):
+    def test_cancel_during_resumable_task_and_exclude_suspended_time(self):
+        key = Key('example', 1)
+        clock = [0.]
+        events = []
+        def build_steps(context):
+            try:
+                clock[0] += 2.
+                events.append('started')
+                yield
+                clock[0] += 3.
+                return 7
+            finally:
+                events.append('closed')
+        class Provider:
+            def tasks(self, source):
+                yield Task(key, (), CooperativeBuild(lambda context: 7, build_steps))
+        engine = UpdateCoordinator((Provider(),), PatternLibrary())
+        with patch('tested_python_streets.updates.time.perf_counter', side_effect=lambda: clock[0]):
+            for cancel in (True, False):
+                events.clear()
+                steps = engine.prepare_steps(network())
+                while not events:
+                    next(steps)
+                clock[0] += 90.
+                if cancel:
+                    steps.close()
+                    self.assertFalse(engine.products)
+                    self.assertEqual(engine.revision, 0)
+                else:
+                    result = drain_steps(steps)
+                    self.assertEqual(result.products[key], 7)
+                    self.assertEqual(result.timings['tasks'][key.text()], 5.)
+                self.assertEqual(events, ['started', 'closed'])
+
     def collect(self, steps, pause=None):
         count = 0
         try:

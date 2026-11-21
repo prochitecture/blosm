@@ -1,5 +1,10 @@
 # Early mesh previews during street import
 
+For larger original OSM extracts, see the subsequent
+[large-area assessment](STREETS_PROGRESSIVE_LARGE_AREA_TEST.md). It found partial
+construction coverage in three larger areas; the successful Karl-Marx-Allee
+measurement below should not be extrapolated to full large-network generation.
+
 Development record, 13 November 2026. This extends the
 [cooperative Python street import](STREETS_PROGRESSIVE_IMPORT.md), using the
 existing shared OSM scheduler and allocation ownership protocol. Development
@@ -40,8 +45,12 @@ Preparation still reads the complete input, resolves physical ownership and
 retained boundary support, and prepares dependencies before the first suitable
 part exists. Internal plans, trial boundary-support calculations and intermediate
 arrays are not previewed. Some junction/Bundle tasks depend on multiple streets
-or all junction surfaces. Long individual builders remain indivisible, so early
-previews improve visible progress without guaranteeing a fixed maximum UI pause.
+or all junction surfaces. The Python ownership planner yields between ordinary
+junctions and between width-transition candidates. Compound surfaces yield
+between chart construction, height assignment and validation, and while
+evaluating batches of boundary heights. Blender can process events or cancel at
+these points. A single chart construction, radius search or geometry check can
+still occupy a long callback.
 
 The construction formulas, task order, tolerances and final mesh topology are
 unchanged. The pipeline is:

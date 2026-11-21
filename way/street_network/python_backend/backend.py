@@ -45,15 +45,14 @@ class PythonMeshBackend:
         self.updates = UpdateCoordinator(self.providers, self.patterns)
 
     def prepare(self, network, *, force=False):
-        return drain_steps(self.prepare_steps(network, force=force))
+        return drain_steps(self.prepare_steps(network, force=force, cooperative_tasks=False))
 
-    def prepare_steps(self, network, *, force=False, on_progress=None, emit_products=False):
+    def prepare_steps(self, network, *, force=False, on_progress=None, emit_products=False, cooperative_tasks=True):
         """Prepare numerical products cooperatively without accepting them.
 
         UV fallback yields between products, and overlap validation yields at
-        its existing numerical batch boundaries. Individual builders and UV
-        mappings remain indivisible operations; the phase callback identifies
-        those operations before they begin. No Blender or
+        its existing numerical batch boundaries. Resumable providers also yield
+        within a task. The phase callback identifies the current task. No Blender or
         scheduler dependency is needed by this numerical producer.
         Optional product events expose read-only raw products before fallback
         UV mapping and final validation; they do not accept the update.
@@ -66,7 +65,8 @@ class PythonMeshBackend:
             raise ValueError('No registered numerical provider supports: ' + ', '.join(sorted(missing)))
         self.patterns.set_budget(network.settings.pattern_cache_bytes)
         prepared = yield from progress.forward(self.updates.prepare_steps(
-            network, force=force, on_progress=on_progress, emit_products=emit_products))
+            network, force=force, on_progress=on_progress, emit_products=emit_products,
+            cooperative_tasks=cooperative_tasks))
         # Feature providers can supply their own charts and extra UV sets.
         # Every otherwise uncharted Part gets a shared physical-plan fallback,
         # after its final geometry has been assembled and before placement.
@@ -74,8 +74,12 @@ class PythonMeshBackend:
         from .uv import DEFAULT_UV_MAP, PlanarMapping, apply_mapping
         uv_seconds = 0.
         products = dict(prepared.products)
+        lineage = {bundle.key: bundle for bundle in network.bundles if bundle.source_bundle_id is not None}
         yield from progress.checkpoint('Checking street UV maps')
         for index, (key, part) in enumerate(products.items(), 1):
+            if isinstance(part, Part) and part.owner in lineage:
+                bundle = lineage[part.owner]
+                part.metadata.update(source_bundle_id=bundle.source_bundle_id, scope_ordinal=bundle.scope_ordinal)
             if isinstance(part, Part) and part.mesh is not None and DEFAULT_UV_MAP not in part.mesh.uv_layers:
                 yield from progress.checkpoint(f'Mapping street UVs for {key.text()}')
                 before = time.perf_counter()

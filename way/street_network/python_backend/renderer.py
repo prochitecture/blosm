@@ -200,10 +200,21 @@ class PythonStreetRenderer(StreetRenderBackend):
         return context
 
     def _write_report(self, snapshot, adaptation, collection, results, start, *, complete):
+        deferred = [i for i in adaptation.issues if i.get('code') == 'OUTSIDE_GROUND_SCOPE']
+        scope_records = [i for i in adaptation.issues if i['kind'] in ('ScopeBoundary', 'ScopeJunction', 'ScopeBundle')]
+        scope_errors = [i for i in adaptation.issues if i not in deferred and i not in scope_records]
+        ground_ready = (bool(results) and all(r['status'] == 'READY' for r in results)
+                        and not adaptation.blocked_sections and not scope_errors)
         report = dict(backend='python', version=1, source=snapshot.report(),
             preparation_issues=adaptation.issues, surfaces=results,
             coverage='IN_PROGRESS' if not complete else 'COMPLETE' if results and all(r['status'] == 'READY' for r in results)
-                     and not adaptation.issues else 'PARTIAL', seconds=time.perf_counter() - start)
+                     and not adaptation.issues else 'PARTIAL', seconds=time.perf_counter() - start,
+            ground_coverage='IN_PROGRESS' if not complete else 'COMPLETE' if ground_ready else 'PARTIAL',
+            ground_scope=dict(policy='EXPLICIT_SOURCE_GROUND_SUBGRAPH',
+                deferred_sections=sorted(i['id'] for i in deferred),
+                boundaries=[i for i in scope_records if i['kind'] != 'ScopeBundle'],
+                bundles=[i for i in scope_records if i['kind'] == 'ScopeBundle'],
+                blocked_sections=sorted(adaptation.blocked_sections)))
         text = self.context.text if self.context is not None and alive(self.context.text) else bpy.data.texts.new('Blosm Python street import report')
         text.clear()
         text.write(json.dumps(report, indent=2))

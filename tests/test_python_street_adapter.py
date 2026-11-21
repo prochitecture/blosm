@@ -27,6 +27,15 @@ def adapter():
 
 
 class PythonAdapterTests(unittest.TestCase):
+    def test_unresolved_placement_is_reported_as_invalid_ground_input(self):
+        original = source()
+        original.bundles.clear()
+        original.streets[1]['items'][0]['source_placement'] = dict(
+            status='UNRESOLVED', reason='Variable placement needs an explicit dimensional transition')
+        result = adapter().read(original, 'import', Settings())
+        self.assertNotIn(10, {s.id for s in result.network.sections})
+        self.assertTrue(any(i['id'] == 10 and 'placement' in i['reason'] for i in result.issues))
+
     def test_category_style_radii_are_preferred_and_an_override_remains_strict(self):
         original = source()
         original.bundles.clear()
@@ -54,6 +63,34 @@ class PythonAdapterTests(unittest.TestCase):
         self.assertEqual(len(tuple(components(network))), 1)
         reopened = Network.from_dict(json.loads(json.dumps(network.to_dict())))
         self.assertEqual(reopened, network)
+
+    def test_unmapped_bundle_blocks_its_original_ground_ownership(self):
+        for declaration in ('owned', 'terminals', 'street'):
+            original = source()
+            bundle = original.bundles[7]
+            bundle['topology'] = dict(status='UNRESOLVED', reason='Original lateral order is unresolved')
+            if declaration == 'owned': bundle['owned_streets'] = (1, 2)
+            elif declaration == 'terminals': bundle.update(head=(1, 2), tail=(2, 1))
+            else:
+                for street in original.streets.values(): street['bundle_id'] = 7
+            with self.subTest(declaration=declaration):
+                result = adapter().read(original, 'import', Settings())
+                self.assertEqual(result.blocked_sections, {10, 11, 20, 21})
+                self.assertFalse(result.network.bundles)
+                issue, = result.issues
+                self.assertEqual(issue['code'], 'UNMAPPED_BUNDLE_MEMBERSHIP')
+                self.assertEqual(issue['sections'], [10, 11, 20, 21])
+                self.assertEqual(issue['reason'], bundle['topology']['reason'])
+
+    def test_unmapped_bundle_entirely_outside_scope_needs_no_ground_block(self):
+        original = source()
+        original.bundles[7].update(topology=dict(status='UNRESOLVED'), owned_streets=(1, 2))
+        for street in original.streets.values():
+            for item in street['items']: item['tags']['bridge'] = 'yes'
+        result = adapter().read(original, 'import', Settings())
+        self.assertFalse(result.blocked_sections)
+        self.assertFalse(result.network.sections)
+        self.assertFalse(any(issue['kind'] == 'Bundle' for issue in result.issues))
 
     def test_regrouping_objects_does_not_change_logical_preparation(self):
         original = source()

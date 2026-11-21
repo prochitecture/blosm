@@ -37,7 +37,13 @@ parser.add_argument('--performance-request', action='store_true',
                     help='Enable the normal scoped Import performance preference for this run')
 parser.add_argument('--no-navigation', action='store_true',
                     help='Keep the observer heartbeat but disable its simulated viewport navigation')
+parser.add_argument('--timeout-seconds', type=float, default=600.,
+                    help='Wall-clock test limit, including synchronous callback time')
+parser.add_argument('--heartbeat-seconds', type=float, default=.01,
+                    help='Observer timer interval; does not change the production import scheduler')
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
+if not (0 < args.timeout_seconds <= 7200 and .01 <= args.heartbeat_seconds <= 1.):
+    parser.error('Use a timeout in (0, 7200] and heartbeat interval in [.01, 1]')
 if args.expected_hash and not args.osm:
     parser.error('--expected-hash requires --osm')
 if args.osm and not args.osm.is_file():
@@ -428,6 +434,8 @@ def complete(error=None):
                   source_sha256=hashlib.sha256(support.FIXTURE.read_bytes()).hexdigest(),
                   performance_request=args.performance_request,
                   simulated_navigation=not args.no_navigation,
+                  observer_interval_seconds=args.heartbeat_seconds,
+                  timeout_seconds=args.timeout_seconds,
                   source_hashes_at_start=source_hashes, wall_timing=wall_scope_report(),
                   real_extract_only=bool(args.osm), expected_geometry_sha256=args.expected_hash,
                   normal_exact_geometry_sha256=normal_geometry_digest,
@@ -439,6 +447,17 @@ def complete(error=None):
                   visibility_measurement='Visible preview meshes and accepted components sampled from the UI heartbeat; not pixel timing',
                   normal_worst_heartbeat_gap_seconds=max(gaps, default=None),
                   heartbeats=heartbeats, result_notifications=results)
+    report_names = {collection.get('blosm_street_report') for collection in bpy.data.collections
+                    if collection.get('blosm_street_report')}
+    report['street_import_reports'] = [json.loads(bpy.data.texts[name].as_string())
+                                      for name in sorted(report_names)]
+    report['scene_counts'] = dict(objects=len(bpy.data.objects), meshes=len(bpy.data.meshes),
+        accepted_components=len(support.controllers(committed=True)),
+        failed_components=sum(bool(obj.get('st_py_error')) for obj in support.controllers()),
+        output_meshes=sum(obj.type == 'MESH' for controller in support.controllers(committed=True)
+                         for obj in controller['st_py_outputs'].objects),
+        output_quads=sum(len(obj.data.polygons) for controller in support.controllers(committed=True)
+                         for obj in controller['st_py_outputs'].objects if obj.type == 'MESH'))
     (args.artifacts / 'ui_checks.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print('STREET_PROGRESSIVE_UI_CHECKS', json.dumps(dict(passed=report['passed'], error=error)), flush=True)
     bpy.ops.wm.quit_blender()
@@ -447,7 +466,7 @@ def complete(error=None):
 def heartbeat():
     global last_progress
     try:
-        assert time.monotonic() - started < 600, 'Street GUI check timed out'
+        assert time.monotonic() - started < args.timeout_seconds, 'Street GUI check timed out'
         if not args.no_navigation:
             for area in bpy.context.screen.areas:
                 if area.type == 'VIEW_3D':
@@ -488,7 +507,7 @@ def heartbeat():
     except Exception:
         complete(traceback.format_exc())
         return None
-    return .01
+    return args.heartbeat_seconds
 
 
 bpy.app.timers.register(heartbeat, first_interval=.1)

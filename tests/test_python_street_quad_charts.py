@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import numpy as np
 import _python_street_package
 from _python_street_fixtures import fixture_networks
@@ -12,6 +13,34 @@ from tested_python_streets.validation import validate_overlaps
 
 
 class PythonDirectQuadChartTests(unittest.TestCase):
+    def test_cancel_while_grading_keeps_the_source_rim_available_for_a_retry(self):
+        chart = LayeredQuadChart(PatternLibrary())
+        rim = np.array(((0., 0.), (2., 0.), (2., 2.), (0., 2.)))
+        original = rim.copy()
+        checkpoint = object()
+        closed = []
+
+        def grading(mesh):
+            try:
+                yield checkpoint
+            finally:
+                closed.append(True)
+
+        with patch.object(chart.quality, 'improve_steps', grading):
+            steps = chart.build_steps(rim)
+            try:
+                for event in steps:
+                    if event is checkpoint:
+                        break
+                else:
+                    self.fail('The progressive chart swallowed the grading checkpoint')
+            finally:
+                steps.close()
+        self.assertEqual(closed, [True])
+        np.testing.assert_array_equal(rim, original)
+        mesh = chart.build(rim).mesh
+        np.testing.assert_array_equal(mesh.xyz[mesh.seams[0], :2], original)
+
     def test_three_to_one_template_is_positive_for_varied_concave_radial_fronts(self):
         patterns = PatternLibrary()
         transition = RadialTransition(patterns)

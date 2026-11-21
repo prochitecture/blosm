@@ -43,6 +43,9 @@ class Section:
     datum: float = 0.
     category: str = 'residential'
     selection_ends: tuple = ()
+    # A known original incidence whose other feature is outside this backend's
+    # scope. It is an open handoff cross-section, never a genuine dead end.
+    scope_ends: tuple = ()
 
     def __post_init__(self):
         Key('section', self.id)
@@ -60,6 +63,12 @@ class Section:
                 any(type(end) is not int or end not in (0, 1) for end in self.selection_ends)):
             raise ValueError('Selection cuts must name distinct directed Section ends')
         object.__setattr__(self, 'selection_ends', tuple(self.selection_ends))
+        if (len(set(self.scope_ends)) != len(self.scope_ends) or
+                any(type(end) is not int or end not in (0, 1) for end in self.scope_ends)):
+            raise ValueError('Scope boundaries must name distinct directed Section ends')
+        if set(self.selection_ends).intersection(self.scope_ends):
+            raise ValueError('A source scope boundary cannot also be a selection cut')
+        object.__setattr__(self, 'scope_ends', tuple(self.scope_ends))
 
     @property
     def key(self):
@@ -174,6 +183,10 @@ class Bundle:
     members: tuple
     interior_section_ids: tuple = ()
     profile_rise: float | None = None
+    # Disconnected ground extents share the canonical native identity, while
+    # their runtime task keys remain distinct. Neither field renumbers roads.
+    source_bundle_id: int | None = None
+    scope_ordinal: int | None = None
 
     def __post_init__(self):
         Key('bundle', self.id)
@@ -181,6 +194,10 @@ class Bundle:
             raise ValueError('A Bundle needs distinct declared member and interior Sections')
         if self.profile_rise is not None and (not math.isfinite(self.profile_rise) or self.profile_rise < 0):
             raise ValueError('Bundle profile rise must be finite and nonnegative')
+        if (self.source_bundle_id is None) != (self.scope_ordinal is None):
+            raise ValueError('A derived Bundle extent needs source identity and scope ordinal')
+        if self.source_bundle_id is not None and self.id != ground_extent_id(self.source_bundle_id, self.scope_ordinal):
+            raise ValueError('A derived Bundle extent has an invalid reserved runtime identity')
 
     @property
     def sections(self):
@@ -189,6 +206,18 @@ class Bundle:
     @property
     def key(self):
         return Key('bundle', self.id)
+
+
+def ground_extent_id(source_bundle_id, scope_ordinal):
+    """Deterministic positive 63-bit task key; canonical fields stay INT32.
+
+    This reserved namespace is for runtime Keys and JSON/string metadata. It
+    must never be transported into a Blender INT mesh attribute.
+    """
+    if (type(source_bundle_id) is not int or not 0 <= source_bundle_id < 2**31 or
+            type(scope_ordinal) is not int or not 1 <= scope_ordinal < 2**16):
+        raise ValueError('Ground extent lineage exceeds its source-ID or ordinal range')
+    return (1 << 62) | (source_bundle_id << 16) | scope_ordinal
 
 
 @dataclass(frozen=True)
@@ -264,6 +293,8 @@ class Network:
                     raise ValueError('Missing or multiply attached Section endpoint')
                 if end.end in index[end.section_id].selection_ends:
                     raise ValueError('A selection cut cannot also own an explicit junction incidence')
+                if end.end in index[end.section_id].scope_ends:
+                    raise ValueError('A scope boundary cannot also own an explicit junction incidence')
                 attached.add(end)
         for bundle in self.bundles:
             if any(sid not in index for sid in bundle.sections):
@@ -289,7 +320,8 @@ class Network:
                                tuple(j.get('radii', ())), tuple(j.get('radius_modes', ())))
                   for j in data.get('intersections', ())),
             tuple(Bundle(b['id'], tuple(BundleMember(tuple(Traversal(**t) for t in m['path']),
-                  m.get('complete', True)) for m in b['members']), tuple(b.get('interior_section_ids', ())), b.get('profile_rise'))
+                  m.get('complete', True)) for m in b['members']), tuple(b.get('interior_section_ids', ())), b.get('profile_rise'),
+                  b.get('source_bundle_id'), b.get('scope_ordinal'))
                   for b in data.get('bundles', ())),
             tuple(Placement(**p) for p in data.get('furniture', ())), Settings(**data.get('settings', {})),
             tuple(Connection(c['id'], tuple(End(**e) for e in c['ends'])) for c in data.get('connections', ())))

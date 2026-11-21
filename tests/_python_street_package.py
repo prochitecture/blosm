@@ -11,3 +11,9 @@ if NAME not in sys.modules:
     package = importlib.util.module_from_spec(spec)
     sys.modules[NAME] = package
     spec.loader.exec_module(package)
+
+
+def prepared_steps(product):
+    """A numerical test double that yields before returning its prepared product."""
+    yield
+    return product

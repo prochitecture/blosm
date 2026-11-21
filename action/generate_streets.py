@@ -121,7 +121,8 @@ class StreetGenerator():
         # of StreetGenerator! So we do it here.
         NetSection.ID = 0
 
-        # Find the way segments, that intersect each other.
+        # Audit geometric crossings. OSM node identity, not XY coincidence,
+        # supplies connectivity when the section graph is built below.
         if session is not None:
             session.phase = 'Finding street crossings'
             session.call(self.findSelfIntersections)
@@ -252,21 +253,24 @@ class StreetGenerator():
         self.intersectingSegments = intersector.findIntersections(cleanedSegs)
         from ..way.connectivity_audit import ConnectivityAudit
         self.wayManager.streetPreparationAudit = ConnectivityAudit().read(
-            auditedWays, self.intersectingSegments)
+            auditedWays, self.intersectingSegments, source_topology=True)
 
 
     # Creates the network graph <self.sectionNetwork> for way-sections (ways between crossings).
-    # If there are intersections, detected by findSelfIntersections(), split them at the
-    # intersection point and add the parts to the network.
-    # Join the OSM segments to sections between the intersection points.
+    # Shared OSM nodes are already segment endpoints. Geometric crossings which
+    # lack that shared identity must not split or join the source streets.
+    # Join the OSM segments to sections between their actual junctions.
     def createWaySectionNetwork(self):
         wayManager = self.wayManager
 
         # prepare clipper for this frame of the scene
         clipper = SCClipper(self.app.minX, self.app.maxX, self.app.minY, self.app.maxY)
         from ..way.clipped_context import ClippedSourceContext
+        from ..way.source_topology import SourceEndpoints
         context = ClippedSourceContext((self.app.minX,self.app.maxX,self.app.minY,self.app.maxY),
             source_selection='ALL_WAYS' if self.allWays else 'SURFACE_VEHICLES')
+        endpoints = SourceEndpoints()
+        prepared = []
 
         # create full way network
         wayManager.networkGraph = self.networkGraph = WayNetwork(self.leftHandTraffic)
@@ -285,36 +289,36 @@ class StreetGenerator():
             if [tag for tag in ExcludedWayTags if tag in way.category]:
                 continue
 
-            for waySegment in way.segments:
-                # If waySSegment has an intersection, detected by findSelfIntersections(), split it at the
-                # intersection point and add the parts to the network.
-                segments = []
-                newSegments = self.intersectingSegments.get( (tuple(waySegment.v1),tuple(waySegment.v2)), None)
-                if newSegments:
-                    for v1,v2 in zip(newSegments[:-1],newSegments[1:]):
-                        segments.append((v1,v2))
-                else:
-                    segments.append((waySegment.v1,waySegment.v2))
+            for segment_index, waySegment in enumerate(way.segments):
+                # Clipping creates open source-edge ends, not artificial junctions.
+                accepted, v1, v2 = clipper.clip(Vector(waySegment.v1),Vector(waySegment.v2))
+                # A point contact with the clipping rectangle has no road length.
+                if not accepted or v1 == v2:
+                    continue
+                source_id = getattr(way, 'source_id', None)
+                keys = tuple(endpoints.identity(waySegment, point, source_id, segment_index, end)
+                             for end, point in enumerate((v1,v2)))
+                for point, key in zip((v1,v2), keys):
+                    endpoints.add(point, key)
+                prepared.append((way, waySegment, v1, v2, keys))
 
-                # If a segment is clipped by the scene's frame, add only the inner part.
-                for segment in segments:
-                    v1, v2 = Vector(segment[0]),Vector(segment[1])
-                    accepted, v1, v2 = clipper.clip(v1,v2)
-                    # A segment touching only a clipping corner has no length
-                    # inside the scene. Keep every nonzero interval, but do not
-                    # feed a point contact to PolyLine's distance interpolator.
-                    if accepted and v1 != v2:
-                        netSeg = NetSection(v1,v2,way.category,way.element.tags,(v2-v1).length)
-                        source_id = getattr(way, 'source_id', None)
-                        netSeg.sourceWayIds = frozenset((source_id,)) if source_id is not None else frozenset()
-                        delta = waySegment.v2-waySegment.v1
-                        length_squared = delta.length_squared
-                        netSeg.sourceSegments = ((source_id, str(waySegment.id1), str(waySegment.id2),
-                            (v1-waySegment.v1).dot(delta)/length_squared,
-                            (v2-waySegment.v1).dot(delta)/length_squared),)
-                        if context is not None:
-                            context.observe(waySegment,netSeg.sourceSegments[0],(v1,v2))
-                        wayManager.networkGraph.addSegment(netSeg,False)
+        # Collect virtual frame endpoints before resolving colliding identities.
+        borderPolygon = clipper.getPolygon()
+        for point in borderPolygon:
+            endpoints.add(point, ('scene_border', tuple(point)))
+
+        for way, waySegment, v1, v2, keys in prepared:
+            first, last = (endpoints.point(point,key) for point,key in zip((v1,v2),keys))
+            netSeg = NetSection(first,last,way.category,way.element.tags,(v2-v1).length)
+            source_id = getattr(way, 'source_id', None)
+            netSeg.sourceWayIds = frozenset((source_id,)) if source_id is not None else frozenset()
+            delta = waySegment.v2-waySegment.v1
+            length_squared = delta.length_squared
+            netSeg.sourceSegments = ((source_id, str(waySegment.id1), str(waySegment.id2),
+                (v1-waySegment.v1).dot(delta)/length_squared,
+                (v2-waySegment.v1).dot(delta)/length_squared),)
+            context.observe(waySegment,netSeg.sourceSegments[0],(v1,v2))
+            wayManager.networkGraph.addSegment(netSeg,False)
 
         if context is not None:
             selected = wayManager.getAllWays() if self.allWays else wayManager.getAllVehicleWays()
@@ -323,9 +327,9 @@ class StreetGenerator():
 
         # As a helper for further algorithms, add virtual segments of the category
         # 'scene_border' along the border polygon of the scene.
-        borderPolygon = clipper.getPolygon()
         for v1,v2 in zip(borderPolygon[:-1],borderPolygon[1:]):
-            netSeg = NetSection(v1,v2,'scene_border',None, (v2-v1).length)
+            first, last = (endpoints.point(point,('scene_border',tuple(point))) for point in (v1,v2))
+            netSeg = NetSection(first,last,'scene_border',None, (v2-v1).length)
             wayManager.networkGraph.addSegment(netSeg)
 
         # Join the OSM segments to sections between the intersection points.
@@ -1049,32 +1053,14 @@ class StreetGenerator():
 
 
     def postProcessing(self):
-
-        # Propagate the width and offset from a Section following SideLane
+        from ..way.dimension_propagation import TransitionDimensionPropagation
+        propagation = TransitionDimensionPropagation()
+        # Keep corrections through equal original dimensional runs. A minor
+        # side junction may genuinely gain/lose lanes; it must not overwrite
+        # that next Section's independently resolved source width.
         for sideLane in self.wayManager.transitionSideLanes:
-            item = sideLane.succ
-            width, offset = item.width, item.offset
-            while item:
-                item = item.succ
-                if item:
-                    if isinstance(item, Section):
-                        item.width = width
-                        item.offset = offset
-                        item.widthOrigin = 'Propagated after SideLane by Blosm preparation'
-                    elif not (isinstance(item, Intersection) and item.isMinor):
-                        item = None
-
-        # Propagate the width from a Section following SymLane
+            propagation.apply(sideLane, offset=True)
         for symLane in self.wayManager.transitionSymLanes:
-            item = symLane.succ
-            width = item.width
-            while item:
-                item = item.succ
-                if item:
-                    if isinstance(item, Section):
-                        item.width = width
-                        item.widthOrigin = 'Propagated after SymLane by Blosm preparation'
-                    elif not (isinstance(item, Intersection) and item.isMinor):
-                        item = None    
+            propagation.apply(symLane)
 
 

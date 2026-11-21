@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="510" viewBox="0 0 1100 510">
+ <rect width="1100" height="510" rx="20" fill="#f3f6f7"/>
+ <g font-family="Segoe UI,Arial,sans-serif" fill="#1b3540">
+  <text x="45" y="49" font-size="25" font-weight="700">Keep the grass boundary. Change only the internal quads.</text>
+  <text x="45" y="79" font-size="15">Schematic local patch · all original vertices and physical curb heights are retained</text>
+  <rect x="30" y="105" width="500" height="325" rx="14" fill="white"/>
+  <rect x="570" y="105" width="500" height="325" rx="14" fill="white"/>
+  <text x="55" y="136" font-size="19" font-weight="650">Before: two cells</text>
+  <text x="595" y="136" font-size="19" font-weight="650">After: three direct quad cells</text>
+  <g transform="translate(25 70)">
+   <path d="M100 140 L230 105 L360 145 L350 300 L140 320 L180 230 Z" fill="#e8f2ea"/>
+   <path d="M360 145 L180 230" stroke="#5c828c" stroke-width="3"/>
+   <path d="M100 140 L230 105 L360 145 L350 300 L140 320" fill="none" stroke="#d48536" stroke-width="5"/>
+   <path d="M140 320 L180 230 L100 140" fill="none" stroke="#829ba4" stroke-width="2" stroke-dasharray="6 5"/>
+   <path d="M202 112 L230 147 L257 112" fill="none" stroke="#b74646" stroke-width="2"/>
+   <g fill="#d48536" stroke="white" stroke-width="2">
+    <circle cx="100" cy="140" r="6"/><circle cx="230" cy="105" r="7"/>
+    <circle cx="360" cy="145" r="6"/><circle cx="350" cy="300" r="6"/><circle cx="140" cy="320" r="6"/>
+   </g>
+   <circle cx="180" cy="230" r="6" fill="#277b8a" stroke="white" stroke-width="2"/>
+   <text x="276" y="199" font-size="14" fill="#aa4141">One corner has</text>
+   <text x="276" y="218" font-size="14" fill="#aa4141">two fixed edges.</text>
+  </g>
+  <g transform="translate(565 70)">
+   <path d="M100 140 L230 105 L360 145 L350 300 L140 320 L180 230 Z" fill="#e8f2ea"/>
+   <path d="M230 105 L255 220 L350 300 M255 220 L180 230" fill="none" stroke="#277b8a" stroke-width="3"/>
+   <path d="M100 140 L230 105 L360 145 L350 300 L140 320" fill="none" stroke="#d48536" stroke-width="5"/>
+   <path d="M140 320 L180 230 L100 140" fill="none" stroke="#829ba4" stroke-width="2" stroke-dasharray="6 5"/>
+   <g fill="#d48536" stroke="white" stroke-width="2">
+    <circle cx="100" cy="140" r="6"/><circle cx="230" cy="105" r="7"/>
+    <circle cx="360" cy="145" r="6"/><circle cx="350" cy="300" r="6"/><circle cx="140" cy="320" r="6"/>
+   </g>
+   <g fill="#277b8a" stroke="white" stroke-width="2"><circle cx="180" cy="230" r="6"/><circle cx="255" cy="220" r="8"/></g>
+   <text x="275" y="227" font-size="14">New interior point</text>
+   <text x="275" y="247" font-size="14">with a free height</text>
+  </g>
+  <g font-size="15">
+   <path d="M55 460 H93" stroke="#d48536" stroke-width="5"/><text x="104" y="465">Fixed physical curb</text>
+   <path d="M350 460 H388" stroke="#277b8a" stroke-width="3"/><text x="399" y="465">Computational interior edges</text>
+   <text x="730" y="465" font-weight="650">Same 10% slope and drainage checks</text>
+  </g>
+ </g>
+</svg>

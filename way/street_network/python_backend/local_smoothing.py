@@ -43,6 +43,78 @@ def within_source_envelope(coefficients, points, limit):
                for q, first, last, bound in zip(controls, points, points[1:], limits))
 
 
+def coalesced_source_indices(points, tolerance, protected=()):
+    """Coalesce dense evaluation controls without erasing sharp authored turns.
+
+    Every accepted replacement chord has monotone source projection and every
+    original subsegment lies inside its finite capsule. Those two properties
+    also bound the chord's distance from the original polyline. The source
+    itself is not edited. A large turn, reversal or closed chord forces a split.
+    """
+    points = np.asarray(points, dtype=float)
+    delta = np.diff(points, axis=0)
+    lengths = np.linalg.norm(delta, axis=1)
+    directions = delta / lengths[:, None]
+    turns = np.sum(directions[:-1] * directions[1:], axis=1)
+    fixed = {0, len(points)-1, *protected,
+             *(int(i)+1 for i in np.flatnonzero(turns <= .5))}
+    retained = set(fixed)
+    ordered = sorted(fixed)
+    pending = list(zip(ordered, ordered[1:]))
+    while pending:
+        first, last = pending.pop()
+        if last <= first + 1:
+            continue
+        chord = points[last] - points[first]
+        square = float(chord @ chord)
+        if square < 1e-14:
+            split = first + 1 + int(np.argmax(np.linalg.norm(points[first+1:last] - points[first], axis=1)))
+        else:
+            distances = segment_distance(points[first+1:last], points[first], points[last])
+            projection = (points[first:last+1] - points[first]) @ chord / square
+            forward = np.diff(projection)
+            angles = directions[first:last] @ (chord / math.sqrt(square))
+            if (distances.max() <= tolerance and np.all(forward >= 0.) and np.all(angles > .5)):
+                continue
+            split = first + 1 + int(np.argmax(distances))
+        retained.add(split)
+        pending.extend(((first, split), (split, last)))
+    return tuple(sorted(retained))
+
+
+def within_polyline_envelope(coefficients, points, limit, *, maximum_depth=12):
+    """Continuous curve-to-original-polyline proof, not a sampled distance test.
+
+    A Bezier hull inside one finite segment capsule proves the entire piece.
+    Subdivision allows consecutive pieces to use different source capsules;
+    uncertain pieces are rejected at the finite refinement budget.
+    """
+    points = np.asarray(points, dtype=float)
+    delta = np.diff(points, axis=0)
+    squares = np.sum(delta * delta, axis=1)
+    firsts = points[:-1]
+    p, a, b, c = np.moveaxis(coefficients, 1, 0)
+    controls = np.stack((p, p+a/3., p+(2.*a+b)/3., p+a+b+c), axis=1)
+    pending = [(q, 0) for q in controls]
+    while pending:
+        q, depth = pending.pop()
+        relative = q[:, None, :] - firsts[None, :, :]
+        parameters = np.clip(np.sum(relative * delta[None, :, :], axis=2) / squares[None, :], 0., 1.)
+        distance = np.linalg.norm(relative - parameters[:, :, None] * delta[None, :, :], axis=2)
+        # Use a conservative margin rather than granting floating point slack.
+        margin = 64.*np.finfo(float).eps*max(1., float(abs(q).max()), float(abs(points).max()))
+        if float(distance.max(axis=0).min()) + margin <= limit:
+            continue
+        if depth >= maximum_depth:
+            return False
+        levels = [q]
+        for unused in range(3):
+            levels.append(.5 * (levels[-1][:-1] + levels[-1][1:]))
+        pending.append((np.array([v[0] for v in levels]), depth+1))
+        pending.append((np.array([v[-1] for v in levels[::-1]]), depth+1))
+    return True
+
+
 @dataclass(frozen=True)
 class SharedEndpointBend:
     """One directed half of a single bend across an explicit source seam."""
@@ -74,14 +146,44 @@ def shared_endpoint_bends(first, first_end, second, second_end, limit, *, alignm
     # Localize both sides together if either adjacent span exceeds its envelope.
     alignment_limit = .25 * limit if alignment_limit is None else alignment_limit
     estimated_bow = 4. / 27. * lengths.max() * math.sin(abs(turn) * .5)
+    reach = max(abs(s.offset) + .5 * s.width for s in (first, second))
+    forced = False
     if estimated_bow <= alignment_limit:
-        return None
+        # A small positional bow does not imply a safe offset: rotating the
+        # tangent on a very short endpoint span can still fold a wide road.
+        # Probe both canonical sides only when this cheap curvature estimate
+        # identifies that risk. An accepted pair keeps its established curve.
+        risky = 4.*math.sin(abs(turn)*.5)*reach / lengths.min() >= .98
+        if risky and abs(turn) < math.radians(170.):
+            from .paths import Path
+            common = (u+v) / np.linalg.norm(u+v)
+            for source, end, tangent in ((first, first_end, common if first_end == 1 else -common),
+                                         (second, second_end, common if second_end == 0 else -common)):
+                try:
+                    Path(source, endpoint_directions={end: tangent}, deviation_limit=limit,
+                         returning=first.id == second.id)
+                except ValueError as exc:
+                    if any(message in str(exc) for message in ('Smooth offset curvature', 'Local Smooth')):
+                        forced = True
+                        break
+        if not forced:
+            return None
     if abs(turn) >= math.radians(170.):
         raise ValueError('Shared Smooth bend has a near-reversal')
-    reach = max(abs(s.offset) + .5 * s.width for s in (first, second))
     factor = math.tan(abs(turn) * .5)
     radius = min(2. * reach, .99 * limit / (1. - math.cos(abs(turn) * .5)),
                  .4 * lengths.min() / factor)
+    if radius < 1.5 * reach - 1e-10:
+        if estimated_bow <= limit and not forced:
+            # Retain the established wider endpoint-span allowance whenever
+            # it was already admitted; the path still independently certifies.
+            return RETAIN_ENDPOINT_INTERPOLATION
+        # The former .4-per-leg reserve needlessly rejected a 90-degree bend
+        # next to an otherwise empty short Section. Use its available finite
+        # leg only on this failed branch. LocalCubicSmoothing still budgets
+        # this fixed setback together with every other bend on that Section.
+        radius = min(2.*reach, .99*limit/(1.-math.cos(abs(turn)*.5)),
+                     .9*lengths.min()/factor)
     if radius < 1.5 * reach - 1e-10:
         if estimated_bow <= limit:
             # The tighter alignment target cannot require an unsafe radius.
@@ -120,7 +222,8 @@ def shared_endpoint_bends(first, first_end, second, second_end, limit, *, alignm
 
 class LocalCubicSmoothing:
     """Width-relative default policy, independent of long source chord lengths."""
-    def __init__(self, points, reach, deviation_limit, endpoint_directions=None, endpoint_bends=None):
+    def __init__(self, points, reach, deviation_limit, endpoint_directions=None, endpoint_bends=None,
+                 *, minimum_radius_factor=1.5):
         self.source = np.asarray(points, dtype=float)
         self.reach = float(reach)
         self.deviation_limit = float(deviation_limit)
@@ -129,6 +232,9 @@ class LocalCubicSmoothing:
         self.directions = delta / self.lengths[:, None]
         self.endpoints = endpoint_directions or {}
         self.endpoint_bends = endpoint_bends or {}
+        self.minimum_radius_factor = float(minimum_radius_factor)
+        if not math.isfinite(self.minimum_radius_factor) or self.minimum_radius_factor < 1.25:
+            raise ValueError('Local Smooth radius reserve must be at least 1.25 times the carriageway reach')
 
     def build(self):
         directions, lengths = self.directions, self.lengths
@@ -140,7 +246,7 @@ class LocalCubicSmoothing:
         active = abs(turns) > 1e-7
         factor = np.tan(abs(turns) * .5)
         # Reserve finite inner-curb reach before the independent certificate.
-        minimum = np.where(active, 1.5 * self.reach * factor, 0.)
+        minimum = np.where(active, self.minimum_radius_factor * self.reach * factor, 0.)
         preferred = np.where(active, 2. * self.reach * factor, 0.)
         deviation_radius = .99 * self.deviation_limit / np.maximum(1. - np.cos(abs(turns) * .5), 1e-30)
         preferred = np.minimum(preferred, deviation_radius * factor)

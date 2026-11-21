@@ -130,7 +130,7 @@ class BoundaryData:
 
 
 class BoundaryConditions:
-    def build(self, group, loop, layouts):
+    def build(self, group, loop, layouts, *, context=None):
         sources = {p.region.owner: p for p in group.footprints}
         # Physical boundary owners need not match the logical junction count.
         # Consumed internal profiles impose no phantom boundary height seam.
@@ -231,4 +231,8 @@ class BoundaryConditions:
         if not np.all(np.isfinite(gradients)) or np.min(heights) < datum - 1e-8 or np.max(heights) > ceiling + 1e-8:
             raise ValueError('Compound boundary conditions exceed their physical envelope')
         heights.flags.writeable = gradients.flags.writeable = False
-        return BoundaryData(loop.xy, heights, gradients, tuple(rules), tuple(ports), datum, ceiling, loop.hole)
+        result = BoundaryData(loop.xy, heights, gradients, tuple(rules), tuple(ports), datum, ceiling, loop.hole)
+        if context is not None:
+            from .source_curb_conditions import apply
+            return apply(context, group, loop, result)
+        return result

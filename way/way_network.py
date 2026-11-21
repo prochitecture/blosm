@@ -4,6 +4,8 @@ from math import atan2, pi
 
 from ..defs.way import allRoadwayCategoriesRank
 from .way_properties import lanePattern
+from .source_topology import graph_point
+from .source_placement import placement_signature
 
 # from osmPlot import *
 PI2 = 2.*pi
@@ -21,8 +23,8 @@ class NetSection():
             self.initFromOther(*args)
 
     def initFromDetails(self, source, target, category, tags, length=None, path=None):
-        self.s = Vector(source).freeze()    # source node
-        self.t = Vector(target).freeze()    # target node
+        self.s = graph_point(source)    # source node, retaining OSM identity
+        self.t = graph_point(target)    # target node, retaining OSM identity
         self.forward = True
         self.category = category
         self.tags = tags
@@ -104,7 +106,7 @@ class WayNetwork(dict):
 
     def delNode(self, node):
         # remove a <node> from the graph
-        node = Vector(node).freeze()
+        node = graph_point(node)
         for segment in list(self.iterInSegments(node)):
             self.delSegment(segment)
         self.pop(node, None)
@@ -112,7 +114,7 @@ class WayNetwork(dict):
 
     def hasNode(self, node):
         # test if an <node> exists
-        node = Vector(node).freeze()
+        node = graph_point(node)
         return node in self
 
     def addSegment(self, segment, allowIdenticalSegments=True):
@@ -168,21 +170,21 @@ class WayNetwork(dict):
 
     def iterInSegments(self, source):
         # generator for all in-segments from the network
-        source = Vector(source).freeze()
+        source = graph_point(source)
         for target in self[source]:
             for segment in self[target][source]:
                 yield segment
 
     def iterOutSegments(self, source):
         # generator for all out-segments from the network
-        source = Vector(source).freeze()
+        source = graph_point(source)
         for target in self[source]:
             for segment in self[source][target]:
                 yield segment
 
     def iterAdjacentNodes(self, source):
         # generator for the nodes adjacent to <source>  nodefrom the network
-        source = Vector(source).freeze()
+        source = graph_point(source)
         return iter(self[source])
 
     def iterAllSegments(self):
@@ -217,6 +219,10 @@ class WayNetwork(dict):
             for key in ('width', 'layer', 'bridge', 'tunnel', 'surface', 'railway'):
                 if tags0.get(key) != tags1.get(key):
                     return True
+            if (placement_signature(tags0) != placement_signature(tags1)
+                    or (placement_signature(tags0) and
+                        tags0.get('width:lanes') != tags1.get('width:lanes'))):
+                return True
             isOneWay0,fwdPattern0,bwdPattern0,_ = lanePattern(category0,tags0,rightHandTraffic)
             isOneWay1,fwdPattern1,bwdPattern1,_ = lanePattern(category1,tags1,rightHandTraffic)
             if len(fwdPattern0) != len(fwdPattern1) or len(bwdPattern0) != len(bwdPattern1) or isOneWay0 != isOneWay1:
@@ -228,6 +234,10 @@ class WayNetwork(dict):
         for source in self.iterNodes():
             if len(self[source]) == 2: # order of node == 2
                 segments = [segment for target in self[source] for segment in self[source][target]]
+                if (any(placement_signature(s.tags or {}) for s in segments)
+                        and segments[0].forward == segments[1].forward):
+                    yield source
+                    continue
                 if WayNetwork.doesWayTypeChange(segments[0].category,segments[1].category,
                                                 segments[0].tags,segments[1].tags,self.rightHandTraffic):
                     yield source
@@ -243,6 +253,8 @@ class WayNetwork(dict):
         while len(self[current.t]) == 2: # order of node == 2 -> no crossing or end-point
             current = [self[current.t][source] for source in self[current.t] if source != current.s][0][0]
             if WayNetwork.doesWayTypeChange(firstCategory,current.category,firstTags,current.tags,self.rightHandTraffic):
+                break
+            if placement_signature(firstTags or {}) and current.forward != segment.forward:
                 break
             yield current
 

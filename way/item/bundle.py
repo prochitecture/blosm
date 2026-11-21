@@ -5,6 +5,7 @@ from statistics import median
 
 from ...defs.way_cluster_params import minNeighborLength, searchDist
 
+from ..bundle_continuations import bundle_merge_pairs as _bundleMergePairs
 from .item import Item
 from .street import Street
 from .section import Section
@@ -270,9 +271,15 @@ def bundleCenterline(street):
     The current Bundle preparation orders members between two distinct ends.
     Closed loops and paths returning to a previous control need another
     treatment; converting them to open paths by global deduplication invents
-    parallel membership. This eligibility check does not remove the Street.
+    parallel membership. Explicit roundabout/circular arcs are also parts of
+    a ring, even when source junctions split it into individually open Sections.
+    Pairing opposite arcs would incorrectly turn the traffic island into a
+    divided-road median. This eligibility check does not remove the Street.
     Segment crossings are handled separately; this is not a simplicity proof.
     """
+    if any(isinstance(item, Section) and item.tags.get('junction') in ('roundabout', 'circular')
+           for item in street.iterItems()):
+        return None
     vertices = list(street.iterCenterlineVertices())
     locations = {tuple(vertex[:2]) for vertex in vertices}
     if len(vertices) < 2 or len(locations) != len(vertices):
@@ -470,6 +477,32 @@ def mergePseudoMinors(streetGenerator, streetGroup, groupIntersections):
             del streetGenerator.majorIntersections[isect.location]
         streetGenerator.minorIntersections[isect.location] = isect
 
+def _longitudinalGroupLink(street, group):
+    """An original forward continuation is not a transverse Bundle splitter.
+
+    Overlapping *candidate* groups can mark both ends of a short carriageway
+    segment as crossings of another group. Removing that segment cuts one
+    lateral chain in half and can leave a one-member pseudo-Bundle. Prove a
+    unique, nearly straight, directed continuation at the original endpoint;
+    nearby endpoints and ambiguous forks are deliberately insufficient.
+    This does not infer a new connection or combine the original Streets.
+    """
+    if street.src == street.dst:
+        return False
+    found = False
+    for point, end in ((street.src, 0), (street.dst, 1)):
+        neighbors = [s for s in group if s is not street and point in (s.src, s.dst)]
+        if not neighbors:
+            continue
+        aligned = [s for s in neighbors
+                   if (s.dst == point if end == 0 else s.src == point)
+                   and street.endUnitVecAt(point).dot(s.endUnitVecAt(point)) <= -0.9396926207859084]
+        if len(aligned) != 1:
+            return False
+        found = True
+    return found
+
+
 def removeSplittingStreets(streetGenerator,gIndex, streetGroup, groupIntersections):
     # <groupIntersections> holds intersections between streets 
     # of different groups. The dictionary key is the location
@@ -493,7 +526,7 @@ def removeSplittingStreets(streetGenerator,gIndex, streetGroup, groupIntersectio
             dstSet = {indx for indx in groupIntersections[street.dst] if indx != gIndex}
             # Common group indices for both ends
             commonSet = srcSet.intersection(dstSet)
-            if commonSet:
+            if commonSet and not _longitudinalGroupLink(street, streetGroup):
                 splittingStreets.append(street)
 
     # Two new groups <srcGroup> and <dstGroup> are created.
@@ -864,24 +897,14 @@ def findInnerStreets(streetGroup,leftHandTraffic):
 def canBeMerged(streetGenerator, involvedBundles):
     # When two bundles meet, they can be merged, if there are
     # no inner streets between them at the intersection area.
-    bundleList = list(involvedBundles.items())
-    (_, streetData0), (_, streetData1) = bundleList
-
-    # Check, if they have all ends common
-    ends0 = set( streetData0[0]['bundle'].headLocs if streetData0[0]['type']=='head' else streetData0[0]['bundle'].tailLocs )
-    ends1 = set( streetData1[0]['bundle'].headLocs if streetData1[0]['type']=='head' else streetData1[0]['bundle'].tailLocs )
-    if ends0 != ends1:
+    pairs = _bundleMergePairs(involvedBundles)
+    if pairs is None:
         return False
 
     # Find the end-points of both streets (see below) and the street
     # at the left border of bundle 0.
-    a = streetData0[0]['end']
-    c = streetData0[-1]['end']
-    street0 = streetData0[0]['street']
-    # Find the street of bundle 1, that meets the same endpoint.
-    street1 = next(filter(lambda x: x['end']==a,streetData1))['street']
-    # determine the succession of these streets through both bundles
-    arriving, leaving = (street0,street1) if street0.dst == street1.src else (street1,street0)
+    a, arriving, leaving = pairs[0]
+    c = pairs[1][0]
 
     # Check, if the inner streets would be on the left or the right of street0.
     #
@@ -990,24 +1013,13 @@ def mergeBundles(streetGenerator,involvedBundles):
     bundleList = list(involvedBundles.items())
     (bundle0, streetData0), (bundle1, streetData1) = bundleList
 
-    # Find the end-points of both sides of the bundle 0. 
-    end0left = streetData0[0]['end']
-    street0 = streetData0[0]['street']
+    pairs = _bundleMergePairs(involvedBundles)
+    if pairs is None:
+        raise ValueError('Bundle merge requires two unambiguous original continuations')
+    end0left, arriving0, leaving0 = pairs[0]
     intersection0 = streetGenerator.majorIntersections[end0left]
-
-    # Find the street of bundle 1, that meets at the left endpoint of bundle 0
-    street1 = next(filter(lambda x: x['end']==end0left,streetData1))['street']
-    # determine the succession of these streets through both bundles
-    arriving0, leaving0 = (street0,street1) if street0.dst == street1.src else (street1,street0)
-
-    end0right = streetData0[-1]['end']
-    street0 = streetData0[-1]['street']
+    end0right, arriving1, leaving1 = pairs[1]
     intersection1 = streetGenerator.majorIntersections[end0right]
-
-    # Find the street of bundle 1, that meets at the right endpoint of bundle 0
-    street1 = next(filter(lambda x: x['end']==end0right,streetData1))['street']
-    # determine the succession of these streets through both bundles
-    arriving1, leaving1 = (street0,street1) if street0.dst == street1.src else (street1,street0)
 
     # merge these adajacent streets by pseudo minors
     mergedStreets = []

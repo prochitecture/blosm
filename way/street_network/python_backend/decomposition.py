@@ -6,12 +6,18 @@ from .quad_charts import visibility_center
 from .regions import _classify, signed_area
 
 
+class VisibilityCutFamilyError(ValueError):
+    """The bounded existing-vertex cut family found no compatible option."""
+
+
 class VisibilitySplitter:
-    def __init__(self, *, epsilon=1e-7, max_candidates=768, max_cuts=16):
+    def __init__(self, *, epsilon=1e-7, max_candidates=768, max_cuts=16, minimum_clearance_ratio=0.):
         if (not math.isfinite(epsilon) or epsilon <= 0. or type(max_candidates) is not int
-                or max_candidates < 1 or type(max_cuts) is not int or max_cuts < 1):
+                or max_candidates < 1 or type(max_cuts) is not int or max_cuts < 1
+                or not math.isfinite(minimum_clearance_ratio) or not 0. <= minimum_clearance_ratio < .5):
             raise ValueError('Invalid visibility decomposition budgets')
         self.epsilon, self.max_candidates, self.max_cuts = epsilon, max_candidates, max_cuts
+        self.minimum_clearance_ratio = minimum_clearance_ratio
 
     def visible(self, polygon, first, last):
         a, b = polygon[first], polygon[last]
@@ -46,7 +52,7 @@ class VisibilitySplitter:
                            math.atan2(float(cross(chord, previous)), float(chord @ previous)) % math.tau))
         return min(angles)
 
-    def split(self, boundary, *, preferred=()):
+    def split(self, boundary, *, preferred=(), endpoints=None, semantic_endpoints=()):
         """Return noncrossing diagonals between existing boundary vertices.
 
         A cut separates complete polygonal blocks. Stop as soon as each block
@@ -57,6 +63,11 @@ class VisibilitySplitter:
         if (boundary.ndim != 2 or boundary.shape[1] != 2 or len(boundary) < 4
                 or not np.all(np.isfinite(boundary)) or signed_area(boundary) <= 0.):
             raise ValueError('Visibility splitting needs a finite CCW boundary')
+        endpoints = None if endpoints is None else frozenset(endpoints)
+        semantic_endpoints=frozenset(semantic_endpoints)
+        if (len(semantic_endpoints)>256 or any(type(i) is not int or not 0<=i<len(boundary)
+                or (endpoints is not None and i not in endpoints) for i in semantic_endpoints)):
+            raise ValueError('Visibility semantic endpoints need at most 256 allowed original vertex IDs')
         cache = {}
 
         def kernel(indices):
@@ -67,7 +78,8 @@ class VisibilitySplitter:
                     center = visibility_center(polygon)
                     edge = np.roll(polygon, -1, axis=0) - polygon
                     clearance = float(np.min(cross(edge, center - polygon) / np.linalg.norm(edge, axis=1)))
-                    cache[indices] = clearance
+                    cache[indices] = (None if self.minimum_clearance_ratio
+                        and clearance < self.minimum_clearance_ratio*math.sqrt(signed_area(polygon)) else clearance)
                 except ValueError:
                     cache[indices] = None
             return cache[indices]
@@ -86,10 +98,15 @@ class VisibilitySplitter:
             reflex = np.flatnonzero(turning < -self.epsilon ** 2)
             if not len(reflex):
                 raise ValueError('Nonvisible boundary has no usable reflex cut')
-            priority = [i for i in reflex if indices[i] in preferred]
-            ordered = sorted(reflex, key=lambda i: (turning[i] / (np.linalg.norm(edge[i]) * np.linalg.norm(edge[i - 1])), int(i)))
+            usable = reflex if endpoints is None else [i for i in reflex if indices[i] in endpoints]
+            priority = [i for i in usable if indices[i] in preferred]
+            ordered = sorted(usable, key=lambda i: (turning[i] / (np.linalg.norm(edge[i]) * np.linalg.norm(edge[i - 1])), int(i)))
             starts = list(dict.fromkeys((*priority, *ordered[:16])))
-            ends = np.unique(np.r_[np.linspace(0, len(indices) - 1, min(32, len(indices)), dtype=int), starts])
+            available = np.arange(len(indices)) if endpoints is None else np.array(
+                [i for i in range(len(indices)) if indices[i] in endpoints], dtype=int)
+            ends = np.unique(np.r_[available[np.linspace(0, len(available)-1, min(32, len(available)), dtype=int)], starts])
+            if semantic_endpoints:
+                ends=np.unique(np.r_[ends,np.array([i for i in available if indices[i] in semantic_endpoints],dtype=int)])
             best, partial, qualified = None, None, 0
             area = signed_area(polygon)
             for i in starts:
@@ -132,7 +149,7 @@ class VisibilitySplitter:
                     break
             option = best if best is not None else partial
             if option is None:
-                raise ValueError('Visibility decomposition needs another compatible cut family')
+                raise VisibilityCutFamilyError('Visibility decomposition needs another compatible cut family')
             _, cut, first, second = option
             cuts.append(cut)
             pending.extend((first, second))

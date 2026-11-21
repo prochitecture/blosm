@@ -9,10 +9,63 @@ from .model import Key
 from .validation import validate_overlaps
 
 
+class MergedBodyCellBudgetError(ValueError):
+    """A completed positive seed exceeds this one body's existing cell cap."""
+    def __init__(self, quads, limit):
+        super().__init__('Merged-run pavement and grass exceed the combined quad budget')
+        self.quads, self.limit = int(quads), int(limit)
+
+
 class MergedRunBody:
     max_cells = 8000
 
-    def build(self, context, bundle, approach, merged_cut, *, remote_inset=8., remote_station=None, remote_cuts=None):
+    def build_between(self, context, bundle, approach, cuts, *, namespace):
+        """Mesh between two actual prepared common fibres.
+
+        Each supplied cut is an authoritative outer-to-crest half profile.
+        Either end may be separated or merged; a merged crest has one shared
+        identity. Junction footprints are outside this finite body interval.
+        This does not infer, move or invent any source intersection.
+        """
+        from .bundle_common_fibres import CommonFibreCuts
+        prepared = CommonFibreCuts(approach.frame_chart, approach.field, cuts, namespace)
+        result = self.build(context, bundle, approach, prepared.cuts[0, 0],
+                            _prepared_cuts=prepared)
+        from .drainage import BoundaryDrainage
+        from .four_side_charts import quality
+        pavement, grass, report = result
+        stored = [Mesh(mesh.xyz.astype(np.float32), mesh.quads,mesh.material)
+                  for mesh in (pavement, grass) if mesh is not None]
+        for mesh in stored:mesh.validate()
+        stored_quality = [quality(mesh) for mesh in stored]
+        if any(row['maximum_edge_ratio'] > 8. or (mesh.material!='grass' and row['minimum_corner_sine'] < .03)
+               for mesh,row in zip(stored,stored_quality)):
+            raise ValueError('A finite Bundle body needs better stored-coordinate cell grading')
+        fixed = np.zeros(len(pavement.xyz), bool)
+        fixed[np.unique(self._boundary_vertices(pavement))] = True
+        _, drainage = BoundaryDrainage(max_cells=self.max_cells).fill(pavement, fixed)
+        if drainage['maximum_fill'] > 1e-6:
+            raise ValueError('A finite Bundle body contains an interior depression')
+        label = lambda key: (namespace, key)
+        self.pavement_keys = [label(key) for key in self.pavement_keys]
+        self.grass_keys = [label(key) for key in self.grass_keys]
+        self.cut_keys = {key: [label(name) for name in names] for key, names in self.cut_keys.items()}
+        self.open_grass_cuts = {key: (points, [label(name) for name in names])
+                               for key, (points, names) in self.open_grass_cuts.items()}
+        report['prepared_common_fibres'] = dict(merged_ends=list(prepared.merged_ends),
+            source_curbs_extrapolated=False, complete_profiles_preserved=True,
+            stored_quality=stored_quality, drainage=drainage)
+        return result
+
+    @staticmethod
+    def _boundary_vertices(mesh):
+        edges = np.sort(np.stack((mesh.quads, np.roll(mesh.quads, -1, axis=1)), axis=-1).reshape(-1, 2), axis=1)
+        unique, counts = np.unique(edges, axis=0, return_counts=True)
+        if counts.max() > 2:raise ValueError('A finite Bundle body has a nonmanifold edge')
+        return unique[counts == 1]
+
+    def build(self, context, bundle, approach, merged_cut, *, remote_inset=8., remote_station=None, remote_cuts=None,
+              _prepared_cuts=None):
         field, frame, settings = approach.field, approach.frame_chart, context.network.settings
         # R1 retains the compact default budget. A requested finer mesh has a
         # bounded larger allowance; physical/error/shape limits are unchanged.
@@ -21,52 +74,30 @@ class MergedRunBody:
         merged_station = float(local[:, 0].mean())
         if np.ptp(local[:, 0]) > 1e-8:
             raise ValueError('Merged run needs an actual common-fibre body cut')
-        if remote_station is None:
+        if _prepared_cuts is not None:
+            first, last = _prepared_cuts.interval
+            merged_end = _prepared_cuts.merged_ends
+        elif remote_station is None:
             remote_station = (min(ray.stations[-1] for ray in field.curves)-remote_inset
                 if approach.sign > 0. else max(ray.stations[0] for ray in field.curves)+remote_inset)
-        first, last = sorted((merged_station, float(remote_station)))
-        merged_end = 0 if approach.sign > 0. else 1
+        if _prepared_cuts is None:
+            first, last = sorted((merged_station, float(remote_station)))
+            merged_end = 0 if approach.sign > 0. else 1
         if last <= first+2.*settings.spacing:
             raise ValueError('The declared source run has no positive body interval')
         domain = SimpleNamespace(context=context, frame=frame, field=field, rays=field.curves,
             bundle=bundle, ports={i:SimpleNamespace(path=path) for i,path in enumerate(approach.paths)})
         regions, roots = gap_intervals(domain, first, last)
-        if regions[0 if merged_end == 0 else -1][2]:
+        if _prepared_cuts is None and regions[0 if merged_end == 0 else -1][2]:
             raise ValueError('The proposed merged cut contains a real separator')
         builder = MultiIslandSurfaceBuilder(context.patterns, spacing=settings.spacing,
             curve_tolerance=settings.curve_tolerance, max_cells=self.max_cells)
-        cuts, cut_keys = {}, {}
-        order = np.argsort(-local[:, 1])
-        ordered = merged_cut[order].copy()
-        peak = int(np.argmax(ordered[:, 2]))
-        if peak in (0,len(ordered)-1):
-            raise ValueError('A merged cut lost its prescribed common crest sample')
-        complete_keys = [('merged cut', int(index)) for index in range(len(merged_cut))]
-        groups = (np.arange(peak+1), np.arange(len(ordered)-1, peak-1, -1))
-        for role, indices in enumerate(groups):
-            cuts[role, merged_end] = ordered[indices].copy()
-            cut_keys[role, merged_end] = [complete_keys[int(order[index])] for index in indices]
-        remote_end = 1-merged_end
-        remote = first if remote_end == 0 else last
-        ao, ai, bi, bo = field.edges(remote)
-        high, low = field.peaks(remote)
-        if ai <= bi:
-            raise ValueError('Remote body cut needs its merged-end policy too')
-        for role, (outer, inner) in enumerate(((ao, high), (bo, low))):
-            if remote_cuts is not None:
-                points = np.asarray(remote_cuts[role]).copy()
-                if np.max(abs(frame.local(points[:,:2])[:,0]-remote)) > 1e-8:
-                    raise ValueError('An actual external connector has a different common-fibre cut')
-                if np.max(abs(points[:,2]-field.values(points[:,:2]))) > 1e-8:
-                    raise ValueError('External whole profile disagrees with the original Bundle field')
-                cuts[role, remote_end] = points
-                cut_keys[role, remote_end] = [('remote cut',role,i) for i in range(len(points))]
-                continue
-            count = len(cuts[role, merged_end])-1
-            y = np.linspace(outer, inner, count+1)
-            xy = frame.world(np.c_[np.full(len(y),remote),y])
-            cuts[role, remote_end] = np.c_[xy,field.values(xy)]
-            cut_keys[role, remote_end] = [('remote cut',role,i) for i in range(len(y))]
+        if _prepared_cuts is not None:
+            cuts = {key: points.copy() for key, points in _prepared_cuts.cuts.items()}
+            cut_keys = {key: list(names) for key, names in _prepared_cuts.keys.items()}
+        else:
+            cuts, cut_keys = self._legacy_cuts(frame, field, merged_cut, local, merged_end,
+                                             first, last, remote_cuts)
 
         grass, rims, islands, open_cuts = Assembler(), {}, [], {}
         for index,(a,b,positive) in enumerate(regions):
@@ -93,9 +124,15 @@ class MergedRunBody:
                     except ValueError as error:
                         failures.append(str(error))
                 else:
-                    raise ValueError('Merged-run island construction failed: '+str(failures))
+                    from .bundle_open_fibre_islands import OpenFibreIsland
+                    try:
+                        island=OpenFibreIsland(domain,max_cells=min(5000,self.max_cells-len(grass.quads)))
+                        mesh,boundary,report=island.build(a,b,roots,index)
+                    except ValueError as recovery_failure:
+                        raise ValueError('Merged-run island construction failed: '+str(failures)
+                            +'; protected fibres: '+str(recovery_failure)) from recovery_failure
+                    report['selection']='protected fibres after all established open-island choices'
             report['prior_failures'] = failures
-            grass.add(mesh.xyz,mesh.quads,island.keys)
             rims[index] = boundary
             islands.append(report)
             for end,at in ((0,first),(1,last)):
@@ -106,9 +143,22 @@ class MergedRunBody:
                     point = boundary[role][0][0 if end == 0 else -1]
                     if np.linalg.norm(cuts[role,end][-1,:2]-point) > 1e-8:
                         raise ValueError('Separator and pavement disagree at the original body cut')
-                    cuts[role,end][-1,:2] = point
-                    cuts[role,end][-1,2] = field.ceiling
-                    cut_keys[role,end][-1] = boundary[role][1][0 if end == 0 else -1]
+                    key = boundary[role][1][0 if end == 0 else -1]
+                    if _prepared_cuts is not None:
+                        if cuts[role,end][-1,2] != field.ceiling:
+                            raise ValueError('An authoritative separated peak must equal its physical plateau')
+                        # The supplied physical profile is authoritative even
+                        # across a few ulps of equivalent chart evaluation.
+                        target = cuts[role,end][-1,:2]
+                        for points, names in (*boundary, *island.cuts):
+                            for node, name in enumerate(names):
+                                if name == key:points[node] = target
+                        mesh.xyz[island.keys.index(key), :2] = target
+                    else:
+                        cuts[role,end][-1,:2] = point
+                        cuts[role,end][-1,2] = field.ceiling
+                    cut_keys[role,end][-1] = key
+            grass.add(mesh.xyz,mesh.quads,island.keys)
 
         def endpoint(station, role, which):
             if station == first or station == last:
@@ -173,7 +223,7 @@ class MergedRunBody:
         pave = pavement.mesh()
         grassy = grass.mesh('grass') if grass.quads else None
         if len(pave.quads)+(len(grassy.quads) if grassy is not None else 0) > self.max_cells:
-            raise ValueError('Merged-run pavement and grass exceed the combined quad budget')
+            raise MergedBodyCellBudgetError(len(pave.quads)+(len(grassy.quads) if grassy is not None else 0), self.max_cells)
         pe = builder.boundary_edges(pave)
         available = {tuple(sorted((tuple(pave.xyz[a]),tuple(pave.xyz[b])))) for a,b in pe}
         reserved = {tuple(sorted((tuple(np.r_[a,field.ceiling]),tuple(np.r_[b,field.ceiling]))))
@@ -212,3 +262,40 @@ class MergedRunBody:
             physical_slopes=slopes,angular_longitudinal_bound=longitudinal,
             overlap_check=overlap,merged_end=merged_end,first=first,last=last,
             external_rounded_cap_included=False,normal_addon_integration=True,all_direct_quads=True)
+
+    @staticmethod
+    def _legacy_cuts(frame, field, merged_cut, local, merged_end, first, last, remote_cuts):
+        """Preserve the established one-merged-end construction and identities."""
+        cuts, cut_keys = {}, {}
+        order = np.argsort(-local[:, 1])
+        ordered = merged_cut[order].copy()
+        peak = int(np.argmax(ordered[:, 2]))
+        if peak in (0, len(ordered)-1):
+            raise ValueError('A merged cut lost its prescribed common crest sample')
+        complete_keys = [('merged cut', int(index)) for index in range(len(merged_cut))]
+        groups = (np.arange(peak+1), np.arange(len(ordered)-1, peak-1, -1))
+        for role, indices in enumerate(groups):
+            cuts[role, merged_end] = ordered[indices].copy()
+            cut_keys[role, merged_end] = [complete_keys[int(order[index])] for index in indices]
+        remote_end = 1-merged_end
+        remote = first if remote_end == 0 else last
+        ao, ai, bi, bo = field.edges(remote)
+        high, low = field.peaks(remote)
+        if ai <= bi:
+            raise ValueError('Remote body cut needs its merged-end policy too')
+        for role, (outer, inner) in enumerate(((ao, high), (bo, low))):
+            if remote_cuts is not None:
+                points = np.asarray(remote_cuts[role]).copy()
+                if np.max(abs(frame.local(points[:, :2])[:, 0]-remote)) > 1e-8:
+                    raise ValueError('An actual external connector has a different common-fibre cut')
+                if np.max(abs(points[:, 2]-field.values(points[:, :2]))) > 1e-8:
+                    raise ValueError('External whole profile disagrees with the original Bundle field')
+                cuts[role, remote_end] = points
+                cut_keys[role, remote_end] = [('remote cut', role, i) for i in range(len(points))]
+                continue
+            count = len(cuts[role, merged_end])-1
+            y = np.linspace(outer, inner, count+1)
+            xy = frame.world(np.c_[np.full(len(y), remote), y])
+            cuts[role, remote_end] = np.c_[xy, field.values(xy)]
+            cut_keys[role, remote_end] = [('remote cut', role, i) for i in range(len(y))]
+        return cuts, cut_keys

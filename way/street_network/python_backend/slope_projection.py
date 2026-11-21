@@ -7,6 +7,7 @@ small local Euclidean projections with the common-datum/crown height box.
 import math
 import numpy as np
 from .mesh import Mesh, cross
+from .updates import drain_steps
 
 
 def corner_matrices(mesh):
@@ -44,6 +45,13 @@ def face_colors(faces, fixed, maximum):
         for vertex in free:
             used[vertex] |= bit
     return tuple(np.asarray(group, dtype=np.int32) for group in groups)
+
+
+class ProjectionIterationBudgetError(ValueError):
+    """A bounded solve stopped; its last candidate is not accepted implicitly."""
+    def __init__(self,message,candidate,report):
+        super().__init__(message)
+        self.candidate,self.report=candidate,report
 
 
 class SlopeProjection:
@@ -113,7 +121,13 @@ class SlopeProjection:
         return result
 
     def solve(self, mesh, fixed, *, datum, ceiling, maximum_slope, minimum_heights=None,
-              feasibility_slope=None):
+              feasibility_slope=None, height_slabs=None):
+        return drain_steps(self.solve_steps(mesh, fixed, datum=datum, ceiling=ceiling,
+            maximum_slope=maximum_slope, minimum_heights=minimum_heights,
+            feasibility_slope=feasibility_slope, height_slabs=height_slabs))
+
+    def solve_steps(self, mesh, fixed, *, datum, ceiling, maximum_slope, minimum_heights=None,
+                    feasibility_slope=None, height_slabs=None):
         """Project to a slope ball, optionally stopping at a certified feasible mesh.
 
         By default the displacement must converge as well as the constraints.
@@ -142,9 +156,16 @@ class SlopeProjection:
                 raise ValueError('Fixed boundary heights violate minimum heights')
             lower = lower.copy()
             lower[fixed] = mesh.xyz[fixed, 2]
+        slab_state=None
+        if height_slabs is not None:
+            from .height_slabs import HeightSlabs
+            if not isinstance(height_slabs,HeightSlabs):
+                raise ValueError('Directional height constraints require HeightSlabs')
         estimated = len(mesh.quads) * 2048 + len(mesh.xyz) * 96
+        if height_slabs is not None:estimated+=height_slabs.estimated_bytes
         if len(mesh.quads) > self.max_cells or estimated > self.memory_bytes:
             raise ValueError('Slope projection exceeds its mesh/memory budget')
+        if height_slabs is not None:slab_state=height_slabs.prepare(mesh,fixed,self.max_colors)
         initial = mesh.xyz[:, 2]
         if np.any(initial[fixed] < datum - 1e-10) or np.any(initial[fixed] > ceiling + 1e-10):
             raise ValueError('Fixed boundary heights exceed the crown envelope')
@@ -153,7 +174,8 @@ class SlopeProjection:
         def gradients(z):
             return np.linalg.norm(np.einsum('fcij,fj->fci', coefficient, z[faces]), axis=-1)
         before = float(gradients(initial).max())
-        if before <= maximum_slope and np.all((initial >= lower) & (initial <= ceiling)):
+        if (before <= maximum_slope and np.all((initial >= lower) & (initial <= ceiling))
+                and (height_slabs is None or height_slabs.violation(initial) <= self.slope_tolerance)):
             return mesh, dict(iterations=0, maximum=before, maximum_height_change=0., colors=0,
                               estimated_bytes=estimated, construction='fixed-chart height projection')
         free = ~fixed[faces]
@@ -183,6 +205,7 @@ class SlopeProjection:
                     values[group, corner], vectors[group, corner]) for corner in range(4))
                 prepared_groups.append((ids, available, constant, corners))
         for iteration in range(self.max_iterations):
+            yield
             previous = heights.copy()
             for gi, group in enumerate(groups):
                 if prepared_groups is None:
@@ -199,6 +222,7 @@ class SlopeProjection:
                     projected[~available] = constant
                     corrections[group, corner] = (x - projected) * available
                     heights[ids] = projected
+            if slab_state is not None:slab_state.sweep(heights)
             x = heights + box_correction
             heights = np.clip(x, lower, ceiling)
             heights[fixed] = initial[fixed]
@@ -208,6 +232,8 @@ class SlopeProjection:
             movement = float(np.max(abs(heights - previous)))
             converged = (maximum <= maximum_slope + self.slope_tolerance and movement <= self.height_tolerance
                          if feasibility_slope is None else maximum <= feasibility_slope)
+            if height_slabs is not None:
+                converged=converged and height_slabs.violation(heights) <= self.slope_tolerance
             if converged:
                 xyz = mesh.xyz.copy()
                 xyz[:, 2] = heights
@@ -216,6 +242,15 @@ class SlopeProjection:
                     maximum_height_change=float(np.max(abs(heights - initial))),
                     squared_displacement=float(np.sum((heights - initial) ** 2)),
                     colors=len(groups), estimated_bytes=estimated,
+                    **({} if height_slabs is None else dict(directional_height_rows=len(height_slabs.vertices),
+                        directional_violation=height_slabs.violation(heights))),
                     **({} if feasibility_slope is None else dict(convergence='feasible_surface')),
                     construction='fixed-chart height projection')
-        raise ValueError(f'Height projection did not converge within its iteration budget: slope {maximum:.6f}, step {movement:.3g}')
+        xyz=mesh.xyz.copy();xyz[:,2]=heights
+        raise ProjectionIterationBudgetError(
+            f'Height projection did not converge within its iteration budget: slope {maximum:.6f}, step {movement:.3g}',
+            mesh.with_positions(xyz),dict(iterations=self.max_iterations,initial_maximum=before,
+                maximum=maximum,maximum_height_change=float(np.max(abs(heights-initial))),
+                squared_displacement=float(np.sum((heights-initial)**2)),
+                colors=len(groups),estimated_bytes=estimated,
+                construction='last candidate of bounded fixed-chart height projection'))

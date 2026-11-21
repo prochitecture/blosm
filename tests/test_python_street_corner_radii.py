@@ -28,6 +28,21 @@ def curved_pair():
 
 
 class PythonCornerRadiusTests(unittest.TestCase):
+    def test_distinct_shallow_fork_uses_finite_exact_contacts(self):
+        from tested_python_streets.profiles import Crown
+        angle = np.deg2rad(2.)
+        sections = (model.Section(1, 1, ((0., 0., 0.), (500., 0., 0.)), width=2.),
+                    model.Section(2, 2, ((0., 0., 0.),
+                        (500.*np.cos(angle), 500.*np.sin(angle), 0.)), width=2.))
+        approaches = tuple(Approach(Path(s), 0, Crown(.08, 0.)) for s in sections)
+        corner = _corner(*approaches, 1.)
+        for approach, station, offset in zip(approaches, corner.stations, (-1., 1.)):
+            self.assertGreater(station, 0.)
+            self.assertLess(station, approach.length)
+            p, tangent = approach.jet(station, offset)
+            self.assertAlmostEqual(float(np.linalg.norm(p-corner.center)), 1., places=7)
+            self.assertAlmostEqual(float((p-corner.center) @ tangent), 0., places=7)
+
     def test_exact_miter_curbs_use_unit_radius_normals_and_tangent_contacts(self):
         for reverse in (False, True):
             for angle in (0., .63):
@@ -112,12 +127,25 @@ class PythonCornerRadiusTests(unittest.TestCase):
 
     def test_style_fitting_is_bounded_and_does_not_erase_a_turn_with_a_tiny_fillet(self):
         a, b = curved_pair()
-        with self.assertRaisesRegex(CornerContactError, 'Preferred style radius could not be fitted'):
-            CornerRadiusPolicy.solve(a, b, 20., 'STYLE')
         candidates = tuple(CornerRadiusPolicy.candidates(20., 'STYLE'))
         self.assertLessEqual(len(candidates), 9)
         self.assertEqual(min(candidates), 5.)
         self.assertTrue(all(x > y for x, y in zip(candidates, candidates[1:])))
+
+    def test_acute_long_fork_can_fit_a_nose_below_the_ordinary_style_floor(self):
+        a, b = curved_pair()
+        candidates = tuple(CornerRadiusPolicy.contact_candidates(a, b, 20., 'STYLE'))
+        self.assertLessEqual(len(candidates), 17)
+        self.assertEqual(min(candidates), .5)
+        corner = CornerRadiusPolicy.solve(a, b, 20., 'STYLE')
+        self.assertLess(corner.radius, 5.)
+        self.assertGreaterEqual(corner.radius, .5)
+        self.assertLess(corner.sweep, -np.pi/2.)
+        self.assertEqual(fitted_radius_report(model.Key('intersection', 1),
+            SimpleNamespace(corners=(corner,)))[0]['fit_policy'], 'ACUTE_FORK_NOSE')
+        self.assertEqual(tuple(CornerRadiusPolicy.contact_candidates(a, b, 20., 'STRICT')), (20.,))
+        self.assertEqual(tuple(CornerRadiusPolicy.contact_candidates(a, b, 20., 'STYLE', displaced=True)),
+                         tuple(CornerRadiusPolicy.candidates(20., 'STYLE')))
 
     def test_a_feasible_style_radius_preserves_all_existing_mesh_coordinates(self):
         source = fixture_networks(model)[0]

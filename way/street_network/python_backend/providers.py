@@ -48,18 +48,50 @@ class PathProvider(FeatureProvider):
     def tasks(self, network):
         from .profiles import memberships
         members = memberships(network)
+        from .owned_prefixes import candidates
+        prefixes=candidates(network)
+        sites = {section.id: [] for section in network.sections}
+        for site in (*network.intersections, *network.connections):
+            for sid in {end.section_id for end in site.ends}:
+                sites[sid].append(site)
         for section in network.sections:
-            neighbors = [j for j in (*network.intersections, *network.connections) if len(j.ends) == 2
-                         and any(e.section_id == section.id for e in j.ends)]
+            neighbors = [j for j in sites[section.id] if len(j.ends) == 2]
+            returning_site = next((j for j in sites[section.id]
+                if {e.end for e in j.ends if e.section_id == section.id} == {0, 1}), None)
             source_ids = {section.id, *(e.section_id for j in neighbors for e in j.ends)}
             deps = tuple(sorted({*(Key('section', sid) for sid in source_ids),
                                  *(members[sid][0].key for sid in source_ids if sid in members),
-                                 *(j.key for j in neighbors)}))
+                                 *(j.key for j in neighbors),
+                                 *((returning_site.key,) if returning_site is not None else ())}))
+            prefix=prefixes.get(section.id)
+            inward=tuple(claim for claim in prefixes.values() if claim.external.section_id==section.id)
+            deps=tuple(sorted({*deps,*(Key('path',claim.endpoint.section_id) for claim in inward),
+                               *((prefix.junction,) if prefix is not None else ())}))
             yield Task(Key('path', section.id), deps,
-                lambda context, source=section, seams=neighbors: self.build(context, source, seams))
+                lambda context, source=section, seams=neighbors, returning=returning_site is not None,
+                       candidate=prefix, incoming=inward:
+                    self.with_owned_prefix(context, source, seams, returning, candidate, incoming), version='4')
 
     @staticmethod
-    def build(context, section, seams):
+    def with_owned_prefix(context, section, seams, returning, candidate, incoming):
+        skipped={claim.seam for claim in incoming
+                 if getattr(context[Key('path',claim.endpoint.section_id)],'owned_prefix',None)==claim}
+        active=[seam for seam in seams if seam.key not in skipped]
+        try:
+            return PathProvider.build(context,section,active,returning=returning)
+        except ValueError as exc:
+            if candidate is None or not any(message in str(exc) for message in ('Local Smooth','Smooth offset curvature')):
+                raise
+            # Removing a shared tangent is legitimate only when its complete
+            # short source span will be owned by the incident physical junction.
+            # The uncoupled authored path must still pass every offset guard.
+            path=PathProvider.build(context,section,[s for s in active if s.key!=candidate.seam],returning=returning)
+            path.owned_prefix=candidate
+            path.owned_prefix_failure=str(exc)
+            return path
+
+    @staticmethod
+    def build(context, section, seams, *, returning=False):
         endpoints = {}
         endpoint_bends = {}
         endpoint_alignment_limits = {}
@@ -67,8 +99,8 @@ class PathProvider(FeatureProvider):
         from .profiles import memberships
         from .local_smoothing import shared_endpoint_bends, RETAIN_ENDPOINT_INTERPOLATION
         members = memberships(context.network)
-        for seam in seams:
-            own = next(e for e in seam.ends if e.section_id == section.id)
+        for seam, own in ((seam, end) for seam in seams for end in seam.ends
+                          if end.section_id == section.id):
             partner = next(e for e in seam.ends if e != own)
             other = context.network.section_index[partner.section_id]
             # A width-changing continuation must accommodate both complete
@@ -84,17 +116,19 @@ class PathProvider(FeatureProvider):
             # Mixed-mode and Bundle transition geometry keeps its prior policy.
             if (section.interpolation == other.interpolation == 3
                     and section.id not in members and other.id not in members):
-                canonical = sorted(((section, own.end), (other, partner.end)), key=lambda pair: pair[0].id)
+                canonical = sorted(((section, own.end), (other, partner.end)),
+                                   key=lambda pair: (pair[0].id, pair[1]))
                 envelope = max(4. * context.network.settings.curve_tolerance, section.width, other.width)
                 bends = shared_endpoint_bends(*canonical[0], *canonical[1], envelope,
                     alignment_limit=max(4. * context.network.settings.curve_tolerance, .25 * envelope))
                 if bends is RETAIN_ENDPOINT_INTERPOLATION:
                     endpoint_alignment_limits[own.end] = envelope
                 elif bends is not None:
-                    endpoint_bends[own.end] = bends[0 if canonical[0][0].id == section.id else 1]
+                    endpoint_bends[own.end] = bends[0 if (canonical[0][0].id, canonical[0][1])
+                                                  == (section.id, own.end) else 1]
         return Path(section, context.network.settings.curve_tolerance, endpoints,
                     deviation_limit=envelope_width, endpoint_bends=endpoint_bends,
-                    endpoint_alignment_limits=endpoint_alignment_limits)
+                    endpoint_alignment_limits=endpoint_alignment_limits, returning=returning)
 
 
 class CarriagewayProvider(FeatureProvider):
@@ -179,13 +213,30 @@ class CarriagewayProvider(FeatureProvider):
         return metadata
 
     @staticmethod
-    def build(context, section, attachments):
+    def build(context, section, attachments, *, source_interval=None):
         path = context[Key('path', section.id)]
         profile = context[Key('profile', section.id)]
         metadata = CarriagewayProvider.span_metadata(context, section, attachments)
+        computation = None
+        if source_interval is not None:
+            values = np.asarray(source_interval, dtype=float)
+            if (values.shape != (2,) or not np.isfinite(values).all()
+                    or values[0] < metadata['start'] or values[1] > metadata['end']
+                    or values[1] <= values[0] + 1e-7):
+                raise ValueError('Computational road interval must be a positive subset of its accepted visible source')
+            computation = dict(first=float(values[0]), last=float(values[1]),
+                original_first=metadata['start'], original_last=metadata['end'],
+                policy='original_source_evaluation_planes', physical_aliases_created=False)
+            metadata = dict(metadata, start=float(values[0]), end=float(values[1]))
         first, last = metadata['start'], metadata['end']
         covered, junction_spans, transition_spans = (metadata[name] for name in
             ('compound_spans', 'junction_spans', 'transition_spans'))
+        pending=getattr(path,'owned_prefix',None)
+        if pending is not None:
+            spans=covered+junction_spans
+            if (last>first+1e-7 or not any(s['start']<=1e-8 and s['end']>=path.length-1e-8
+                                        for s in spans)):
+                raise ValueError('Deferred source prefix cannot publish an independent carriageway')
         settings = context.network.settings
         from .profiles import memberships
         member = memberships(context.network).get(section.id)
@@ -233,6 +284,8 @@ class CarriagewayProvider(FeatureProvider):
                     junction_spans=junction_spans, transition_spans=transition_spans,
                     terrain_stations=stations.tolist(), terrain_datum=float(profile.datum),
                     uv_mapping='road_station_transverse_metres')
+        if computation is not None:
+            metadata['computational_source_interval'] = computation
         if refine_sampling:
             metadata['local_curvature_sampling'] = True
         if getattr(path, 'localized', False):
@@ -240,6 +293,10 @@ class CarriagewayProvider(FeatureProvider):
                 source_deviation_limit=path.deviation_limit, alignment_limit=path.alignment_limit, bends=path.local_bends,
                 shared_ends={str(end): dict(radius=bend.radius, setback=bend.setback)
                              for end, bend in path.endpoint_bends.items()})
+        if getattr(path, 'coalescing', None) is not None:
+            metadata['centerline_control_coalescing'] = path.coalescing
+        if getattr(path, 'radius_reserve_fallback', None) is not None:
+            metadata['centerline_radius_reserve'] = path.radius_reserve_fallback
         return Part(section.key, mesh, metadata)
 
 

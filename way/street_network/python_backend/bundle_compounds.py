@@ -7,13 +7,23 @@ from .ownership import PLAN, surface_key, CurbChainUnavailable
 from .providers import Part
 
 
+class UnequalBundleVisibilityError(ValueError):
+    """An old run pairing has no complete opposite visible source run."""
+
+
+class _UnpairedCrossing(ValueError):
+    """The unmatched run does not have a unique crossing-to-free continuation."""
+
+
 def compound_owners(context, bundle):
     plan = context.products.get(PLAN)
     if plan is None:
         return ()
     sections = set(bundle.sections)
     return tuple(group.members[0] for group in plan.groups if any(
-        sid in sections for footprint in group.footprints for sid, end in footprint.layout.mouths))
+        sid in sections for layout in ([group.physical_layout] if group.physical_layout is not None
+                                       else [footprint.layout for footprint in group.footprints])
+        for sid, end in layout.mouths))
 
 
 def has_internal_junction(network, bundle):
@@ -140,7 +150,7 @@ class CompoundBundleBuilder:
         longer = 0 if len(runs[0]) > len(runs[1]) else 1
         other = 1 - longer
         if len(runs[longer]) != len(runs[other]) + 1 or not runs[other]:
-            raise ValueError('Unequal Bundle visibility needs an explicit region partition')
+            raise UnequalBundleVisibilityError('Unequal Bundle visibility needs an explicit region partition')
         plan = context.products.get(PLAN)
         def owner(site):
             return (plan.owner(site) if plan is not None else None) or site
@@ -157,7 +167,7 @@ class CompoundBundleBuilder:
                     candidates.append((end, extra, CrossingFreeContinuation.build(
                         context.network, bundle, crossing, other, end)))
         if len(candidates) != 1:
-            raise ValueError('Unequal Bundle events need one topology-proven crossing-to-free continuation')
+            raise _UnpairedCrossing('Unequal Bundle events need one topology-proven crossing-to-free continuation')
         end, extra, continuation = candidates[0]
         boundary = cls.runs(context, continuation.member, other)
         if len(boundary) != 1 or boundary[0].terminals[end].attached:
@@ -185,6 +195,55 @@ class CompoundBundleBuilder:
             caps.append(Cap.rounded(curve))
         return caps
 
+    @staticmethod
+    def interior_pocket(context, runs, profile):
+        """Close a single unmatched inner bank with the intervening owner's actual curb."""
+        from .regions import signed_area
+        from .separator_surfaces import FixedRimSeparator
+        longer = 0 if len(runs[0]) > len(runs[1]) else 1
+        side, other = runs[longer], runs[1-longer]
+        if len(side) != len(other)+1:
+            return None
+        candidates = []
+        for i in range(1, len(side)-1):
+            run = side[i]
+            a, b = run.terminals
+            owner = a.owner
+            if owner is None or b.owner != owner or not (a.attached and b.attached):
+                continue
+            # The two neighboring regions terminate at this same physical
+            # junction on both sides of the Bundle. Preserve their path order.
+            neighbors = (side[i-1], other[i-1], side[i+1], other[i])
+            if any(r.terminals[end].owner != owner for r, end in zip(neighbors, (1,1,0,0))):
+                continue
+            candidates.append((i, run, owner))
+        if len(candidates) != 1:
+            return None
+        i, run, owner = candidates[0]
+        ends = tuple((t.endpoint.section_id, t.endpoint.end) for t in run.terminals)
+        if ends[0] == ends[1]:
+            return None
+        coords = tuple(.5*(q*(1 if end == 0 else -1)+1.) for q, (_,end) in zip(run.coordinates, ends))
+        try:
+            curb = context[surface_key(owner)].edge_cap(*ends, *coords)
+        except CurbChainUnavailable:
+            return None
+        bank = run.member.rim
+        if not np.array_equal(curb[[0,-1]], bank[[0,-1]]):
+            raise ValueError('Interior separator pocket disagrees with its two original mouth vertices')
+        boundary = np.vstack((bank[:-1],curb[:0:-1]))
+        if longer == 0:
+            boundary = boundary[::-1]
+        if signed_area(boundary[:,:2]) <= 0.:
+            raise ValueError('The junction curb does not enclose grass on the inner side of the member')
+        settings = context.network.settings
+        surface = FixedRimSeparator(context.patterns, spacing=settings.spacing).build(boundary,
+            datum=profile.datum, height=profile.rise*settings.exaggeration, exaggeration=settings.exaggeration)
+        paired = [list(arm) for arm in runs]
+        del paired[longer][i]
+        return list(zip(*paired)), surface, dict(construction='inner member bank closed by its junction curb',
+            owner=owner.text(), ends=ends, member_role=longer, road_edges=len(bank)-1, curb_edges=len(curb)-1)
+
     @classmethod
     def build(cls, context, bundle):
         from .bundles import BundleProvider, CenterlineRange, certify_disjoint
@@ -203,8 +262,17 @@ class CompoundBundleBuilder:
         if any(abs(profile.datum - profiles[0].datum) > 1e-7 for profile in profiles):
             raise ValueError('Compound Bundle members require a common minimum height')
         runs = [cls.runs(context, member, role) for role, member in enumerate(bundle.members)]
-        regions, continuations = cls.regions(context, bundle, runs)
         assembly, reports = Assembler(), []
+        try:
+            regions, continuations = cls.regions(context, bundle, runs)
+        except _UnpairedCrossing:
+            pocket = cls.interior_pocket(context, runs, profiles[0])
+            if pocket is None:
+                raise
+            regions, surface, evidence = pocket
+            continuations = []
+            assembly.add(surface.mesh.xyz, surface.mesh.quads)
+            reports.append(dict(surface.metadata, pocket=evidence))
         for first, second in regions:
             region_proof = certify_disjoint(first.member.path, second.member.path)
             datum = profiles[0].datum

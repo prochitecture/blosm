@@ -8,7 +8,12 @@ from dataclasses import dataclass
 import math
 import numpy as np
 from .mesh import cross
+from .updates import drain_steps
 from .region_pairs import PairBudget, SegmentPairIndex
+
+
+class BoundaryIncidenceError(ValueError):
+    """A retained boundary vertex does not have one incoming and one outgoing edge."""
 
 
 def signed_area(points):
@@ -20,6 +25,9 @@ def signed_area(points):
 class Region:
     owner: object
     xy: np.ndarray
+    # A consolidated curve lookup may describe only an exterior while the
+    # physical source union also has holes. It is never an area operand.
+    boundary_only: bool = False
 
     def __post_init__(self):
         xy = np.array(self.xy, dtype=float, copy=True)
@@ -60,12 +68,19 @@ class BoundaryLoop:
 
 def _classify(points, polygon, epsilon):
     """Even/odd interior plus nearest coincident boundary edge, in batches."""
-    a, b = polygon, np.roll(polygon, -1, axis=0)
+    return _classify_edges(points, polygon, np.roll(polygon, -1, axis=0), epsilon)
+
+
+def _classify_edges(points, a, b, epsilon):
+    """Ray parity and closest boundary index for a supplied set of original edges."""
     edge = b - a
     length2 = np.sum(edge * edge, axis=1)
     inside, boundary = np.empty(len(points), bool), np.full(len(points), -1, np.int32)
-    for start in range(0, len(points), 128):
-        p = points[start:start + 128]
+    # Indexing can decline unusually large polygons. Bound the largest
+    # (point, edge, coordinate) temporary in that exhaustive path as well.
+    batch = max(1, min(128, 32768 // max(1, len(a))))
+    for start in range(0, len(points), batch):
+        p = points[start:start + batch]
         delta = p[:, None] - a
         fraction = np.clip(np.sum(delta * edge, axis=-1) / length2, 0., 1.)
         distance2 = np.sum((delta - fraction[..., None] * edge) ** 2, axis=-1)
@@ -78,6 +93,58 @@ def _classify(points, polygon, epsilon):
         intersections = a[:, 0] + offset
         inside[start:start + len(p)] = np.count_nonzero(crosses & (p[:, None, 0] < intersections), axis=1) % 2 == 1
     return inside, boundary
+
+
+def _coincident_interval(first, last, polygon, epsilon):
+    """Certify a whole segment inside the existing boundary welding tubes.
+
+    Each finite polygon edge contributes its exact strip and endpoint disks.
+    Their intervals along the source segment must cover it without a gap.
+    This also covers unequal sampling across several almost-collinear chords.
+    """
+    vector=last-first
+    length=float(np.linalg.norm(vector))
+    along=vector/length
+    a,b=polygon,np.roll(polygon,-1,axis=0)
+    edge=b-a
+    lengths=np.linalg.norm(edge,axis=1)
+    direction=edge/lengths[:,None]
+    delta=first-a
+    slope=cross(along,direction)
+    distance=cross(delta,direction)
+    projection=np.sum(delta*direction,axis=1)
+    speed=direction@along
+    intervals=[]
+    for i in range(len(polygon)):
+        low,high=0.,length
+        for value,change,minimum,maximum in ((distance[i],slope[i],-epsilon,epsilon),
+                                           (projection[i],speed[i],0.,lengths[i])):
+            if change==0.:
+                if not minimum<=value<=maximum:
+                    high=-1.
+                    break
+            else:
+                p,q=(minimum-value)/change,(maximum-value)/change
+                low,high=max(low,min(p,q)),min(high,max(p,q))
+        if low<=high:
+            intervals.append((low,high))
+    # A shared vertex disk is identical for both adjacent finite edges.
+    centers=-(delta@along)
+    perpendicular=cross(delta,along)
+    for center,distance in zip(centers,perpendicular):
+        if abs(distance)<=epsilon:
+            radius=math.sqrt(max(0.,epsilon**2-distance**2))
+            low,high=max(0.,center-radius),min(length,center+radius)
+            if low<=high:
+                intervals.append((low,high))
+    covered=0.
+    for low,high in sorted(intervals):
+        if low>covered:
+            return False
+        covered=max(covered,high)
+        if covered>=length:
+            return True
+    return False
 
 
 class _Nodes:
@@ -111,6 +178,50 @@ class RegionUnion:
         self.epsilon = epsilon
         self.max_segments, self.max_pair_tests = max_segments, max_pair_tests
 
+    def _classification_candidates(self, points, bounds):
+        minimum, maximum = bounds
+        # This is only a broad phase. Preserve narrow-phase cancellation at
+        # large coordinate ranges by conservatively overselecting its finite
+        # arithmetic error; the actual classification epsilon stays unchanged.
+        rounding=32.*np.finfo(float).eps*np.maximum(1.,np.maximum(abs(minimum),abs(maximum)))
+        return np.all(points >= minimum-self.epsilon-rounding, axis=1) & np.all(points <= maximum+self.epsilon+rounding, axis=1)
+
+    def _classify_batch(self, middle, endpoints, source_edges, vectors, region, regions, owner_bounds, classifier):
+        keep=np.ones(len(middle),bool)
+        for other in regions:
+            if other.owner==region.owner:continue
+            possible=np.flatnonzero(keep & self._classification_candidates(middle,owner_bounds[other.owner]))
+            if not len(possible):continue
+            classify = classifier if len(other.xy) >= 128 else _classify
+            inside,boundary=classify(middle[possible],other.xy,self.epsilon)
+            # A midpoint can be close to a shallow transverse crossing even
+            # though the retained interval leaves the welding neighbourhood.
+            # Owner ties describe whole coincident intervals. Use the exact
+            # interior result if the interval leaves the boundary tubes;
+            # otherwise two crossing exterior pieces can both survive.
+            hits=np.flatnonzero(boundary>=0)
+            if len(hits):
+                first=other.xy[boundary[hits]]
+                direction=other.xy[(boundary[hits]+1)%len(other.xy)]-first
+                delta=endpoints[possible[hits]]-first[:,None,:]
+                fraction=np.clip(np.sum(delta*direction[:,None,:],axis=-1)
+                    /np.sum(direction*direction,axis=-1)[:,None],0.,1.)
+                distance2=np.sum((delta-fraction[...,None]*direction[:,None,:])**2,axis=-1)
+                for index in np.flatnonzero(np.any(distance2>self.epsilon**2,axis=1)):
+                    at=hits[index]
+                    if not _coincident_interval(*endpoints[possible[at]],other.xy,self.epsilon):
+                        boundary[at]=-1
+            keep[possible]&=~(inside & (boundary<0))
+            for index in np.flatnonzero(boundary>=0):
+                edge=boundary[index]
+                direction=other.xy[(edge+1)%len(other.xy)]-other.xy[edge]
+                at=possible[index]
+                # Keep the original two-vector dot arithmetic and lower-owner
+                # tie. Batching must not alter coincident span provenance.
+                alignment=direction@vectors[source_edges[at]]
+                if alignment<0. or (alignment>0. and other.owner<region.owner):keep[at]=False
+        return keep
+
     def _split_pair(self, first, second, offsets, cuts, *, same=False):
         epsilon = self.epsilon
         aa, bb = first.xy, second.xy
@@ -118,8 +229,9 @@ class RegionUnion:
         la, lb = np.linalg.norm(da, axis=1), np.linalg.norm(db, axis=1)
         amin, amax = np.minimum(aa, aa + da), np.maximum(aa, aa + da)
         bmin, bmax = np.minimum(bb, bb + db), np.maximum(bb, bb + db)
-        for start in range(0, len(aa), 128):
-            a, d = aa[start:start + 128], da[start:start + 128]
+        batch = max(1, min(128, 32768 // len(bb)))
+        for start in range(0, len(aa), batch):
+            a, d = aa[start:start + batch], da[start:start + batch]
             nearby = np.all(amax[start:start + len(a), None] + epsilon >= bmin, axis=-1)
             nearby &= np.all(bmax + epsilon >= amin[start:start + len(a), None], axis=-1)
             if same:
@@ -191,7 +303,12 @@ class RegionUnion:
                         cuts[offsets[1] + j].append(float(np.clip(t, 0., 1.)))
 
     def build(self, regions):
+        return drain_steps(self.build_steps(regions))
+
+    def build_steps(self, regions):
         regions = tuple(sorted(regions, key=lambda r: r.owner))
+        if any(getattr(region, 'boundary_only', False) for region in regions):
+            raise ValueError('A boundary-only region cannot be a physical union operand')
         if not regions:
             return ()
         if len({r.owner for r in regions}) != len(regions):
@@ -203,6 +320,7 @@ class RegionUnion:
         cuts = [[0., 1.] for _ in range(int(offsets[-1]))]
         tested = sum(count * (count - 1) // 2 for count in counts)
         bounds = [(region.xy.min(axis=0), region.xy.max(axis=0)) for region in regions]
+        owner_bounds = {region.owner: bound for region,bound in zip(regions,bounds)}
         estimate = tested
         for i in range(len(regions)):
             if estimate > self.max_pair_tests:
@@ -217,6 +335,7 @@ class RegionUnion:
         # accepted input. Only over-budget arrangements use spatial pruning.
         budget = PairBudget(self.max_pair_tests) if estimate > self.max_pair_tests else None
         for i, region in enumerate(regions):
+            yield
             if budget is None:
                 self._split_pair(region, region, (offsets[i], offsets[i]), cuts, same=True)
             else:
@@ -227,12 +346,32 @@ class RegionUnion:
                 if (np.any(first.xy.max(axis=0) + self.epsilon < second.xy.min(axis=0))
                         or np.any(second.xy.max(axis=0) + self.epsilon < first.xy.min(axis=0))):
                     continue
+                yield
                 if budget is None:
                     self._split_pair(first, second, (offsets[i], offsets[j]), cuts)
                 else:
                     self._split_pair_indexed(first, second, (offsets[i], offsets[j]), cuts, budget)
+        # These immutable polygons can be queried by many other operands.
+        # Keep the spatial index local to this one union, including cancellation.
+        from .prepared_source_classifier import SourceProofClassifier
+        classifier = SourceProofClassifier()
         nodes, retained = _Nodes(self.epsilon), {}
         for ri, region in enumerate(regions):
+            yield
+            vectors=np.roll(region.xy,-1,axis=0)-region.xy
+            pending=[];middles=[];endpoints=[];source_edges=[];pending_count=0
+            def retain_batch():
+                nonlocal pending_count
+                if not pending:return
+                keep=self._classify_batch(np.concatenate(middles),np.concatenate(endpoints),np.concatenate(source_edges),
+                    vectors,region,regions,owner_bounds,classifier)
+                offset=0
+                for si,a,b,intervals in pending:
+                    selected=keep[offset:offset+len(intervals)];offset+=len(intervals)
+                    for first,last in intervals[selected]:
+                        u,v=nodes.add(a+first*(b-a)),nodes.add(a+last*(b-a))
+                        if u!=v:retained.setdefault((u,v),SourceSpan(region.owner,si,float(first),float(last)))
+                pending.clear();middles.clear();endpoints.clear();source_edges.clear();pending_count=0
             for si, (a, b) in enumerate(zip(region.xy, np.roll(region.xy, -1, axis=0))):
                 length = np.linalg.norm(b - a)
                 fractions = sorted(cuts[offsets[ri] + si])
@@ -241,29 +380,25 @@ class RegionUnion:
                     if (t - unique[-1]) * length > self.epsilon:
                         unique.append(t)
                 intervals = np.column_stack((unique[:-1], unique[1:]))
-                middle = a + intervals.mean(axis=1)[:, None] * (b - a)
-                keep = np.ones(len(middle), bool)
-                for other in regions:
-                    if other.owner == region.owner:
-                        continue
-                    inside, boundary = _classify(middle, other.xy, self.epsilon)
-                    keep &= ~(inside & (boundary < 0))
-                    coincident = np.flatnonzero(boundary >= 0)
-                    for index in coincident:
-                        edge = boundary[index]
-                        direction = other.xy[(edge + 1) % len(other.xy)] - other.xy[edge]
-                        if direction @ (b - a) < 0.:
-                            keep[index] = False
-                for first, last in intervals[keep]:
-                    u, v = nodes.add(a + first * (b - a)), nodes.add(a + last * (b - a))
-                    if u != v:
-                        retained.setdefault((u, v), SourceSpan(region.owner, si, float(first), float(last)))
+                # Bound temporary classification scratch independently of the
+                # source arrangement size. Retention order stays edge/fraction
+                # order, including when one source edge crosses batch limits.
+                for first in range(0,len(intervals),8192):
+                    part=intervals[first:first+8192]
+                    if pending_count+len(part)>8192:
+                        yield
+                        retain_batch()
+                    pending.append((si,a,b,part))
+                    middles.append(a+part.mean(axis=1)[:,None]*(b-a))
+                    endpoints.append(a+part[...,None]*(b-a))
+                    source_edges.append(np.full(len(part),si,np.intp));pending_count+=len(part)
+            retain_batch()
         outgoing, incoming = {}, {}
         for u, v in retained:
             outgoing.setdefault(u, []).append(v)
             incoming.setdefault(v, []).append(u)
         if any(len(outgoing.get(i, ())) != 1 or len(incoming.get(i, ())) != 1 for i in outgoing.keys() | incoming.keys()):
-            raise ValueError('Compound boundary has a point-only contact or unresolved numerical incidence')
+            raise BoundaryIncidenceError('Compound boundary has a point-only contact or unresolved numerical incidence')
         pending, loops = set(retained), []
         while pending:
             first = min(pending)

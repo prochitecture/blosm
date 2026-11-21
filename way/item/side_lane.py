@@ -1,5 +1,6 @@
 from .item import Item
 from ..way_properties import turnsFromPatterns
+from ..source_placement import placement_signature
 
 
 class SideLane(Item):
@@ -44,7 +45,9 @@ class SideLane(Item):
         return self._location
 
     def createSideLane(self):
-        if self.doPixelCorrection:
+        source_placement = any(placement_signature(section.tags)
+                               for section in (self.pred, self.succ))
+        if self.doPixelCorrection and not source_placement:
             # Way width and offset correction for seamless connections according to
             # https://github.com/prochitecture/blosm/issues/57#issuecomment-1544025403
             widePixels = self.succ.totalLanes * 220.0 + 8 * (self.succ.totalLanes - 1)
@@ -70,7 +73,7 @@ class SideLane(Item):
             self.succ.fwdLaneR = fwdR
             self.succ.fwdLaneL = fwdL
             laneDir = 1 if self.laneR else -1
-            if self.laneL or self.laneR:
+            if (self.laneL or self.laneR) and not source_placement:
                 # The reference is the centerline of the section with the turn lane (which is
                 # always the outgoing section of the TransitionSideLane, even if the centerline
                 # points inwards). If the offset is negative, the curve is offset to the left
@@ -91,7 +94,7 @@ class SideLane(Item):
             self.succ.fwdLaneL = fwdL
             self.succ.bwdLaneR = bwdR
             self.succ.bwdLaneL = bwdL
-            if self.laneL or self.laneR:
+            if (self.laneL or self.laneR) and not source_placement:
                 # The reference is the centerline of the section with the turn lane (which is
                 # always the outgoing section of the TransitionSideLane, even if the centerline
                 # points inwards). If the offset is negative, the curve is offset to the left

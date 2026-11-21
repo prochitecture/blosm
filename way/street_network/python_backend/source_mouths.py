@@ -16,6 +16,10 @@ class SourceMouth:
     physical_peak_u: float = 1.
     outward_outer_u: float = 0.
     outward_peak_u: float = 1.
+    # An interior physical cut is an evaluation view of an original Path,
+    # not a newly authored source incidence. It needs an owner-scoped port
+    # registry and must never replace SeparatorPortIndex.resolve(End).
+    original_incidence: bool = True
 
     def outward_parameter(self, physical_u):
         v = ((np.asarray(physical_u)-self.physical_outer_u)

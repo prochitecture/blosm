@@ -24,6 +24,22 @@ def drain_steps(steps):
         steps.close()
 
 
+def numerical_time_slices(steps):
+    """Batch small iterations before the Blender scene is checked again."""
+    deadline = time.perf_counter() + 1./60.
+    try:
+        while True:
+            try:
+                command = next(steps)
+            except StopIteration as finished:
+                return finished.value
+            if command is not None or time.perf_counter() >= deadline:
+                yield command
+                deadline = time.perf_counter() + 1./60.
+    finally:
+        steps.close()
+
+
 class _PreparationProgress:
     """Local checkpoints with timings that exclude time suspended by the UI."""
     def __init__(self, on_progress=None):
@@ -75,6 +91,16 @@ class Task:
     build: object
     version: str = '1'
     signature: object = None
+
+
+@dataclass(frozen=True)
+class CooperativeBuild:
+    """One task callable with a synchronous entry and a resumable entry."""
+    run: object
+    steps: object
+
+    def __call__(self, context):
+        return self.run(context)
 
 
 class FeatureProvider(ABC):
@@ -171,14 +197,14 @@ class UpdateCoordinator:
         self.dependencies = {}
 
     def prepare(self, network, *, force=False):
-        return drain_steps(self.prepare_steps(network, force=force))
+        return drain_steps(self.prepare_steps(network, force=force, cooperative_tasks=False))
 
-    def prepare_steps(self, network, *, force=False, on_progress=None, emit_products=False):
+    def prepare_steps(self, network, *, force=False, on_progress=None, emit_products=False, cooperative_tasks=True):
         """Yield local checkpoints and return an uncommitted PreparedUpdate.
 
         Source and task iteration retain the blocking path's deterministic
-        order. A builder is still one indivisible operation; its product and
-        digest become available together only after it returns successfully.
+        order. A resumable builder can yield within a task. The product and
+        digest become available together after the builder returns successfully.
         Closing this iterator never commits its pending products. Providers
         must treat accepted upstream products as read-only, as in prepare().
         Opting into product events exposes each rebuilt product immediately
@@ -238,12 +264,15 @@ class UpdateCoordinator:
             rebuilding = force or digest != previous_tasks.get(key) or key not in products
             if rebuilding:
                 yield from progress.checkpoint(f'Building {key.text()}')
-                before = time.perf_counter()
+                before = progress.elapsed()
                 try:
-                    product = task.build(context)
+                    if cooperative_tasks and isinstance(task.build, CooperativeBuild):
+                        product = yield from progress.forward(task.build.steps(context))
+                    else:
+                        product = task.build(context)
                 except ValueError as exc:
                     raise ValueError(f'{key.text()}: {exc}') from exc
-                durations[key.text()] = time.perf_counter() - before
+                durations[key.text()] = progress.elapsed() - before
                 products[key] = product
                 rebuilt.append(key)
             digests[key] = digest

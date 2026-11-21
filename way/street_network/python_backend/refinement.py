@@ -1,6 +1,7 @@
 """Conforming local quad refinement using cached 1:3 boundary templates."""
 import numpy as np
 from .mesh import Assembler
+from .updates import drain_steps
 
 
 class QuadRefiner:
@@ -10,6 +11,9 @@ class QuadRefiner:
         self.patterns, self.max_cells = patterns, max_cells
 
     def refine(self, mesh, selected, field):
+        return drain_steps(self.refine_steps(mesh, selected, field))
+
+    def refine_steps(self, mesh, selected, field):
         selected = np.asarray(selected)
         if (selected.ndim != 1 or selected.dtype.kind not in 'iu'
                 or np.any(selected < 0) or np.any(selected >= len(mesh.quads))):
@@ -24,14 +28,19 @@ class QuadRefiner:
         boundary = {tuple(edge) for edge, count in zip(unique, counts) if count == 1}
         split = {tuple(edge) for edge in keys[selected].reshape(-1, 2) if tuple(edge) not in boundary}
         atlases, total = [], 0
-        for row in keys:
+        for index, row in enumerate(keys):
+            if index % 128 == 0:
+                yield
             pattern = self.patterns.quad(*(3 if tuple(edge) in split else 1 for edge in row))
             total += len(pattern.quads)
             if total > self.max_cells:
                 raise ValueError('Adaptive quad refinement exceeds its cell budget')
             atlases.append(pattern)
         assembly = Assembler()
+        evaluate_steps = getattr(field, 'evaluate_steps', None)
         for fi, (q, pattern) in enumerate(zip(mesh.quads, atlases)):
+            if fi % 8 == 0:
+                yield
             u, v = pattern.uv.T
             p = mesh.xyz[q, :2]
             xy = (((1. - u) * (1. - v))[:, None] * p[0] + (u * (1. - v))[:, None] * p[1]
@@ -53,10 +62,19 @@ class QuadRefiner:
                     if a > b:
                         t = 1. - t
                     addresses.append(('edge', min(a, b), max(a, b), int(round(t * 3.))))
-            height = field(xy)
-            for at, address in enumerate(addresses):
-                if address[0] == 'vertex':
-                    height[at] = mesh.xyz[address[1], 2]
+            if all(address[0] == 'vertex' for address in addresses):
+                # An untouched face contains only retained vertices. Their
+                # authoritative heights were already copied into the source mesh.
+                height = mesh.xyz[[address[1] for address in addresses], 2]
+            else:
+                # Preserve the original batch for fields evaluated on new points.
+                if evaluate_steps is None:
+                    height = field(xy)
+                else:
+                    height = yield from evaluate_steps(xy)
+                for at, address in enumerate(addresses):
+                    if address[0] == 'vertex':
+                        height[at] = mesh.xyz[address[1], 2]
             assembly.add(np.column_stack((xy, height)), pattern.quads, addresses)
         result = assembly.mesh(mesh.material)
         vertex_map = np.array([assembly.lookup['vertex', i] for i in range(len(mesh.xyz))], dtype=np.int32)

@@ -14,6 +14,31 @@ from tested_python_streets.routes import RouteTopology, route_key
 
 
 class PythonSourceSupportTests(unittest.TestCase):
+    def test_deferred_neighbor_does_not_leave_a_short_original_selection_arm_without_finite_support(self):
+        for reverse in (False,True):
+            network,snapshot,context=clipped_fixture_source(model,reverse=reverse)
+            short=replace(network.sections[0],points=((0.,0.,0.),(2.,0.,0.)))
+            extra=(model.Section(5,5,((2.,0.,0.),(32.,0.,0.))),
+                   model.Section(6,6,((2.,0.,0.),(2.,-30.,0.))))
+            site=model.Intersection(2,(model.End(1,1),model.End(5,0),model.End(6,0)),
+                                    radius=2.,radius_modes=('STYLE',)*3)
+            network=replace(network,sections=(short,*network.sections[1:],*extra),
+                            intersections=(*network.intersections,site))
+            for s in extra:snapshot.streets[s.id]=dict(items=[dict(kind='Section',id=s.id,tags={})])
+            before=network.to_dict()
+            prepared=ClippedApproachSupport(snapshot,context).prepare(network)
+            self.assertFalse(prepared.error)
+            self.assertEqual(network.to_dict(),before)
+            extension,=prepared.report['extensions']
+            self.assertEqual(extension['trigger'],'DEFERRED_COMPOUND_EXTERNAL_CONTACT_BUDGET')
+            current=prepared.network.section_index[2]
+            self.assertTrue(all(point in current.points for point in network.section_index[2].points))
+            self.assertEqual(current.selection_ends,(0 if reverse else 1,))
+            self.assertGreater(Path(current).length,8.)
+            self.assertLessEqual(extension['added_polyline_length_m'],40.)
+            update=PythonMeshBackend(prepared.network.settings).prepare(prepared.network)
+            self.assertLessEqual(update.products[model.Key('junction_mesh',1)].mesh.validate()['maximum_edge_ratio'],8.)
+
     def test_original_same_way_intervals_extend_either_authored_end_and_keep_all_old_controls(self):
         for reverse in (False, True):
             for mode in (0, 3):
@@ -113,6 +138,38 @@ class PythonSourceSupportTests(unittest.TestCase):
     def test_original_outside_junction_is_not_replaced_by_an_inferred_free_road(self):
         network, snapshot, context = clipped_fixture_source(model)
         context['nodes'][0]['topology_kind'] = 'JUNCTION'
+        prepared = ClippedApproachSupport(snapshot, context).prepare(network)
+        self.assertIn('complete original incidence', prepared.error)
+        self.assertEqual(prepared.report['extensions'], [])
+
+    def test_short_original_segment_extension_does_not_need_a_remote_outside_junction(self):
+        network, snapshot, context = clipped_fixture_source(model)
+        node = context['nodes'][0]
+        node['topology_kind'] = 'JUNCTION'
+        node['position'] = (0., 110.)
+        node['incidences'][0]['parameter'] = 2.5 / 110.
+        node['open_ends'][0]['parameter'] = 2.5 / 110.
+        snapshot.streets[2]['items'][0]['source_segments'] = [('way', 'root', 'outside', 0., 2.5 / 110.)]
+        prepared = ClippedApproachSupport(snapshot, context).prepare(network)
+        self.assertFalse(prepared.error)
+        extension, = prepared.report['extensions']
+        self.assertEqual(extension['outside_node_kind'], 'JUNCTION')
+        self.assertEqual(extension['output_end_kind'], 'SELECTION_CUT')
+        self.assertEqual(len(extension['extra_controls']), 1)
+        self.assertLess(extension['source_intervals'][0][4], 1.)
+        self.assertEqual(prepared.network.section_index[2].selection_ends, (1,))
+        update = PythonMeshBackend(prepared.network.settings).prepare(prepared.network)
+        self.assertFalse(update.products[route_key(model.End(2, 0))].terminal_free)
+        self.assertLessEqual(update.products[model.Key('junction_mesh', 1)].mesh.validate()['maximum_edge_ratio'], 8.)
+
+    def test_remote_junction_extension_must_stop_before_its_clearance(self):
+        network, snapshot, context = clipped_fixture_source(model)
+        node = context['nodes'][0]
+        node['topology_kind'] = 'JUNCTION'
+        node['position'] = (0., 8.5)
+        node['incidences'][0]['parameter'] = 2.5 / 8.5
+        node['open_ends'][0]['parameter'] = 2.5 / 8.5
+        snapshot.streets[2]['items'][0]['source_segments'] = [('way', 'root', 'outside', 0., 2.5 / 8.5)]
         prepared = ClippedApproachSupport(snapshot, context).prepare(network)
         self.assertIn('complete original incidence', prepared.error)
         self.assertEqual(prepared.report['extensions'], [])

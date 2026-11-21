@@ -180,6 +180,7 @@ class Cap:
     middle: np.ndarray
     last: np.ndarray
     attached: bool
+    continuation: dict | None = None
 
     @classmethod
     def free(cls, a, b, count):
@@ -203,11 +204,11 @@ class BundleProvider(FeatureProvider):
     def tasks(self, network):
         from .ownership import PLAN, SURFACES_READY, has_junctions
         from .transitions import required, product_key
-        from .separator_ports import PORTS, SeparatorPortIndex
+        from .separator_ports import PORTS, SeparatorPortIndex, PHYSICAL_PORT_BINDING_POLICY
         if network.bundles:
             port_deps = tuple(sorted({*(j.layout_key for j in network.intersections),
                                       *((PLAN, SURFACES_READY) if has_junctions(network) else ())}))
-            yield Task(PORTS, port_deps, SeparatorPortIndex.build)
+            yield Task(PORTS, port_deps, SeparatorPortIndex.build, version=PHYSICAL_PORT_BINDING_POLICY)
         from .bundle_merged_entrances import MergedEntrancePreparation, preparation_key
         merged_candidates = {candidate.id for candidate, crossing, runs in MergedEntrancePreparation.candidates(network)}
         for bundle in network.bundles:
@@ -228,18 +229,40 @@ class BundleProvider(FeatureProvider):
                              and ends <= full_ends)
             internal_ports = (bool(bundle.interior_section_ids) and len(bundle.members) == 2
                               and all(member.complete for member in bundle.members))
-            plan_deps = tuple(sorted({bundle.key,
+            terminal_ports = (not bundle.interior_section_ids and len(bundle.members) == 2
+                              and all(member.complete for member in bundle.members)
+                              and any(len(member.path) > 1 for member in bundle.members))
+            # Both the terminal prefix and the gapped body read original road
+            # spans, including two-arm seams along each member and crossroad.
+            prepares_spans = terminal_ports or internal_ports
+            span_layouts = ()
+            hydration_sections = sections.copy()
+            if prepares_spans:
+                from .routes import RouteTopology
+                attachments = RouteTopology(network).attachments(network)
+                span_sites = {site.key: site for sid in sections for site, end in attachments[sid]}
+                span_layouts = tuple(site.layout_key for site in span_sites.values())
+                hydration_sections.update(end.section_id for site in span_sites.values() for end in site.ends)
+            local_plan_deps = {bundle.key,
                 *(Key(kind, sid) for sid in members for kind in ('path', 'profile')),
+                *(Key(kind, sid) for sid in sections for kind in ('path', 'profile') if prepares_spans),
                 *mouth_dependencies(network, bundle),
                 *(j.layout_key for j in dimensional_sites(network, bundle)),
                 *(j.key for j in attached),
-                *((PORTS,) if angular_ports or internal_ports else ()),
+                *((PORTS,) if angular_ports or internal_ports or terminal_ports else ()),
                 *((preparation_key(bundle),) if bundle.id in merged_candidates else ()),
-                *((PLAN,) if has_junctions(network) else ())}))
+                *((PLAN,) if has_junctions(network) else ())}
+            hydration_deps = {*span_layouts,
+                *(Key(kind, sid) for sid in hydration_sections for kind in ('path', 'profile') if prepares_spans)}
+            plan_deps = tuple(sorted(local_plan_deps | hydration_deps))
+            projected = tuple(sorted(hydration_deps - local_plan_deps))
             yield Task(Key('bundle_plan', bundle.id), plan_deps,
                 lambda context, source=bundle: plan(context, source),
-                signature=lambda context, source=bundle, dependencies=plan_deps:
-                    self.plan_signature(context, source, dependencies))
+                version=PHYSICAL_PORT_BINDING_POLICY+'-2-bounded-body-cuts',
+                signature=lambda context, source=bundle, dependencies=plan_deps,
+                                 hydration=projected, local_sections=tuple(sorted(sections)):
+                    self.plan_signature(context, source, dependencies,
+                                        hydration_dependencies=hydration, local_sections=local_sections))
             yield Task(Key('bundle_pavement', bundle.id), (Key('bundle_plan', bundle.id),),
                 lambda context, source=bundle: context[Key('bundle_plan', source.id)].pavement(context)
                     if context[Key('bundle_plan', source.id)].mode == 'union' else None)
@@ -253,16 +276,43 @@ class BundleProvider(FeatureProvider):
                     self.signature(context, source, dependencies)))
 
     @staticmethod
-    def plan_signature(context, bundle, dependencies):
-        from .ownership import PLAN
+    def plan_signature(context, bundle, dependencies, *, hydration_dependencies=(), local_sections=()):
+        from .ownership import PLAN, surface_key
         from .separator_ports import PORTS
         from .bundle_compounds import compound_owners
         # Finite strips must yield when a compound consumes their mouth. The
         # graph records that ownership dependency, while a distant compound
         # edit must not invalidate an unrelated Bundle plan.
-        return ([(key.text(), context.digest(key)) for key in dependencies if key not in (PLAN, PORTS)],
+        excluded = {PLAN, PORTS, *hydration_dependencies}
+        # Hydration may need all sources at a potential far route attachment,
+        # but those sources affect this Bundle only through a mouth reaching
+        # its local Sections. Local Path/Profile records remain full inputs;
+        # completed physical ports also retain their actual surface stamps.
+        # Keep the broad graph edges for safe evaluation order, then project
+        # the same actual mouth fields used by the carriageway consumer.
+        mouths = []
+        layouts = {key for key in hydration_dependencies if key.kind in ('mouths', 'seam_layout')}
+        if layouts:
+            from .providers import CarriagewayProvider
+            from .routes import RouteTopology
+            attachments = RouteTopology(context.network).attachments(context.network)
+            for sid in local_sections:
+                joins = tuple((site, end) for site, end in attachments[sid] if site.layout_key in layouts)
+                if joins:
+                    mouths.append((sid, CarriagewayProvider.signature(context, (), joins, sid)))
+        physical = []
+        if PORTS in dependencies:
+            plan = context.products.get(PLAN)
+            source_ids = set(local_sections or bundle.sections)
+            owners = {((plan.owner(site.key) if plan is not None else None) or site.key)
+                      for site in context.network.intersections
+                      if any(end.section_id in source_ids for end in site.ends)}
+            owners.update(compound_owners(context, bundle))
+            physical = [(owner.text(), context.digest(surface_key(owner))) for owner in sorted(owners)]
+        return ([(key.text(), context.digest(key)) for key in dependencies if key not in excluded],
                 [owner.text() for owner in compound_owners(context, bundle)],
-                context[PORTS].signature(bundle.sections) if PORTS in dependencies else None)
+                context[PORTS].signature(local_sections or bundle.sections) if PORTS in dependencies else None,
+                mouths, physical)
 
     @staticmethod
     def signature(context, bundle, dependencies):
@@ -286,7 +336,9 @@ class BundleProvider(FeatureProvider):
                 raise ValueError('Attached Bundle endpoint has no visible pavement port; explicit continuation is required')
             return None
         if not all(matches):
-            raise ValueError('A partly attached Bundle cap requires explicit junction continuation')
+            from .bundle_partial_caps import build
+            return build(context, first, second, end, ports,
+                         rim_coordinates=rim_coordinates, rim_source=rim_source)
         if matches[0].key == matches[1].key:
             junction = matches[0]
             layout = context[junction.layout_key]
@@ -357,7 +409,15 @@ class BundleProvider(FeatureProvider):
         from .bundle_compounds import (CompoundBundleBuilder, compound_owners, has_internal_junction,
                                        has_consumed_sections)
         if has_consumed_sections(context, bundle) or compound_owners(context, bundle) or has_internal_junction(context.network, bundle):
-            return CompoundBundleBuilder.build(context, bundle)
+            from .bundle_compounds import UnequalBundleVisibilityError
+            try:
+                return CompoundBundleBuilder.build(context, bundle)
+            except UnequalBundleVisibilityError as previous:
+                from .wholly_owned_bundle import WhollyOwnedBundleSeparator,WhollyOwnedBundleUnavailable
+                try:
+                    return WhollyOwnedBundleSeparator.build(context,bundle)
+                except WhollyOwnedBundleUnavailable:
+                    raise previous
         members = tuple(Member.build(context, member, role) for role, member in enumerate(bundle.members))
         proof_checks = certify_disjoint(members[0].path, members[1].path)
         profiles = [context[Key('profile', t.section_id)] for m in bundle.members for t in m.path]
@@ -367,33 +427,66 @@ class BundleProvider(FeatureProvider):
         return cls.region(context, bundle, members, caps, proof_checks)
 
     @staticmethod
-    def region(context, bundle, members, caps, proof_checks):
+    def region(context, bundle, members, caps, proof_checks, *, correct_positive=False):
         profiles = [context[Key('profile', t.section_id)] for m in bundle.members for t in m.path]
-        width = max(np.linalg.norm(members[1].rim[i, :2] - members[0].rim[i, :2]) for i in (0, -1))
-        free_count = max(4, 2 * int(math.ceil(width / (2. * context.network.settings.spacing))))
-        # Free rims have no neighboring mesh and can adopt the attached cap's
-        # partition. Every pavement-adjacent rim keeps its original samples.
+        # A free end shares only its two endpoints with the pavement. The
+        # quad disk needs compatible parity across the rim, not matching counts.
+        member_intervals = sum(len(member.rim)-1 for member in members)
         for i in (0, 1):
             if caps[i] is None:
-                count = len(caps[1 - i].rim) - 1 if caps[1 - i] is not None else free_count
-                caps[i] = Cap.free(members[0].rim[0 if i == 0 else -1], members[1].rim[0 if i == 0 else -1], count)
+                end = 0 if i == 0 else -1
+                first, last = (member.rim[end] for member in members)
+                length = np.linalg.norm(last[:2]-first[:2])
+                count = max(4, math.ceil(length/context.network.settings.spacing))
+                other = caps[1-i]
+                parity = (member_intervals + len(other.rim)-1) % 2 if other is not None else 0
+                count += (parity-count) % 2
+                caps[i] = Cap.free(first, last, count)
+        if (sum(len(member.rim)-1 for member in members)+sum(len(cap.rim)-1 for cap in caps)) % 2:
+            from .finite_free_closure import FiniteFreeCap
+            editable = [i for i, cap in enumerate(caps) if isinstance(cap, FiniteFreeCap) and not cap.refined]
+            if editable:
+                # Only a new computational exterior grass edge is editable.
+                # Every actual road/junction curb vertex remains authoritative.
+                i = editable[0]
+                caps[i] = caps[i].refine_exterior_connector()
         head, tail = caps
 
-        def partition(cap, shift=0):
+        def partition(cap, shift=0, last_shift=0):
             if not cap.attached:
                 return cap.first, cap.rim, cap.last
-            a, b = len(cap.first) // 2 + shift, len(cap.last) // 2
+            a, b = len(cap.first) // 2 + shift, len(cap.last) // 2 + last_shift
             if not 0 <= a < len(cap.first) or not 0 <= b < len(cap.last):
                 return None
             # Atlas corners lie on existing curved samples. The physical curb
             # is unchanged; a 180-degree mouth vertex is not a grid corner.
             return cap.first[:a + 1], _join(cap.first[a:], cap.middle, cap.last[:b + 1]), cap.last[b:]
 
+        def fixed_rim_result(rims, reason):
+            from .separator_surfaces import FixedRimSeparator
+            left, back, right, front = rims
+            loop = _join(left, back, right[::-1], front[::-1])[:-1][::-1]
+            surface = FixedRimSeparator(context.patterns, spacing=context.network.settings.spacing).build(
+                loop, datum=profiles[0].datum, height=profiles[0].rise * context.network.settings.exaggeration,
+                exaggeration=context.network.settings.exaggeration)
+            return Part(bundle.key, surface.mesh, dict(surface.metadata,
+                initial_atlas_error=reason, centerline_proof_checks=proof_checks,
+                rim_intervals=tuple(len(r)-1 for r in rims),
+                cap_continuations=[cap.continuation for cap in caps if cap.continuation is not None],
+                crown_ceiling=profiles[0].rise, attached_caps=[cap.attached for cap in caps]))
+
         corner_shifts = None
-        for head_shift, tail_shift in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
-            if (head_shift and not head.attached) or (tail_shift and not tail.attached):
+        # A partial junction cap can have its entire rounded side on the
+        # second member. Either side can supply a neighboring atlas corner.
+        for head_shift, tail_shift, head_last, tail_last in (
+                (0, 0, 0, 0), (1, 0, 0, 0), (-1, 0, 0, 0),
+                (0, 1, 0, 0), (0, -1, 0, 0), (0, 0, 1, 0),
+                (0, 0, -1, 0), (0, 0, 0, 1), (0, 0, 0, -1)):
+            if ((head_shift or head_last) and not head.attached
+                    or (tail_shift or tail_last) and not tail.attached):
                 continue
-            front_parts, back_parts = partition(head, head_shift), partition(tail, tail_shift)
+            front_parts = partition(head, head_shift, head_last)
+            back_parts = partition(tail, tail_shift, tail_last)
             if front_parts is None or back_parts is None:
                 continue
             ha, front, hb = front_parts
@@ -408,6 +501,11 @@ class BundleProvider(FeatureProvider):
         if corner_shifts is None:
             primitive_counts = (len(members[0].rim) - 1, len(members[1].rim) - 1,
                                 len(head.rim) - 1, len(tail.rim) - 1)
+            if sum(primitive_counts) % 2 == 0:
+                # A quad disk only needs an even perimeter. Opposite-side
+                # parity is a restriction of the four-sided layout above.
+                return fixed_rim_result((members[0].rim, tail.rim, members[1].rim, head.rim),
+                                        'Opposite sides have incompatible interval parity')
             raise ValueError(f'Bundle separator boundary parity needs coordinated curb sampling: '
                              f'members/head/tail={primitive_counts}, total={sum(primitive_counts)}')
         pattern = context.patterns.quad(*counts)
@@ -427,19 +525,27 @@ class BundleProvider(FeatureProvider):
         for side, rim in enumerate(rims):
             xyz[context.patterns.boundary(pattern, side)] = rim
         mesh = Mesh(xyz, pattern.quads[:, ::-1], 'grass')
+        positive_correction = None
         try:
             quality = mesh.validate()
             if quality['maximum_edge_ratio'] > 8.:
-                raise ValueError(f"Bundle quad edge ratio {quality['maximum_edge_ratio']:.4g} exceeds 8")
+                if not correct_positive:
+                    raise ValueError(f"Bundle quad edge ratio {quality['maximum_edge_ratio']:.4g} exceeds 8")
+                from .quality_correction import QuadShapeCorrection
+                planar = mesh.with_positions(np.c_[mesh.xyz[:, :2], np.zeros(len(mesh.xyz))])
+                candidate, details = QuadShapeCorrection(max_cells=50000).improve(planar)
+                candidate.xyz[:, 2] = mesh.xyz[:, 2]
+                measured = candidate.validate()
+                published = Mesh(candidate.xyz.astype(np.float32), candidate.quads, 'grass').validate()
+                if max(measured['maximum_edge_ratio'], published['maximum_edge_ratio']) > 8.:
+                    raise ValueError('Positive Bundle separator correction failed stored grading')
+                # This is a grass construction objective. The unchanged grass
+                # contract is positive corners and edge ratio <= 8; a physical
+                # needle tip need not satisfy the pavement angle floor.
+                xyz = candidate.xyz
+                positive_correction = dict(details, stored_quality=published)
         except ValueError as error:
-            from .separator_surfaces import FixedRimSeparator
-            loop = _join(left, back, right[::-1], front[::-1])[:-1][::-1]
-            surface = FixedRimSeparator(context.patterns, spacing=context.network.settings.spacing).build(
-                loop, datum=profiles[0].datum, height=profiles[0].rise * context.network.settings.exaggeration,
-                exaggeration=context.network.settings.exaggeration)
-            return Part(bundle.key, surface.mesh, dict(surface.metadata,
-                initial_atlas_error=str(error), centerline_proof_checks=proof_checks, rim_intervals=counts,
-                crown_ceiling=profiles[0].rise, attached_caps=[cap.attached for cap in caps]))
+            return fixed_rim_result(rims, str(error))
         boundary = np.concatenate(rims)
         xyz[:, 2], extension = plateau_extension(xyz[:, :2], boundary, profiles[0].datum,
             profiles[0].rise * context.network.settings.exaggeration)
@@ -453,9 +559,14 @@ class BundleProvider(FeatureProvider):
         mesh = Mesh(xyz, pattern.quads[:, ::-1], 'grass')
         mesh.seams = {side: context.patterns.boundary(pattern, side) for side in range(4)}
         quality = mesh.validate()
-        return Part(bundle.key, mesh, dict(quality=quality, construction='separated boundary quad atlas',
+        metadata = dict(quality=quality, construction='separated boundary quad atlas',
             centerline_proof_checks=proof_checks, rim_intervals=counts,
             crown_ceiling=profiles[0].rise, attached_caps=[cap.attached for cap in caps],
+            cap_continuations=[cap.continuation for cap in caps if cap.continuation is not None],
             height_extension=extension,
             atlas_corner_shifts=corner_shifts,
-            physical_slopes=mesh.slope_statistics(context.network.settings.exaggeration)))
+            atlas_last_corner_shifts=(head_last, tail_last),
+            physical_slopes=mesh.slope_statistics(context.network.settings.exaggeration))
+        if positive_correction is not None:
+            metadata['positive_fixed_rim_correction'] = positive_correction
+        return Part(bundle.key, mesh, metadata)

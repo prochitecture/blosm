@@ -6,7 +6,7 @@ The internal cut planes are computational boundaries, not edits to source data.
 from dataclasses import replace
 import numpy as np
 from . import model
-from .bundle_axis import AxialPlan, AxialChartUnavailable, _regular_rows
+from .bundle_axis import AxialPlan, AxialChartUnavailable, _regular_rows, _simplify
 from .bundle_ends import AttachedAxialPlan
 from .mesh import Assembler, Mesh
 from .providers import Part
@@ -127,6 +127,19 @@ class FiniteAxialPlan(AttachedAxialPlan):
         pattern = context.patterns.quad(len(sides[0])-1, self.port_intervals,
                                         len(sides[1])-1, self.port_intervals)
         if len(pattern.quads) > 4096:
+            # Source lookup knots need not all become mesh rows. This fallback
+            # retains a continuous-polyline distance bound, the mouth and cut
+            # endpoints. The existing source sampling/simplification uses 0.2
+            # of the curve budget; reserve another 0.2 here. The same resulting
+            # inside rim is reused by the separator, so no crack is introduced.
+            exact = all(context[model.Key('path', t.section_id)].exact
+                        for t in self.members[role].path)
+            tolerance = 1e-9 if exact else .2*self.settings.curve_tolerance
+            sides = [_regular_rows(_simplify(points, tolerance),
+                        min(self.settings.spacing, 2*width/self.port_intervals)) for points in sides]
+            pattern = context.patterns.quad(len(sides[0])-1, self.port_intervals,
+                                            len(sides[1])-1, self.port_intervals)
+        if len(pattern.quads) > 4096:
             raise ValueError('Finite entrance strip exceeds its cell budget')
         u, v = pattern.uv.T
         ids0, ids1 = (context.patterns.boundary(pattern, side) for side in (0, 2))
@@ -195,6 +208,11 @@ class FiniteAxialPlan(AttachedAxialPlan):
                 values = query.evaluate(rows[ids], default=sentinel)
                 valid = values != sentinel
                 output[ids[valid]] = values[valid]
+        query = getattr(self, '_finite_free_query', None)
+        if query is not None:
+            values = query.evaluate(rows, default=sentinel)
+            valid = values != sentinel
+            output[valid] = values[valid]
         return output.reshape(result.shape)
 
     def keys(self, mesh):
@@ -269,14 +287,28 @@ class FiniteAxialPlan(AttachedAxialPlan):
         quality = mesh.validate()
         if quality['maximum_edge_ratio'] > 8.:
             raise ValueError('Finite Bundle separator exceeds its unchanged quad-quality limit')
-        return Part(self.bundle.key,mesh,dict(quality=quality,islands=len(self.islands),finite_caps=True,
+        continuations = [record for part in caps for record in part.metadata.get('cap_continuations', ())]
+        reconciliation = None
+        if any('finite_free_closure' in record for record in continuations):
+            from .finite_free_heights import reconcile, physical_separator
+            physical = (physical_separator(context, self) if self.settings.exaggeration != 1. else None)
+            mesh, self._finite_free_query, self._finite_free_physical, reconciliation = reconcile(mesh,
+                datum=self.datum, ceiling=self.datum+self.rise,
+                exaggeration=self.settings.exaggeration, physical_mesh=physical)
+            self.requires_separator_query = True
+        metadata = dict(quality=quality,islands=len(self.islands),finite_caps=True,
             attached_caps=attached, finite_cap_selection=self.cap_selection,
-            physical_slopes=mesh.slope_statistics(self.settings.exaggeration)))
+            cap_continuations=continuations,
+            physical_slopes=mesh.slope_statistics(self.settings.exaggeration))
+        if reconciliation is not None:
+            metadata['finite_free_reconciliation'] = reconciliation
+        return Part(self.bundle.key, mesh, metadata)
 
     def release_geometry(self):
         super().release_geometry()
         self.combined = None
         self.cap_meshes.clear()
+        self._finite_free_physical = None
 
 
 def finite_plan(context, bundle):

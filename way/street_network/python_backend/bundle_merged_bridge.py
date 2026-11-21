@@ -11,7 +11,16 @@ from .slope_projection import corner_matrices
 class MergedProfileBridge:
     max_cells = 2048
 
-    def build(self, context, approach, station, mouth):
+    def build(self, context, approach, station, mouth, *, target_inventory=None):
+        from .finite_terminal_entrances import FinitePairedEntrance
+        if isinstance(approach, FinitePairedEntrance):
+            if target_inventory is None:
+                raise ValueError('Finite merged entrance needs its independently certified complete run inventory')
+            from .finite_profile_bridge import build
+            mesh,front,back,report=build(context,approach,station,mouth,target_inventory,max_cells=self.max_cells)
+            self.front_ids,self.back_ids=front,back
+            self.body_cut=mesh.xyz[back].copy()
+            return mesh,report
         settings = context.network.settings
         start = float(station)
         finish = start+2.*settings.spacing

@@ -4,7 +4,7 @@ import numpy as np
 import _python_street_package
 from tested_python_streets import model
 from tested_python_streets.backend import PythonMeshBackend
-from tested_python_streets.drainage import BoundaryDrainage
+from tested_python_streets.drainage import BoundaryDrainage, ProtectedSpillUnavailable
 from tested_python_streets.mesh import Mesh
 from tested_python_streets.patterns import PatternLibrary
 from tested_python_streets.slope_projection import SlopeProjection
@@ -45,6 +45,37 @@ def refined_cross():
 
 
 class PythonDrainageTests(unittest.TestCase):
+    def test_basin_at_a_prescribed_crown_can_drain_across_a_free_saddle(self):
+        mesh, fixed, inside = basin()
+        protected = fixed | inside
+        original = mesh.xyz.copy()
+        solve = BoundaryDrainage()
+        heights, report = solve.fill_preserving(mesh, fixed, protected)
+        np.testing.assert_array_equal(mesh.xyz, original)
+        np.testing.assert_array_equal(heights[protected], original[protected, 2])
+        self.assertTrue(report['routes'])
+        self.assertGreater(report['maximum_cut'], 0.)
+        corrected = mesh.with_positions(np.column_stack((original[:, :2], heights)))
+        np.testing.assert_array_equal(solve.fill(corrected, fixed)[0], heights)
+        with self.assertRaises(ProtectedSpillUnavailable):
+            solve.fill_preserving(mesh, fixed, np.ones(len(fixed), dtype=bool))
+
+    def test_when_the_lowest_pass_is_prescribed_only_the_editable_pass_is_cut(self):
+        mesh, fixed, inside = basin()
+        rim = ~fixed & ~inside
+        # The lowest pass is 0.4 m. Only a slightly higher pass can be cut.
+        xy = mesh.xyz[:, :2]
+        editable = np.all(np.isclose(xy, [1., 3.]), axis=1)
+        mesh.xyz[editable, 2] = .401
+        protected = fixed | inside | (rim & ~editable)
+        solver = BoundaryDrainage()
+        heights, report = solver.fill_preserving(mesh, fixed, protected)
+        np.testing.assert_array_equal(heights[protected], mesh.xyz[protected, 2])
+        np.testing.assert_allclose(heights[editable], .1)
+        self.assertEqual(len(report['routes']), 1)
+        drained = mesh.with_positions(np.column_stack((xy, heights)))
+        self.assertEqual(solver.fill(drained, fixed)[1]['maximum_fill'], 0.)
+
     def test_a_flat_basin_has_a_nonascending_path_to_the_boundary_after_minimal_fill(self):
         mesh, fixed, inside = basin()
         original = mesh.xyz.copy()
@@ -105,18 +136,23 @@ class PythonDrainageTests(unittest.TestCase):
                 SlopeProjection().solve(mesh, fixed, datum=0., ceiling=.08,
                     maximum_slope=.05, minimum_heights=bad)
 
-    def test_real_unequal_width_cross_uses_bounded_regrading_and_preserves_profiles(self):
+    def test_real_unequal_width_cross_drains_and_preserves_profiles(self):
         network = refined_cross()
         result = PythonMeshBackend(network.settings).prepare(network)
         part = result.products[model.Key('junction_mesh', 29)]
-        self.assertIsNotNone(part.metadata.get('refined_grading'))
         self.assertLessEqual(part.mesh.validate()['maximum_edge_ratio'], 8.)
         self.assertLessEqual(part.metadata['physical_slopes']['maximum'], part.metadata['measured_slope_limit'] + 1e-8)
-        details = part.metadata['refined_grading']
-        self.assertTrue(details['exact_boundary'])
-        self.assertEqual(details['joins']['isolated_interior_minima'], 0)
-        self.assertLessEqual(details['joins']['maximum_entrance_longitudinal_slope'], .03)
-        self.assertLessEqual(details['rounds'][-1]['drainage']['maximum_fill'], 1e-6)
+        surface = result.products[model.Key('junction_surface', 29)]
+        fixed = np.zeros(len(part.mesh.xyz), dtype=bool)
+        for loop, ids in part.mesh.seams.items():
+            np.testing.assert_allclose(part.mesh.xyz[ids], surface.physical_rims[loop], rtol=0., atol=1e-10)
+            fixed[ids] = True
+        _, spill = BoundaryDrainage().fill(part.mesh, fixed)
+        self.assertLessEqual(spill['maximum_fill'], 1e-6)
+        refined = part.metadata.get('refined_grading')
+        joins = refined['joins'] if refined is not None else part.metadata['height_projection']
+        self.assertEqual(joins['isolated_interior_minima'], 0)
+        self.assertLessEqual(joins['maximum_entrance_longitudinal_slope'], .03)
 
     def test_regraded_field_queries_and_local_edits_survive_publication_release(self):
         network = refined_cross()

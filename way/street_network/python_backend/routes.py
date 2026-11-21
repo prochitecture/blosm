@@ -19,11 +19,13 @@ class Candidate:
     seams: tuple
     terminal_site: object = None
     terminal_selection: bool = False
+    terminal_scope: bool = False
 
 
 class RouteTopology:
     def __init__(self, network):
         self.selection_ends = {End(s.id, end) for s in network.sections for end in s.selection_ends}
+        self.scope_ends = {End(s.id, end) for s in network.sections for end in s.scope_ends}
         self.seams = {}
         self.incidents = {end: site.key for site in (*network.intersections, *network.connections)
                           for end in site.ends}
@@ -43,7 +45,8 @@ class RouteTopology:
                 break
             end, seam = next_end
             seams.append(seam)
-        return Candidate(tuple(visits), tuple(seams), self.incidents.get(exit), exit in self.selection_ends)
+        return Candidate(tuple(visits), tuple(seams), self.incidents.get(exit),
+                         exit in self.selection_ends, exit in self.scope_ends)
 
     def attachments(self, network):
         """Potential dependency closure, including mouths beyond a seam."""
@@ -110,7 +113,8 @@ class Route:
             pieces.append(piece)
             first_profile, first_offset = profile, offset
         return cls(pieces, terminal_free=(len(pieces) == len(candidate.traversals)
-                                         and candidate.terminal_site is None and not candidate.terminal_selection))
+                                         and candidate.terminal_site is None
+                                         and not candidate.terminal_selection and not candidate.terminal_scope))
 
     def frame(self, station):
         s = np.asarray(station)

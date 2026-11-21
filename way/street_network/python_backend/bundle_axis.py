@@ -572,6 +572,40 @@ class AxialPlan:
 
 
 def plan(context, bundle):
+    from .ownership import PLAN
+    ownership = context.products.get(PLAN)
+    prepared = getattr(ownership, 'bundle_sources', {}).get(bundle.id)
+    if prepared is not None:
+        from .bundle_merged_plan import MergedBundlePlan
+        return MergedBundlePlan(context, bundle, prepared)
+    candidate = _established_plan(context, bundle)
+    if candidate.mode != 'separated':
+        return candidate
+    from .separator_ports import PORTS
+    if PORTS not in context.products or PLAN not in context.products:
+        return candidate
+    # A source-cycle junction can consume both true terminals of a complete
+    # run without making that run an interior Bundle member. Only after the
+    # old charts decline, resolve its actual paired mouth and retain the full
+    # separated remainder beyond a certified original-source evaluation plane.
+    from .bundle_terminal_unions import TerminalMergedBundlePlan
+    reasons = [candidate.reason] if candidate.reason else []
+    try:
+        terminal = TerminalMergedBundlePlan.build(context, bundle)
+    except AxialChartUnavailable as error:
+        reasons.append(str(error))
+    else:
+        if terminal is not None:
+            return terminal
+    from .gapped_source_plan import GappedSourcePlan, GappedSourceUnavailable
+    try:
+        return GappedSourcePlan.build(context, bundle, require_visible_overlap=True)
+    except GappedSourceUnavailable as error:
+        reasons.append(str(error))
+    return SeparatedPlan(reason='; '.join(reasons))
+
+
+def _established_plan(context, bundle):
     if len(bundle.members) != 2 or not all(m.complete for m in bundle.members):
         return SeparatedPlan()
     if bundle.interior_section_ids:

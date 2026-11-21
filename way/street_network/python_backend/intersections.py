@@ -13,7 +13,7 @@ from .mesh import Assembler, cross
 from .model import End, Key
 from .paths import right
 from .providers import Part
-from .updates import FeatureProvider, Task
+from .updates import FeatureProvider, Task, drain_steps
 from .routes import Route, RouteTopology, route_key
 from .continuations import WidthContinuation
 from .corner_radii import CornerContactError, CornerRadiusPolicy, fitted_radius_report
@@ -156,17 +156,52 @@ class Corner:
     requested_radius: float | None = None
     radius_mode: str = 'STRICT'
     radius_attempts: tuple = ()
+    median_cap: bool = False
+    fit_policy: str = 'ORDINARY'
 
 
-def _corner(first, second, radius, continuation_angle=0.):
+def _corner(first, second, radius, continuation_angle=0., *, side_override=None, median_cap=False):
+    return drain_steps(_corner_steps(first, second, radius, continuation_angle,
+                                     side_override=side_override, median_cap=median_cap))
+
+
+def _corner_steps(first, second, radius, continuation_angle=0., *, side_override=None, median_cap=False):
+    try:
+        return (yield from _local_corner_steps(first, second, radius, continuation_angle,
+                                               side_override=side_override, median_cap=median_cap))
+    except CornerContactError as original:
+        # A single tangent-line seed can converge to the wrong branch of a
+        # returning road, or miss an existing curved contact entirely. Keep
+        # the exact same radius and guards; only supply bounded extra seeds.
+        from .corner_search import contact_seeds
+        yield
+        for seed in contact_seeds(first, second, radius, side_override=side_override):
+            yield
+            try:
+                return (yield from _local_corner_steps(first, second, radius, continuation_angle, seed=seed,
+                                                       side_override=side_override, median_cap=median_cap))
+            except CornerContactError:
+                continue
+        raise original
+
+
+def _local_corner(first, second, radius, continuation_angle=0., *, seed=None,
+                  side_override=None,median_cap=False):
+    return drain_steps(_local_corner_steps(first, second, radius, continuation_angle, seed=seed,
+                                           side_override=side_override, median_cap=median_cap))
+
+
+def _local_corner_steps(first, second, radius, continuation_angle=0., *, seed=None,
+                        side_override=None, median_cap=False):
     gap = math.atan2(float(cross(first.direction, second.direction)),
                      float(first.direction @ second.direction)) % math.tau
-    if gap < math.radians(3.):
+    if min(gap, math.tau - gap) < 1e-8:
         raise ValueError('Two intersection approaches have indistinguishable outward directions')
     mismatch = abs(first.offset + second.offset + .5 * (second.width - first.width)) > 1e-6
     if abs(gap - math.pi) < 1e-6 or (mismatch and abs(gap - math.pi) <= continuation_angle):
         return Corner(first, second, (0., 0.), None, radius, 0., 0., gap, continuation=mismatch)
-    side = 1. if gap < math.pi else -1.
+    side = (1. if gap < math.pi else -1.) if side_override is None else side_override
+    if side not in (-1.,1.):raise ValueError('Circular corner side must be -1 or +1')
     distances = (first.offset - first.width * .5 - side * radius,
                  second.offset + second.width * .5 + side * radius)
     p0 = first.point(0., distances[0])
@@ -177,14 +212,31 @@ def _corner(first, second, radius, continuation_angle=0.):
     initial = np.linalg.solve(matrix, p1 - p0)
     lower = -4. * max(first.width + radius, second.width + radius)
     upper = np.array((first.length, second.length))
-    current = np.clip(initial, lower, upper)
+    current = np.clip(initial if seed is None else seed, lower, upper)
     solved = False
-    for _ in range(32):
+    # Keep the established contact acceptance, then refine its numerical root.
+    # Nanometre centre residuals can create much longer false segments when
+    # an arc chord meets its almost-tangent source curb. At large world
+    # coordinates, stop at the representable precision rather than rejecting
+    # an already accepted root when its finite line search stalls.
+    precision = max(1e-11, min(1e-8, 8.*np.finfo(float).eps*max(
+        1., float(np.max(abs(p0))), float(np.max(abs(p1))))))
+    # When both offset loci are the centrelines, their shared authored
+    # endpoint is an exact root. Evaluating a reversed spline at its end can
+    # otherwise yield a station a few femtometres outside the native bank.
+    if (seed is None and distances == (0.,0.)
+            and first.source.points[-first.end][:2] == second.source.points[-second.end][:2]
+            and np.linalg.norm(p0-p1) <= precision):
+        current[:] = 0.
+    for iteration in range(32):
+        if iteration and iteration % 4 == 0:
+            yield
         jets = [a.jet(float(s), d) for a, s, d in zip((first, second), current, distances)]
         delta = jets[0][0] - jets[1][0]
         if np.linalg.norm(delta) < 1e-8:
             solved = True
-            break
+            if np.linalg.norm(delta) <= precision:
+                break
         jacobian = np.column_stack((jets[0][1], -jets[1][1]))
         if abs(np.linalg.det(jacobian)) < 1e-9:
             break
@@ -222,15 +274,31 @@ def _corner(first, second, radius, continuation_angle=0.):
         vectors = np.array(contacts) - center
     if np.max(abs(np.linalg.norm(vectors, axis=1) - radius)) > 1e-5:
         raise ValueError('Corner contacts do not preserve the prescribed radius')
+    if np.linalg.norm(contacts[0] - contacts[1]) <= 1e-7:
+        # Opposite traversals of a returning Section share the same physical
+        # curb. Newton can converge to that identical point rather than two
+        # distinct tangent contacts. A zero-sweep circle is not a fillet.
+        raise CornerContactError('Circular corner contacts coincide on the same physical curb')
     start = math.atan2(vectors[0, 1], vectors[0, 0])
     sweep = math.atan2(float(cross(vectors[0], vectors[1])), float(vectors[0] @ vectors[1]))
-    if sweep * side > 1e-7 or abs(sweep) > math.pi + 1e-7:
+    if median_cap:
+        if first.profile.half!=-1 or second.profile.half!=1 or side!=1.:
+            raise ValueError('A median end cap needs two facing plateau-side half-profiles')
+        if sweep>0.:sweep-=math.tau
+        # Converging median curbs can require slightly more than a semicircle.
+        # This explicit paired-terminal primitive must stay near its original
+        # mouths; it must not choose a remote root to imitate an ordinary turn.
+        nearby=2.*max(first.width,second.width)+float(np.linalg.norm(first.origin-second.origin))
+        if np.min(current)<-1e-8 or np.max(current)>nearby or abs(sweep)>math.radians(210.)+1e-7:
+            raise CornerContactError('Median end cap has no local finite circular contact within 210 degrees')
+    elif sweep * side > 1e-7 or abs(sweep) > math.pi + 1e-7:
         raise CornerContactError('Corner contact selects the wrong circular sector')
-    return Corner(first, second, tuple(map(float, current)), center, radius, start, sweep, gap)
+    return Corner(first, second, tuple(map(float, current)), center, radius, start, sweep, gap,
+                  median_cap=median_cap)
 
 
 class BoundaryCurve:
-    def __init__(self, corner, stations, tolerance):
+    def __init__(self, corner, stations, tolerance, *, outward_offset=0.):
         self.corner = corner
         self.mouths = stations
         self.first = corner.first.point(stations[0], corner.first.offset - corner.first.width * .5)
@@ -240,7 +308,12 @@ class BoundaryCurve:
             if corner.continuation:
                 first_velocity = corner.first.jet(stations[0], corner.first.offset - corner.first.width * .5)[1]
                 last_velocity = corner.second.jet(stations[1], corner.second.offset + corner.second.width * .5)[1]
-                self.continuation = WidthContinuation(self.first, self.last, -first_velocity, last_velocity, corner.radius)
+                # A conservative whole-curve speed bound can reject a valid
+                # short back curb. Refine its Bernstein certificate before
+                # requiring different mouths; the polynomial and radius stay
+                # exactly the same and every parameter interval is certified.
+                self.continuation = WidthContinuation(self.first, self.last, -first_velocity, last_velocity,
+                                                      corner.radius, refine_curvature=True, outward_offset=outward_offset)
                 self.lengths = np.array((0., self.continuation.length))
                 return
             self.lengths = np.array((0., float(np.linalg.norm(self.last - self.first))))
@@ -321,6 +394,8 @@ class JunctionLayout:
     transition: object = None
     absorbed_transitions: tuple = ()
     absorbed_by: object = None
+    finite_scope_ports: tuple = ()
+    finite_free_pads: tuple = ()
 
 
 class IntersectionProvider(FeatureProvider):
@@ -361,6 +436,10 @@ class IntersectionProvider(FeatureProvider):
                 deps = (junction.key, *(Key('path', end.section_id) for end in junction.ends),
                         *(Key('profile', end.section_id) for end in junction.ends),
                         *(footprint_key(j.key) for j in neighbors))
+            # A returning Section has two distinct incidences at this site,
+            # but both consume the same path/profile resource. Keep every End
+            # and route while listing each dependency only once.
+            deps = tuple(dict.fromkeys(deps))
             if len(junction.ends) > 2:
                 if junction.key in merged_sites:
                     deps = (*deps, merged_sites[junction.key])
@@ -373,7 +452,7 @@ class IntersectionProvider(FeatureProvider):
                     signature=lambda context, source=junction: JunctionOwnership.layout_signature(context, source))
             else:
                 signature = None
-                if len(neighbors) > 1:
+                if neighbors:
                     from .junction_transitions import JunctionTransitions
                     geometry_deps = deps
                     deps = (*deps, PLAN)
@@ -431,7 +510,14 @@ class IntersectionProvider(FeatureProvider):
         A compound may use distinct original endpoint origins after its source
         incidence and consumed-span ownership have been established.
         """
-        approaches.sort(key=lambda a: math.atan2(a.direction[1], a.direction[0]) % math.tau)
+        order=getattr(junction,'ordered_ends',None)
+        if order is None:
+            approaches.sort(key=lambda a: math.atan2(a.direction[1], a.direction[0]) % math.tau)
+        else:
+            index={end:i for i,end in enumerate(order)}
+            if (len(index)!=len(approaches) or set(index)!={End(a.source.id,a.end) for a in approaches}):
+                raise ValueError('Compound exterior order must retain every original incidence exactly once')
+            approaches.sort(key=lambda a:index[End(a.source.id,a.end)])
         if len(approaches) == 2:
             first, second = approaches
             from .transitions import mixed_bend_required
@@ -465,7 +551,10 @@ class IntersectionProvider(FeatureProvider):
             try:
                 corners.append(CornerRadiusPolicy.solve(a, b, radius, mode,
                     math.radians(context.network.settings.continuation_angle_degrees),
-                    accept=entrance_fits if mode == 'STYLE' else None))
+                    accept=entrance_fits if mode == 'STYLE' else None,
+                    displaced=order is not None,
+                    median_cap=(End(a.source.id,a.end),End(b.source.id,b.end))
+                        in getattr(junction,'median_pairs',())))
             except ValueError as exc:
                 message = f'Corner between Section {a.source.id} end {a.end} and '
                 message += (
@@ -485,9 +574,8 @@ class IntersectionProvider(FeatureProvider):
                for s, a in zip(stations, approaches)):
             raise ApproachExtentError(junction, [(a, s) for s, a in zip(stations, approaches)
                                                 if s >= a.length - 1e-6])
-        boundaries = [BoundaryCurve(corner, (stations[i], stations[(i + 1) % len(stations)]),
-                                    context.network.settings.curve_tolerance)
-                      for i, corner in enumerate(corners)]
+        from .curb_layout import finite_boundaries
+        stations, boundaries = finite_boundaries(junction, approaches, corners, stations, settings)
         settings = context.network.settings
         radial = half_intervals(settings)
         rows = 2 * radial

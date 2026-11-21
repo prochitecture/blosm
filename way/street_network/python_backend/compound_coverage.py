@@ -14,8 +14,10 @@ class CompoundSourceCoverage:
     def __init__(self, context, group, layouts):
         self.context, self.group = context, group
         intervals = {}
-        for key in group.members:
-            for (sid, end), mouth in layouts[key].mouths.items():
+        sources = ([group.physical_layout] if getattr(group,'physical_layout',None) is not None
+                   else [layouts[key] for key in group.members])
+        for layout in sources:
+            for (sid, end), mouth in layout.mouths.items():
                 length = context[Key('path', sid)].length
                 span = (0., mouth.station) if end == 0 else (mouth.station, length)
                 intervals.setdefault(sid, []).append(span)

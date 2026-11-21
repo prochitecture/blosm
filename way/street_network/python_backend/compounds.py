@@ -49,11 +49,15 @@ def sample_footprint(owner, layout):
     """
     rim, labels = [], []
     for side, approach in enumerate(layout.approaches):
-        u = np.linspace(1., 0., 2 * layout.radial + 1)
+        parameters = getattr(approach, 'mouth_parameters', None)
+        u = (parameters(layout.radial, approach.width/(2*layout.radial)) if parameters is not None
+             else np.linspace(1., 0., 2 * layout.radial + 1))
         points = approach.point(layout.outward_stations[side], approach.offset + approach.width * (u - .5))
         rim.extend(points[:-1])
         labels.extend(RimSegment('mouth', side, float(a), float(b)) for a, b in zip(u, u[1:]))
-        t = np.linspace(0., 1., layout.rows + 1)
+        t = getattr(layout.boundaries[side], 'initial_parameters', None)
+        if t is None:
+            t = np.linspace(0., 1., layout.rows + 1)
         rim.extend(layout.boundaries[side](t)[:-1])
         labels.extend(RimSegment('curb', side, float(a), float(b)) for a, b in zip(t, t[1:]))
     return SampledFootprint(Region(owner, np.asarray(rim)), tuple(labels), layout)
@@ -77,6 +81,12 @@ class CompoundGroup:
     # Logical members/claims survive when a shared physical exterior replaces
     # invalid clipped internal mouths. Only derived geometry belongs here.
     physical_layout: object = None
+
+    @property
+    def area_footprints(self):
+        """Original physical area operands, excluding derived curve carriers."""
+        return tuple(source for source in self.footprints
+                     if not getattr(source.region, 'boundary_only', False))
 
 
 class CompoundPlanner:

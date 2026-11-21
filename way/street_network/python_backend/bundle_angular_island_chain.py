@@ -2,7 +2,7 @@
 import copy
 import numpy as np
 from .bundle_axis import _simplify
-from .bundle_angular_road_tiles import AngularRoadTiles
+from .bundle_angular_road_tiles import AngularRoadTiles, CutTooDense
 from .bundle_angular_surfaces import AngularSurfaceBuilder
 from .mesh import Assembler
 
@@ -89,7 +89,19 @@ class MultiIslandSurfaceBuilder(AngularSurfaceBuilder):
                 return mesh, keys, report
             except ValueError as error:
                 local_failure = str(error)
-            mesh, keys, report = self._mapped_single(frame, field, outer, seam, name)
+                cut_too_dense = isinstance(error, CutTooDense)
+            try:
+                mesh, keys, report = self._mapped_single(frame, field, outer, seam, name)
+            except ValueError as mapped_failure:
+                from .body_chart_recovery import FixedRimBodyRecovery
+                try:
+                    mesh, keys, report = FixedRimBodyRecovery(self,frame,field).build(outer,seam,name)
+                except ValueError as recovery_failure:
+                    if not cut_too_dense:
+                        raise ValueError(str(mapped_failure)+'; fixed-rim body: '+str(recovery_failure)) from recovery_failure
+                    mesh, keys, report = AngularRoadTiles(self, frame, field).build(outer, seam, name, fit_cuts=True)
+                    report['fixed_rim_failure'] = str(recovery_failure)
+                report['four_side_body_failure'] = str(mapped_failure)
             report['local_body_failure'] = local_failure
             return mesh, keys, report
         return self._mapped_single(frame, field, outer, seam, name, grass=grass)

@@ -11,7 +11,7 @@ from tested_python_streets.model import Key, Network, Section
 from tested_python_streets.patterns import PatternLibrary
 from tested_python_streets.providers import Part
 from tested_python_streets.updates import (
-    ProductReady, Task, UpdateCoordinator, _PreparationProgress, drain_steps)
+    ProductReady, Task, UpdateCoordinator, _PreparationProgress, drain_steps, numerical_time_slices)
 from tested_python_streets.uv import DEFAULT_UV_MAP
 
 
@@ -56,6 +56,32 @@ def collect(steps, inspect=None):
 
 
 class PythonStreetProductEventTests(unittest.TestCase):
+    def test_short_numerical_iterations_batch_and_cancellation_closes_the_producer(self):
+        now = [0.]
+        visited = []
+        closed = []
+        marker = object()
+        def iterations():
+            try:
+                for i in range(6):
+                    now[0] += .006
+                    visited.append(i)
+                    yield marker if i == 3 else None
+                return 42
+            finally:
+                closed.append(True)
+        with patch('tested_python_streets.updates.time.perf_counter', side_effect=lambda: now[0]):
+            steps = numerical_time_slices(iterations())
+            self.assertIsNone(next(steps))
+            self.assertEqual(visited, [0, 1, 2])
+            now[0] += 10.  # Time spent suspended in Blender.
+            self.assertIs(next(steps), marker)
+            steps.close()
+            self.assertEqual(visited, [0, 1, 2, 3])
+            self.assertEqual(closed, [True])
+            self.assertEqual(drain_steps(numerical_time_slices(iterations())), 42)
+            self.assertEqual(closed, [True, True])
+
     def test_default_callers_keep_identical_none_checkpoints_and_progress(self):
         source = network()
         for make_engine in (

@@ -69,7 +69,12 @@ class PythonCompoundSurfaceTests(unittest.TestCase):
         unique, counts = np.unique(before_edges, axis=0, return_counts=True)
         rim = np.unique(unique[counts == 1])
         mesh.seams = {0: rim}
-        refined, remap = QuadRefiner(patterns).refine(mesh, np.array((4,)), lambda xy: np.full(len(xy), .02))
+        calls = []
+        def added_vertex_heights(xy):
+            calls.append(len(xy))
+            return np.full(len(xy), .02)
+        refined, remap = QuadRefiner(patterns).refine(mesh, np.array((4,)), added_vertex_heights)
+        self.assertEqual(len(calls), 5)  # The central face and its four edge neighbors.
         np.testing.assert_array_equal(refined.xyz[remap], mesh.xyz)
         np.testing.assert_array_equal(refined.seams[0], remap[rim])
         edges = np.sort(np.stack((refined.quads, np.roll(refined.quads, -1, axis=1)), axis=-1).reshape(-1, 2), axis=1)
@@ -81,6 +86,36 @@ class PythonCompoundSurfaceTests(unittest.TestCase):
         validate_overlaps({model.Key('refined', 1): refined})
         with self.assertRaisesRegex(ValueError, 'cell budget'):
             QuadRefiner(patterns, max_cells=4).refine(mesh, np.array((4,)), lambda xy: np.zeros(len(xy)))
+
+    def test_refinement_forwards_field_batches_and_preserves_geometry(self):
+        patterns = PatternLibrary()
+        grid = patterns.grid(3, 3)
+        field = BoundaryJetField((boundary_data(),), scratch_bytes=4096)
+        mesh = Mesh(np.column_stack((grid.uv, field(grid.uv))), grid.quads)
+        mesh.seams = {0: np.array((0, 1))}
+        refiner = QuadRefiner(patterns)
+        selected = np.array((4,))
+        expected, old_map = refiner.refine(mesh, selected, lambda xy: field(xy))
+        checkpoint = object()
+
+        class SteppedField:
+            def evaluate_steps(self, xy):
+                yield checkpoint
+                return (yield from field.evaluate_steps(xy))
+
+        steps = refiner.refine_steps(mesh, selected, SteppedField())
+        calls = 0
+        while True:
+            try:
+                calls += next(steps) is checkpoint
+            except StopIteration as finished:
+                actual, new_map = finished.value
+                break
+        self.assertEqual(calls, 5)
+        np.testing.assert_array_equal(actual.xyz, expected.xyz)
+        np.testing.assert_array_equal(actual.quads, expected.quads)
+        np.testing.assert_array_equal(new_map, old_map)
+        np.testing.assert_array_equal(actual.seams[0], expected.seams[0])
 
     def test_compound_surfaces_preserve_full_profiles_holes_and_elevation(self):
         for network in (compound_cross_network(model), short_junction_pair(model)):

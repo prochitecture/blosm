@@ -8,6 +8,7 @@ from tested_python_streets import model
 from tested_python_streets.backend import PythonMeshBackend
 from tested_python_streets.bundle_regions import CrossingFreeContinuation, continuation_sections, interior_crossings
 from tested_python_streets.bundles import BundleProvider, Cap, Member
+from tested_python_streets.mesh import publication_coordinates
 from tested_python_streets.patterns import PatternLibrary
 from tested_python_streets.profiles import Crown
 from tested_python_streets.updates import BuildContext
@@ -23,6 +24,79 @@ def continuation_fixture():
 
 
 class PythonInteriorBundleTests(unittest.TestCase):
+    def test_single_inner_bank_closes_against_the_same_physical_junction(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from tested_python_streets.bundle_compounds import CompoundBundleBuilder, Run, Terminal
+        from tested_python_streets.ownership import surface_key
+        owner = model.Key('intersection', 73)
+        before = Terminal(model.End(1, 0), None, False)
+        after = Terminal(model.End(3, 1), None, False)
+        a = Terminal(model.End(2, 0), owner, True)
+        b = Terminal(model.End(2, 1), owner, True)
+        left, right = Run(None, (before,a)), Run(None, (b,after))
+        bank = np.array(((0.,0.,.08), (1.,0.,.08), (2.,0.,.08)))
+        curb = np.array(((0.,0.,.08), (0.,1.,.08), (1.,1.,.08), (2.,1.,.08), (2.,0.,.08)))
+        for longer in (0,1):
+            # For the opposite member the enclosed grass lies to the right.
+            mirror = np.array((1., -1. if longer == 0 else 1., 1.))
+            edge_cap = Mock(return_value=curb*mirror)
+            context = BuildContext(fixture(), {surface_key(owner):SimpleNamespace(edge_cap=edge_cap)}, PatternLibrary())
+            pocket = Run(SimpleNamespace(rim=bank*mirror), (a,b), (-1,-1))
+            runs = [[left,right], [left,right]]
+            runs[longer].insert(1,pocket)
+            pairs, surface, evidence = CompoundBundleBuilder.interior_pocket(context, runs, Crown(.08,0.,1))
+            self.assertEqual(pairs, [(left,left),(right,right)])
+            self.assertEqual((evidence['road_edges'],evidence['curb_edges']), (2,4))
+            edge_cap.assert_called_once_with((2,0),(2,1),0.,1.)
+            self.assertLessEqual(surface.mesh.validate()['maximum_edge_ratio'],8.)
+            self.assertEqual(set(map(tuple,surface.mesh.xyz[:6])),set(map(tuple,np.vstack((bank,curb[1:-1]))*mirror)))
+            runs[1-longer][1]=Run(None,(before,after))
+            self.assertIsNone(CompoundBundleBuilder.interior_pocket(context,runs,Crown(.08,0.,1)))
+
+    def test_free_separator_end_uses_its_own_length_and_preserves_opposite_parity(self):
+        network = fixture()
+        bundle = network.bundles[0]
+        profiles = {model.Key('profile', visit.section_id): Crown(.08, 0., 1)
+                    for member in bundle.members for visit in member.path}
+        context = BuildContext(network, profiles, PatternLibrary())
+        spacing = network.settings.spacing
+        stations = np.arange(17)*spacing
+        left = np.column_stack((stations, np.full_like(stations, 5.5*spacing), np.zeros_like(stations)))
+        right = left.copy()
+        right[:,1] = 0.
+        members = (Member((), left, ()), Member((), right, ()))
+        for free in (0, 1):
+            opposite = 1-free
+            end = -1 if opposite else 0
+            caps = [None, None]
+            prescribed = Cap.free(left[end], right[end], 17)
+            caps[opposite] = prescribed
+            surface = BundleProvider.region(context, bundle, members, caps, 0)
+            self.assertEqual(len(caps[free].rim)-1, 7)
+            self.assertIs(caps[opposite], prescribed)
+            vertices = {tuple(p) for p in surface.mesh.xyz}
+            self.assertTrue(all(tuple(p) in vertices for p in prescribed.rim))
+        # Different sample counts on the two roads may require an even-rim
+        # disk even when neither straight closure has a movable atlas corner.
+        extra = .5*(right[4]+right[5])
+        members = (members[0], Member((), np.insert(right, 5, extra, axis=0), ()))
+        surface = BundleProvider.region(context, bundle, members, [None, None], 0)
+        self.assertIn('parity', surface.metadata['initial_atlas_error'])
+        self.assertLessEqual(surface.mesh.validate()['maximum_edge_ratio'],8.)
+
+    def test_bundle_plan_declares_two_arm_seams_along_a_member(self):
+        network = fixture()
+        bundle, = network.bundles
+        leading = replace(network.sections[0], id=6, points=((-60., 8., 0.), (-40., 8., 0.)))
+        seam = model.Connection(3, (model.End(6, 1), model.End(1, 0)))
+        first, second = bundle.members
+        first = replace(first, path=(model.Traversal(6), *first.path))
+        bundle = replace(bundle, members=(first, second))
+        network = replace(network, sections=(*network.sections, leading), connections=(seam,), bundles=(bundle,))
+        tasks = {task.key: task for task in BundleProvider().tasks(network)}
+        self.assertIn(seam.layout_key, tasks[model.Key('bundle_plan', bundle.id)].dependencies)
+
     def test_convex_but_badly_graded_cells_are_never_silently_accepted(self):
         # A long rectangular median with independently dense end-cap samples.
         # The old tensor product creates 48,000 convex but elongated quads.
@@ -40,10 +114,16 @@ class PythonInteriorBundleTests(unittest.TestCase):
         caps = [Cap.free(left[i], right[i], 120) for i in (0, -1)]
         context = BuildContext(network, {model.Key('profile', 1): Crown(.08, 0., 1),
             model.Key('profile', 2): Crown(.08, 0., -1)}, PatternLibrary())
-        # This deliberately severe sample imbalance is not yet handled by the
-        # available charts. Positive cells alone must not bypass their limits.
-        with self.assertRaisesRegex(ValueError, 'No accepted fixed-rim'):
-            BundleProvider.region(context, bundle, members, caps, 0)
+        result = BundleProvider.region(context, bundle, members, caps, 0)
+        mesh = result.mesh
+        expected = {tuple(point) for rim in (left, right, caps[0].rim, caps[1].rim) for point in rim}
+        self.assertEqual({tuple(point) for point in mesh.xyz[mesh.seams[0]]}, expected)
+        stored = mesh.with_positions(publication_coordinates(mesh.xyz, 1., physical=True))
+        for candidate in (mesh, stored):
+            measured = candidate.validate()
+            self.assertGreater(measured['minimum_corner'], 0.)
+            self.assertLessEqual(measured['maximum_edge_ratio'], 8.)
+
     def test_explicit_interior_keeps_the_same_crossing_pavement_and_two_separators(self):
         before = side_junction_fixture_networks(model)[1]
         before = replace(before, bundles=(replace(before.bundles[0], interior_section_ids=()),))
